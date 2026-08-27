@@ -1,0 +1,78 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { avancarEstadoCompra } from "./actions";
+
+const ESTADO_LABEL: Record<string, string> = {
+  por_encomendar: "Por encomendar",
+  encomendada: "Encomendada",
+  parcial: "Recebida parcialmente",
+  recebida: "Recebida",
+  cancelada: "Cancelada",
+};
+
+const PROXIMO_ESTADO: Record<string, string> = {
+  por_encomendar: "encomendada",
+  encomendada: "recebida",
+  parcial: "recebida",
+};
+
+export default async function ComprasPage() {
+  const supabase = createClient();
+  const { data: compras } = await supabase
+    .from("purchases")
+    .select("id, descricao, fornecedor, estado, data_prevista, purchase_items(nome, qtd)")
+    .order("created_at", { ascending: false });
+
+  return (
+    <div>
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Compras</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Material a encomendar para os serviços.</p>
+        </div>
+        <Link
+          href="/admin/compras/novo"
+          className="rounded-md bg-indigo-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-800"
+        >
+          Nova compra
+        </Link>
+      </div>
+
+      <div className="space-y-3">
+        {(compras ?? []).map((c: any) => (
+          <div key={c.id} className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="mb-2 flex items-start justify-between">
+              <div>
+                <div className="font-medium text-slate-800">{c.descricao}</div>
+                {c.fornecedor && <div className="text-xs text-slate-400">Fornecedor: {c.fornecedor}</div>}
+                {c.data_prevista && <div className="text-xs text-slate-400">Previsto: {c.data_prevista}</div>}
+              </div>
+              <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                {ESTADO_LABEL[c.estado] ?? c.estado}
+              </span>
+            </div>
+            {(c.purchase_items ?? []).length > 0 && (
+              <ul className="mb-2 list-disc pl-5 text-sm text-slate-600">
+                {c.purchase_items.map((i: any, idx: number) => (
+                  <li key={idx}>{i.nome} · {i.qtd}</li>
+                ))}
+              </ul>
+            )}
+            {PROXIMO_ESTADO[c.estado] && (
+              <form action={avancarEstadoCompra} className="flex gap-2">
+                <input type="hidden" name="id" value={c.id} />
+                <input type="hidden" name="estado" value={PROXIMO_ESTADO[c.estado]} />
+                <button className="rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800">
+                  Marcar {ESTADO_LABEL[PROXIMO_ESTADO[c.estado]]}
+                </button>
+              </form>
+            )}
+          </div>
+        ))}
+        {(compras ?? []).length === 0 && (
+          <p className="py-10 text-center text-sm text-slate-400">Ainda sem compras.</p>
+        )}
+      </div>
+    </div>
+  );
+}

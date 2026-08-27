@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fieldservice-dev",
+      "runtimeExecutable": "C:\\Users\\Loja-2022\\Desktop\\fieldservice-app\\.claude\\dev-runner.cmd",
+      "runtimeArgs": [],
+      "port": 3000
+    }
+  ]
+}

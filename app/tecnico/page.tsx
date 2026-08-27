@@ -1,0 +1,59 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+
+// Repara na tabela usada: `services_technician_view`, não `services`.
+// A tabela services nem sequer tem policy de SELECT para TECHNICIAN — se
+// esta página fosse alterada por engano para ler de "services" diretamente,
+// a query simplesmente devolveria zero linhas, nunca dados de mais.
+export default async function AgendaTecnicoPage() {
+  const supabase = createClient();
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  const { data: servicos } = await supabase
+    .from("services_technician_view")
+    .select("*, clients_technician_view!inner(nome), client_addresses_technician_view(endereco)")
+    .order("data_agendada", { ascending: true })
+    .order("hora_agendada", { ascending: true });
+
+  return (
+    <div className="px-4 py-4">
+      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">A minha agenda</h2>
+      {(!servicos || servicos.length === 0) && (
+        <p className="py-10 text-center text-sm text-slate-400">Sem serviços atribuídos.</p>
+      )}
+      <div className="space-y-3">
+        {(servicos ?? []).map((s: any) => (
+          <Link
+            key={s.id}
+            href={`/tecnico/servico/${s.id}`}
+            className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-mono text-sm font-bold text-indigo-900">{s.hora_agendada?.slice(0, 5) ?? "—"}</span>
+              <div className="flex items-center gap-1.5">
+                {s.data_agendada === hoje && (
+                  <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">Hoje</span>
+                )}
+                <EstadoBadge estado={s.estado} />
+              </div>
+            </div>
+            <div className="text-base font-semibold text-slate-800">{s.clients_technician_view?.nome}</div>
+            <div className="text-sm text-slate-500">{s.descricao}</div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EstadoBadge({ estado }: { estado: string }) {
+  const map: Record<string, [string, string]> = {
+    agendado: ["Agendado", "bg-indigo-100 text-indigo-800"],
+    em_curso: ["Em curso", "bg-amber-100 text-amber-800"],
+    concluido: ["Concluído", "bg-emerald-100 text-emerald-800"],
+    nova_visita: ["Nova visita", "bg-orange-100 text-orange-800"],
+    nao_realizado: ["Não realizado", "bg-red-100 text-red-700"],
+  };
+  const [label, cls] = map[estado] ?? [estado, "bg-slate-100 text-slate-700"];
+  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
+}
