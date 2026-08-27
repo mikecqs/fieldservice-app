@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { marcarFaturado, validarServico, enviarParaCorrecao } from "./actions";
+import { marcarFaturado } from "./actions";
+import { validarServico, enviarParaCorrecao } from "../servicos/actions";
 
 export default async function FaturacaoPage() {
   const supabase = createClient();

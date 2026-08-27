@@ -9,8 +9,14 @@ import {
   removerTecnico,
   adicionarMaterialPlaneado,
   removerMaterialPlaneado,
+  validarServico,
+  enviarParaCorrecao,
 } from "../actions";
+import { ESTADO_LABEL, ESTADO_COLOR } from "../estados";
 
+// 'aguarda_validacao' e 'correcao_necessaria' não estão aqui de propósito:
+// só se chega lá pelas ações Validar / Mandar para trás (abaixo), nunca por
+// este seletor manual — assim o motivo da rejeição é sempre obrigatório.
 const ESTADOS = ["por_agendar", "agendado", "em_curso", "concluido", "nova_visita", "nao_realizado", "cancelado"];
 
 export default async function ServicoDetalhePage({ params }: { params: { id: string } }) {
@@ -52,21 +58,9 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
               <p className="mt-1 text-xs text-slate-400">{servico.client_addresses.label}: {servico.client_addresses.endereco}</p>
             )}
           </div>
-          <form action={mudarEstado} className="flex items-center gap-1.5">
-            <input type="hidden" name="id" value={servico.id} />
-            <select
-              name="estado"
-              defaultValue={servico.estado}
-              className="rounded bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700"
-            >
-              {ESTADOS.map((e) => (
-                <option key={e} value={e}>{e}</option>
-              ))}
-            </select>
-            <button className="rounded bg-indigo-900 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-800">
-              Aplicar
-            </button>
-          </form>
+          <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[servico.estado] ?? "bg-slate-100 text-slate-600"}`}>
+            {ESTADO_LABEL[servico.estado] ?? servico.estado}
+          </span>
         </div>
         <p className="mt-2 text-sm font-semibold text-slate-700">
           {Number(servico.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
@@ -76,6 +70,59 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
             <span className="font-semibold">Motivo da rejeição:</span> {validacoes[0].motivo}
           </div>
         )}
+
+        {servico.estado === "aguarda_validacao" && (
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+            <form action={validarServico}>
+              <input type="hidden" name="id" value={servico.id} />
+              <button className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800">
+                Validar
+              </button>
+            </form>
+            <details className="relative">
+              <summary className="list-none cursor-pointer rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">
+                Mandar para trás
+              </summary>
+              <form
+                action={enviarParaCorrecao}
+                className="absolute left-0 z-10 mt-2 w-72 space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+              >
+                <input type="hidden" name="id" value={servico.id} />
+                <span className="block text-xs font-medium text-slate-600">Motivo (obrigatório)</span>
+                <textarea
+                  name="motivo"
+                  required
+                  rows={3}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+                  placeholder="Ex: guia do Wintouch indica 5 câmaras, técnico registou 4."
+                />
+                <button className="w-full rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
+                  Confirmar rejeição
+                </button>
+              </form>
+            </details>
+          </div>
+        )}
+
+        <details className="mt-4 border-t border-slate-100 pt-3">
+          <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600">Forçar estado manualmente</summary>
+          <form action={mudarEstado} className="mt-2 flex items-center gap-1.5">
+            <input type="hidden" name="id" value={servico.id} />
+            <select
+              name="estado"
+              defaultValue={ESTADOS.includes(servico.estado) ? servico.estado : ""}
+              className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+            >
+              {!ESTADOS.includes(servico.estado) && <option value="" disabled>—</option>}
+              {ESTADOS.map((e) => (
+                <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
+              ))}
+            </select>
+            <button className="rounded bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800">
+              Aplicar
+            </button>
+          </form>
+        </details>
       </div>
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">

@@ -15,6 +15,13 @@ export default async function AgendaTecnicoPage() {
     .order("data_agendada", { ascending: true })
     .order("hora_agendada", { ascending: true });
 
+  // Fechados ou à espera de validação já não têm nada a fazer pelo técnico —
+  // ficam no fundo da lista para não competirem por atenção com o que ainda
+  // está por resolver, mas continuam visíveis (histórico do que fez).
+  const FECHADOS = ["concluido", "aguarda_validacao", "nao_realizado", "cancelado"];
+  const ativos = (servicos ?? []).filter((s: any) => !FECHADOS.includes(s.estado));
+  const fechados = (servicos ?? []).filter((s: any) => FECHADOS.includes(s.estado));
+
   return (
     <div className="px-4 py-4">
       <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">A minha agenda</h2>
@@ -22,33 +29,49 @@ export default async function AgendaTecnicoPage() {
         <p className="py-10 text-center text-sm text-slate-400">Sem serviços atribuídos.</p>
       )}
       <div className="space-y-3">
-        {(servicos ?? []).map((s: any) => (
-          <Link
-            key={s.id}
-            href={`/tecnico/servico/${s.id}`}
-            className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50"
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-sm font-bold text-indigo-900">{s.hora_agendada?.slice(0, 5) ?? "—"}</span>
-              <div className="flex items-center gap-1.5">
-                {s.data_agendada === hoje && (
-                  <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">Hoje</span>
-                )}
-                <EstadoBadge estado={s.estado} />
-              </div>
-            </div>
-            <div className="text-base font-semibold text-slate-800">{s.cliente_nome}</div>
-            {s.estado === "correcao_necessaria" && s.motivo_correcao ? (
-              <div className="text-sm font-medium text-red-700">⚠️ Correção: {s.motivo_correcao}</div>
-            ) : s.desbloqueado ? (
-              <div className="text-sm text-slate-500">{s.descricao}</div>
-            ) : (
-              <div className="text-sm text-slate-400">🔒 Detalhes disponíveis depois de fechares o serviço anterior</div>
-            )}
-          </Link>
+        {ativos.map((s: any) => (
+          <ServicoCard key={s.id} s={s} hoje={hoje} />
         ))}
       </div>
+
+      {fechados.length > 0 && (
+        <>
+          <h2 className="mb-3 mt-6 text-sm font-bold uppercase tracking-wide text-slate-400">Fechados</h2>
+          <div className="space-y-3 opacity-60">
+            {fechados.map((s: any) => (
+              <ServicoCard key={s.id} s={s} hoje={hoje} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function ServicoCard({ s, hoje }: { s: any; hoje: string }) {
+  return (
+    <Link
+      href={`/tecnico/servico/${s.id}`}
+      className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50"
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="font-mono text-sm font-bold text-indigo-900">{s.hora_agendada?.slice(0, 5) ?? "—"}</span>
+        <div className="flex items-center gap-1.5">
+          {s.data_agendada === hoje && (
+            <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">Hoje</span>
+          )}
+          <EstadoBadge estado={s.estado} />
+        </div>
+      </div>
+      <div className="text-base font-semibold text-slate-800">{s.cliente_nome}</div>
+      {s.estado === "correcao_necessaria" && s.motivo_correcao ? (
+        <div className="text-sm font-medium text-red-700">⚠️ Correção: {s.motivo_correcao}</div>
+      ) : s.desbloqueado ? (
+        <div className="text-sm text-slate-500">{s.descricao}</div>
+      ) : (
+        <div className="text-sm text-slate-400">🔒 Detalhes disponíveis depois de fechares o serviço anterior</div>
+      )}
+    </Link>
   );
 }
 

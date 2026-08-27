@@ -93,3 +93,56 @@ export async function removerMaterialPlaneado(formData: FormData) {
   await supabase.from("service_materials_planned").delete().eq("id", id);
   revalidatePath(`/admin/servicos/${service_id}`);
 }
+
+// O técnico nunca chega a estas duas ações: não tem UPDATE em `services`
+// nem policy em `service_validations` — só o Admin (via RLS) consegue
+// validar ou rejeitar. Cada ação fica sempre registada no histórico,
+// mesmo que a mesma OS seja corrigida e reavaliada várias vezes.
+export async function validarServico(formData: FormData) {
+  const organizationId = await getOrgId();
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  await supabase.from("services").update({ estado: "concluido" }).eq("id", id);
+  await supabase.from("service_validations").insert({
+    organization_id: organizationId,
+    service_id: id,
+    acao: "validado",
+    utilizador: user!.id,
+  });
+
+  revalidatePath("/admin/faturacao");
+  revalidatePath(`/admin/servicos/${id}`);
+  revalidatePath("/admin/atencao");
+}
+
+export async function enviarParaCorrecao(formData: FormData) {
+  const organizationId = await getOrgId();
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const id = String(formData.get("id") || "");
+  const motivo = String(formData.get("motivo") || "").trim();
+  if (!id || !motivo) return;
+
+  await supabase.from("services").update({ estado: "correcao_necessaria" }).eq("id", id);
+  await supabase.from("service_validations").insert({
+    organization_id: organizationId,
+    service_id: id,
+    acao: "rejeitado",
+    motivo,
+    utilizador: user!.id,
+  });
+
+  revalidatePath("/admin/faturacao");
+  revalidatePath(`/admin/servicos/${id}`);
+  revalidatePath("/admin/atencao");
+  revalidatePath("/tecnico");
+}
