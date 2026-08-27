@@ -72,7 +72,12 @@ $$;
 create table org_settings (
   organization_id uuid primary key references organizations(id) on delete cascade,
   tipos_servico text[] not null default array['Manutenção','Instalação','Orçamento'],
-  followup_dias_default int not null default 3
+  followup_dias_default int not null default 3,
+  -- Controlo operacional: quando ativo, um técnico só vê os detalhes
+  -- operacionais (morada, contacto, descrição, notas) do seu próximo
+  -- serviço agendado depois de encerrar o anterior. Ver
+  -- tech_service_desbloqueado() e services_technician_view.
+  acesso_sequencial_tecnico boolean not null default false
 );
 
 -- -----------------------------------------------------------------------------
@@ -159,7 +164,7 @@ create table services (
   hora_agendada time,
   notas text,
   estado text not null default 'por_agendar'
-    check (estado in ('por_agendar','agendado','em_curso','concluido','nova_visita','nao_realizado','cancelado')),
+    check (estado in ('por_agendar','agendado','em_curso','concluido','nova_visita','nao_realizado','cancelado','aguarda_validacao','correcao_necessaria')),
   valor numeric not null default 0,
   -- faturação
   faturacao_estado text not null default 'por_faturar' check (faturacao_estado in ('por_faturar','faturado')),
@@ -214,6 +219,21 @@ create table visit_photos (
 );
 
 -- -----------------------------------------------------------------------------
+-- VALIDAÇÃO ADMINISTRATIVA DO FECHO DE OS
+-- Histórico completo (nunca apagado) de cada validação/rejeição de um
+-- serviço marcado como concluído pelo técnico — quem, quando, porquê.
+-- -----------------------------------------------------------------------------
+create table service_validations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  service_id uuid not null references services(id) on delete cascade,
+  acao text not null check (acao in ('validado','rejeitado')),
+  motivo text,
+  utilizador uuid references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+-- -----------------------------------------------------------------------------
 -- COMPRAS
 -- -----------------------------------------------------------------------------
 create table purchases (
@@ -255,6 +275,7 @@ alter table visit_materials_used enable row level security;
 alter table visit_photos enable row level security;
 alter table purchases enable row level security;
 alter table purchase_items enable row level security;
+alter table service_validations enable row level security;
 
 -- ---------------------------------------------------------------------------
 -- ORGANIZATIONS: só SUPER_ADMIN gere; ADMIN/TECHNICIAN só vêem a própria.
@@ -335,6 +356,13 @@ create policy "admin manages purchase_items" on purchase_items for all
     exists (select 1 from purchases p where p.id = purchase_id and p.organization_id = my_org())
     and my_role() in ('ADMIN','SUPER_ADMIN')
   );
+
+-- service_validations: só Admin/Super Admin validam ou rejeitam — o técnico
+-- não tem nenhuma policy aqui (nem sequer de leitura); o motivo da rejeição
+-- mais recente chega-lhe só pela coluna motivo_correcao da view segura.
+create policy "admin manages service_validations" on service_validations for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 -- ---------------------------------------------------------------------------
 -- SERVICES — acesso completo (incluindo valor/faturação) só para ADMIN/SUPER_ADMIN.
@@ -418,6 +446,45 @@ create policy "technician manages own visit photos" on visit_photos for all
   with check (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()));
 
 -- =============================================================================
+-- ACESSO SEQUENCIAL DO TÉCNICO (controlo operacional, não é GPS/tracking)
+--
+-- Quando org_settings.acesso_sequencial_tecnico está ativo, um serviço só
+-- fica "desbloqueado" (detalhes visíveis, pode ser iniciado) se todos os
+-- serviços anteriores do mesmo técnico (por data_agendada + hora_agendada,
+-- encadeando entre dias) já estiverem encerrados — concluído, nova visita,
+-- não realizado ou cancelado. Serviços sem data/hora agendada não entram
+-- na sequência (não têm posição definida). Isto é avaliado aqui, numa
+-- função só de leitura, e usado tanto pela view de agenda como pelo RPC
+-- que inicia o serviço — por isso não há forma de contornar via API
+-- (nem escondendo campos no ecrã nem chamando o RPC diretamente).
+-- =============================================================================
+create or replace function tech_service_desbloqueado(p_service_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    coalesce((select not os.acesso_sequencial_tecnico from org_settings os where os.organization_id = s.organization_id), true)
+    or s.data_agendada is null or s.hora_agendada is null
+    or not exists (
+      select 1
+      from services s2
+      join service_technicians st2 on st2.service_id = s2.id
+      where st2.user_id = auth.uid()
+        and s2.data_agendada is not null
+        and s2.hora_agendada is not null
+        and (s2.data_agendada, s2.hora_agendada) < (s.data_agendada, s.hora_agendada)
+        and s2.estado not in ('concluido','nova_visita','nao_realizado','cancelado','aguarda_validacao','correcao_necessaria')
+    )
+  from services s
+  where s.id = p_service_id;
+$$;
+
+grant execute on function tech_service_desbloqueado(uuid) to authenticated;
+
+-- =============================================================================
 -- VIEW SEGURA PARA TÉCNICOS
 -- Expõe só o necessário para trabalhar no terreno: sem valor, sem margens,
 -- sem dados de faturação. É executada com os privilégios do dono da view
@@ -425,6 +492,11 @@ create policy "technician manages own visit photos" on visit_photos for all
 -- tendo policy de SELECT direta na tabela — mas o próprio corpo da view
 -- filtra sempre por auth.uid(), por isso um técnico nunca vê serviços de
 -- outra empresa nem de outro técnico.
+--
+-- Os campos operacionais (descrição, notas, contacto, morada) vêm null
+-- quando o serviço está bloqueado pela regra de acesso sequencial — o
+-- nome do cliente e a hora continuam sempre visíveis, para o técnico
+-- saber que o serviço existe e a que horas é.
 -- =============================================================================
 create view services_technician_view as
 select
@@ -433,14 +505,27 @@ select
   s.client_id,
   s.address_id,
   s.tipo,
-  s.descricao,
+  case when v.desbloqueado then s.descricao else null end as descricao,
   s.prioridade,
   s.data_agendada,
   s.hora_agendada,
-  s.notas,
-  s.estado
+  case when v.desbloqueado then s.notas else null end as notas,
+  s.estado,
+  c.nome as cliente_nome,
+  case when v.desbloqueado then c.telefone else null end as cliente_telefone,
+  case when v.desbloqueado then c.email else null end as cliente_email,
+  case when v.desbloqueado then a.endereco else null end as morada,
+  v.desbloqueado,
+  (
+    select sv.motivo from service_validations sv
+    where sv.service_id = s.id and sv.acao = 'rejeitado'
+    order by sv.created_at desc limit 1
+  ) as motivo_correcao
 from services s
 join service_technicians st on st.service_id = s.id
+left join clients c on c.id = s.client_id
+left join client_addresses a on a.id = s.address_id
+cross join lateral (select tech_service_desbloqueado(s.id) as desbloqueado) v
 where st.user_id = auth.uid();
 
 grant select on services_technician_view to authenticated;
@@ -499,9 +584,13 @@ begin
   -- podendo duplicar visitas em cliques repetidos.
   if not exists (
     select 1 from services
-    where id = p_service_id and estado in ('agendado', 'por_agendar', 'nova_visita')
+    where id = p_service_id and estado in ('agendado', 'por_agendar', 'nova_visita', 'correcao_necessaria')
   ) then
     raise exception 'Este serviço não está num estado que permita iniciar uma visita.';
+  end if;
+
+  if not tech_service_desbloqueado(p_service_id) then
+    raise exception 'Tens um serviço anterior por concluir. Fecha-o antes de iniciares este.';
   end if;
 
   update services
@@ -533,6 +622,7 @@ set search_path = public
 as $$
 declare
   v_service_id uuid;
+  v_novo_estado text;
 begin
   if p_resultado not in ('concluido', 'nova_visita', 'nao_realizado') then
     raise exception 'Resultado inválido.';
@@ -561,8 +651,13 @@ begin
   insert into visit_photos (visit_id, storage_path)
   select p_visit_id, unnest(p_fotos);
 
+  -- 'concluido' fica a aguardar validação do Admin antes de ir para
+  -- faturação — ver "VALIDAÇÃO ADMINISTRATIVA DO FECHO DE OS" acima.
+  -- O resultado da visita em si (histórico) continua a gravar 'concluido'.
+  v_novo_estado := case when p_resultado = 'concluido' then 'aguarda_validacao' else p_resultado end;
+
   update services
-    set estado = p_resultado
+    set estado = v_novo_estado
     where id = v_service_id;
 end;
 $$;

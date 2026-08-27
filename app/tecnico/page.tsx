@@ -11,7 +11,7 @@ export default async function AgendaTecnicoPage() {
 
   const { data: servicos } = await supabase
     .from("services_technician_view")
-    .select("*, clients_technician_view!inner(nome), client_addresses_technician_view(endereco)")
+    .select("*")
     .order("data_agendada", { ascending: true })
     .order("hora_agendada", { ascending: true });
 
@@ -37,8 +37,14 @@ export default async function AgendaTecnicoPage() {
                 <EstadoBadge estado={s.estado} />
               </div>
             </div>
-            <div className="text-base font-semibold text-slate-800">{s.clients_technician_view?.nome}</div>
-            <div className="text-sm text-slate-500">{s.descricao}</div>
+            <div className="text-base font-semibold text-slate-800">{s.cliente_nome}</div>
+            {s.estado === "correcao_necessaria" && s.motivo_correcao ? (
+              <div className="text-sm font-medium text-red-700">⚠️ Correção: {s.motivo_correcao}</div>
+            ) : s.desbloqueado ? (
+              <div className="text-sm text-slate-500">{s.descricao}</div>
+            ) : (
+              <div className="text-sm text-slate-400">🔒 Detalhes disponíveis depois de fechares o serviço anterior</div>
+            )}
           </Link>
         ))}
       </div>
@@ -50,7 +56,9 @@ function EstadoBadge({ estado }: { estado: string }) {
   const map: Record<string, [string, string]> = {
     agendado: ["Agendado", "bg-indigo-100 text-indigo-800"],
     em_curso: ["Em curso", "bg-amber-100 text-amber-800"],
+    aguarda_validacao: ["Aguarda validação", "bg-amber-100 text-amber-800"],
     concluido: ["Concluído", "bg-emerald-100 text-emerald-800"],
+    correcao_necessaria: ["Correção necessária", "bg-red-100 text-red-800"],
     nova_visita: ["Nova visita", "bg-orange-100 text-orange-800"],
     nao_realizado: ["Não realizado", "bg-red-100 text-red-700"],
   };

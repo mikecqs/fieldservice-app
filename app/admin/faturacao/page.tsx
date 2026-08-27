@@ -1,8 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import { marcarFaturado } from "./actions";
+import { marcarFaturado, validarServico, enviarParaCorrecao } from "./actions";
 
 export default async function FaturacaoPage() {
   const supabase = createClient();
+
+  const { data: aguardamValidacao } = await supabase
+    .from("services")
+    .select("id, tipo, descricao, valor, clients(nome)")
+    .eq("estado", "aguarda_validacao")
+    .order("created_at", { ascending: false });
+
   const { data: servicos } = await supabase
     .from("services")
     .select("id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, clients(nome)")
@@ -26,6 +33,58 @@ export default async function FaturacaoPage() {
         <div className="text-2xl font-bold text-slate-900">
           {totalPorFaturar.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
         </div>
+      </div>
+
+      <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">
+        Aguardam validação · {(aguardamValidacao ?? []).length}
+      </h2>
+      <div className="mb-6 space-y-2">
+        {(aguardamValidacao ?? []).map((s: any) => (
+          <div key={s.id} className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="mb-2 flex items-start justify-between">
+              <div>
+                <div className="font-medium text-slate-800">{s.clients?.nome}</div>
+                <div className="text-sm text-slate-600">{s.tipo} · {s.descricao}</div>
+              </div>
+              <span className="font-semibold text-slate-700">
+                {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <form action={validarServico}>
+                <input type="hidden" name="id" value={s.id} />
+                <button className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800">
+                  Validar
+                </button>
+              </form>
+              <details className="relative">
+                <summary className="list-none cursor-pointer rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">
+                  Mandar para trás
+                </summary>
+                <form
+                  action={enviarParaCorrecao}
+                  className="absolute left-0 z-10 mt-2 w-72 space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+                >
+                  <input type="hidden" name="id" value={s.id} />
+                  <span className="block text-xs font-medium text-slate-600">Motivo (obrigatório)</span>
+                  <textarea
+                    name="motivo"
+                    required
+                    rows={3}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+                    placeholder="Ex: guia do Wintouch indica 5 câmaras, técnico registou 4."
+                  />
+                  <button className="w-full rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
+                    Confirmar rejeição
+                  </button>
+                </form>
+              </details>
+            </div>
+          </div>
+        ))}
+        {(aguardamValidacao ?? []).length === 0 && (
+          <p className="py-4 text-center text-sm text-slate-400">Nada à espera de validação.</p>
+        )}
       </div>
 
       <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Por faturar · {porFaturar.length}</h2>

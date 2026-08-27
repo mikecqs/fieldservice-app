@@ -7,7 +7,7 @@ export default async function ConfiguracoesPage() {
   const organizationId = await getOrgId();
   const { data: settings } = await supabase
     .from("org_settings")
-    .select("tipos_servico, followup_dias_default")
+    .select("tipos_servico, followup_dias_default, acesso_sequencial_tecnico")
     .eq("organization_id", organizationId)
     .single();
 
@@ -39,6 +39,22 @@ export default async function ConfiguracoesPage() {
               defaultValue={settings?.followup_dias_default ?? 3}
               className="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
+          </label>
+          <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+            <input
+              type="checkbox"
+              name="acesso_sequencial_tecnico"
+              defaultChecked={settings?.acesso_sequencial_tecnico ?? false}
+              className="mt-0.5 rounded border-slate-300"
+            />
+            <span>
+              <span className="block text-sm font-medium text-slate-700">Acesso sequencial aos serviços</span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Quando ativo, um técnico só vê a morada, contacto, descrição e notas do serviço seguinte depois
+                de encerrar o anterior (concluído, nova visita, não realizado ou cancelado). Continua a ver a
+                hora e o cliente de todos os serviços do dia. Controlo operacional, não afeta o Admin.
+              </span>
+            </span>
           </label>
           <button className="rounded-md bg-indigo-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-800">
             Guardar

@@ -17,7 +17,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
   const supabase = createClient();
   const organizationId = await getOrgId();
 
-  const [{ data: servico }, { data: tecnicos }, { data: visitas }] = await Promise.all([
+  const [{ data: servico }, { data: tecnicos }, { data: visitas }, { data: validacoes }] = await Promise.all([
     supabase
       .from("services")
       .select("*, clients(nome), client_addresses(label, endereco), service_technicians(user_id, profiles(nome)), service_materials_planned(*)")
@@ -25,6 +25,11 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       .single(),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
     supabase.from("visits").select("*").eq("service_id", params.id).order("data", { ascending: false }),
+    supabase
+      .from("service_validations")
+      .select("acao, motivo, created_at, profiles(nome)")
+      .eq("service_id", params.id)
+      .order("created_at", { ascending: false }),
   ]);
 
   if (!servico) notFound();
@@ -66,6 +71,11 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
         <p className="mt-2 text-sm font-semibold text-slate-700">
           {Number(servico.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
         </p>
+        {servico.estado === "correcao_necessaria" && validacoes?.[0]?.motivo && (
+          <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
+            <span className="font-semibold">Motivo da rejeição:</span> {validacoes[0].motivo}
+          </div>
+        )}
       </div>
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
@@ -158,7 +168,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       </div>
 
       {(visitas ?? []).length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="mb-3 text-sm font-semibold text-slate-800">Histórico de visitas</h2>
           <div className="space-y-2">
             {(visitas ?? []).map((v: any) => (
@@ -168,6 +178,28 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
                   <span>{v.resultado ?? "em curso"}</span>
                 </div>
                 {v.trabalho_realizado && <p className="text-slate-700">{v.trabalho_realizado}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(validacoes ?? []).length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">Histórico de validações</h2>
+          <div className="space-y-2">
+            {(validacoes ?? []).map((v: any, i: number) => (
+              <div
+                key={i}
+                className={`rounded-md border p-3 text-sm ${
+                  v.acao === "validado" ? "border-emerald-100 bg-emerald-50" : "border-red-100 bg-red-50"
+                }`}
+              >
+                <div className="mb-1 flex justify-between text-xs text-slate-500">
+                  <span className="font-semibold">{v.acao === "validado" ? "Validado" : "Rejeitado"}</span>
+                  <span>{new Date(v.created_at).toLocaleString("pt-PT")} · {v.profiles?.nome}</span>
+                </div>
+                {v.motivo && <p className="text-slate-700">{v.motivo}</p>}
               </div>
             ))}
           </div>

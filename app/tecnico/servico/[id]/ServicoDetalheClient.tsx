@@ -8,7 +8,9 @@ import { iniciarServico, concluirVisita } from "../../actions";
 const ESTADO_LABEL: Record<string, [string, string]> = {
   agendado: ["Agendado", "bg-indigo-100 text-indigo-800"],
   em_curso: ["Em curso", "bg-amber-100 text-amber-800"],
+  aguarda_validacao: ["Aguarda validação", "bg-amber-100 text-amber-800"],
   concluido: ["Concluído", "bg-emerald-100 text-emerald-800"],
+  correcao_necessaria: ["Correção necessária", "bg-red-100 text-red-800"],
   nova_visita: ["Nova visita", "bg-orange-100 text-orange-800"],
   nao_realizado: ["Não realizado", "bg-red-100 text-red-700"],
 };
@@ -86,14 +88,30 @@ export function ServicoDetalheClient({
         <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{servico.tipo}</span>
       </div>
 
-      <h1 className="text-xl font-bold text-slate-900">{servico.clients_technician_view?.nome}</h1>
-      <p className="mt-1 text-sm text-slate-500">{servico.client_addresses_technician_view?.endereco}</p>
-      <p className="text-sm text-slate-500">{servico.clients_technician_view?.telefone}</p>
+      {servico.estado === "correcao_necessaria" && servico.motivo_correcao && (
+        <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+          <span className="font-semibold">⚠️ O Admin pediu uma correção:</span> {servico.motivo_correcao}
+        </div>
+      )}
 
-      <div className="mt-4 rounded-lg bg-white p-3 shadow-sm">
-        <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Descrição</div>
-        <p className="text-sm text-slate-700">{servico.descricao}</p>
-      </div>
+      <h1 className="text-xl font-bold text-slate-900">{servico.cliente_nome}</h1>
+      {servico.desbloqueado ? (
+        <>
+          {servico.morada && <p className="mt-1 text-sm text-slate-500">{servico.morada}</p>}
+          {servico.cliente_telefone && <p className="text-sm text-slate-500">{servico.cliente_telefone}</p>}
+        </>
+      ) : (
+        <p className="mt-1 text-sm font-medium text-amber-700">
+          🔒 Morada, contacto e descrição disponíveis depois de fechares o serviço anterior.
+        </p>
+      )}
+
+      {servico.desbloqueado && (
+        <div className="mt-4 rounded-lg bg-white p-3 shadow-sm">
+          <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Descrição</div>
+          <p className="text-sm text-slate-700">{servico.descricao}</p>
+        </div>
+      )}
 
       {servico.notas && (
         <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">{servico.notas}</div>
@@ -115,15 +133,31 @@ export function ServicoDetalheClient({
       {erro && <p className="mt-3 text-sm text-red-600">{erro}</p>}
 
       <div className="mt-6">
-        {(servico.estado === "agendado" || servico.estado === "nova_visita") && !aFinalizar && (
-          <button
-            onClick={iniciar}
-            disabled={aGuardar}
-            className="w-full rounded-md bg-indigo-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {aGuardar ? "A iniciar…" : servico.estado === "nova_visita" ? "Iniciar nova visita" : "Iniciar serviço"}
-          </button>
-        )}
+        {!servico.desbloqueado &&
+          ["agendado", "nova_visita", "correcao_necessaria"].includes(servico.estado) &&
+          !aFinalizar && (
+            <div className="rounded-lg bg-slate-100 p-3 text-center text-sm text-slate-500">
+              🔒 Fecha o serviço anterior para poderes iniciar este.
+            </div>
+          )}
+
+        {servico.desbloqueado &&
+          ["agendado", "nova_visita", "correcao_necessaria"].includes(servico.estado) &&
+          !aFinalizar && (
+            <button
+              onClick={iniciar}
+              disabled={aGuardar}
+              className="w-full rounded-md bg-indigo-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-40"
+            >
+              {aGuardar
+                ? "A iniciar…"
+                : servico.estado === "nova_visita"
+                ? "Iniciar nova visita"
+                : servico.estado === "correcao_necessaria"
+                ? "Corrigir e reabrir"
+                : "Iniciar serviço"}
+            </button>
+          )}
 
         {servico.estado === "em_curso" && !aFinalizar && (
           <button
@@ -202,6 +236,12 @@ export function ServicoDetalheClient({
                 {aGuardar ? "A guardar…" : "Confirmar"}
               </button>
             </div>
+          </div>
+        )}
+
+        {servico.estado === "aguarda_validacao" && !aFinalizar && (
+          <div className="rounded-lg bg-white p-3 text-sm text-slate-500 shadow-sm">
+            Serviço concluído — aguarda validação do Admin antes de seguir para faturação.
           </div>
         )}
 
