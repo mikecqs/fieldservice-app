@@ -9,7 +9,7 @@ export default function NovoClientePage() {
       </Link>
       <div className="rounded-xl border border-slate-200 bg-white p-6">
         <h1 className="mb-4 text-lg font-bold text-slate-900">Novo cliente</h1>
-        <form action={criarCliente} className="grid grid-cols-2 gap-3">
+        <form action={criarCliente} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="col-span-2 block">
             <span className="mb-1 block text-xs font-medium text-slate-600">Nome</span>
             <input name="nome" required className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />

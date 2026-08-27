@@ -64,7 +64,7 @@ export default async function FaturacaoPage() {
                 </summary>
                 <form
                   action={enviarParaCorrecao}
-                  className="absolute left-0 z-10 mt-2 w-72 space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+                  className="absolute left-0 z-10 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
                 >
                   <input type="hidden" name="id" value={s.id} />
                   <span className="block text-xs font-medium text-slate-600">Motivo (obrigatório)</span>

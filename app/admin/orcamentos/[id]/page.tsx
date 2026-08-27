@@ -162,7 +162,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
         </div>
 
         {orcamento.estado === "rascunho" && (
-          <form action={adicionarItem} className="mt-4 grid grid-cols-5 gap-2 border-t border-slate-100 pt-4">
+          <form action={adicionarItem} className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:grid-cols-5">
             <input type="hidden" name="budget_id" value={orcamento.id} />
             <select name="tipo" defaultValue="mao_obra" className="rounded-md border border-slate-300 px-2 py-1.5 text-xs">
               <option value="materiais">Materiais</option>
@@ -173,7 +173,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
             <input name="descricao" placeholder="Descrição" required className="col-span-2 rounded-md border border-slate-300 px-2 py-1.5 text-xs" />
             <input name="qtd" type="number" step="0.01" defaultValue="1" placeholder="Qtd" className="rounded-md border border-slate-300 px-2 py-1.5 text-xs" />
             <input name="valor_unit" type="number" step="0.01" placeholder="€ unit." className="rounded-md border border-slate-300 px-2 py-1.5 text-xs" />
-            <button className="col-span-5 mt-1 rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800">
+            <button className="col-span-2 mt-1 rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800 sm:col-span-5">
               Adicionar linha
             </button>
           </form>

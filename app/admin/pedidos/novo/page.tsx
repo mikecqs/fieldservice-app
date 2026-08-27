@@ -26,7 +26,7 @@ export default async function NovoPedidoPage() {
             Precisas de ter pelo menos um cliente criado. <Link href="/admin/clientes/novo" className="text-indigo-700 underline">Criar cliente</Link>.
           </p>
         ) : (
-          <form action={criarPedido} className="grid grid-cols-2 gap-3">
+          <form action={criarPedido} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="col-span-2 block">
               <span className="mb-1 block text-xs font-medium text-slate-600">Cliente</span>
               <select name="client_id" required className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">

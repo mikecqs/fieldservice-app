@@ -85,7 +85,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
               </summary>
               <form
                 action={enviarParaCorrecao}
-                className="absolute left-0 z-10 mt-2 w-72 space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+                className="absolute left-0 z-10 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
               >
                 <input type="hidden" name="id" value={servico.id} />
                 <span className="block text-xs font-medium text-slate-600">Motivo (obrigatório)</span>
@@ -127,7 +127,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="mb-3 text-sm font-semibold text-slate-800">Agendamento</h2>
-        <form action={atualizarAgendamento} className="grid grid-cols-2 gap-3">
+        <form action={atualizarAgendamento} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <input type="hidden" name="id" value={servico.id} />
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-slate-600">Data</span>

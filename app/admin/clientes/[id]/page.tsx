@@ -39,7 +39,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
             NIF {cliente.nif || "—"}
           </span>
         </div>
-        <div className="grid grid-cols-2 gap-4 text-sm text-slate-600">
+        <div className="grid grid-cols-1 gap-1 text-sm text-slate-600 sm:grid-cols-2 sm:gap-4">
           <div>{cliente.telefone}</div>
           <div>{cliente.email}</div>
         </div>
@@ -53,7 +53,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
         {cliente.notas && <p className="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-500">{cliente.notas}</p>}
       </div>
 
-      <div className="mb-5 grid grid-cols-3 gap-4">
+      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatBox label="Serviços" value={services?.length ?? 0} />
         <StatBox label="Orçamentos" value={budgets?.length ?? 0} />
         <StatBox

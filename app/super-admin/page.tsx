@@ -70,7 +70,7 @@ export default async function SuperAdminPage() {
               <summary className="cursor-pointer text-xs font-medium text-slate-600">
                 Criar acesso de Admin para esta empresa
               </summary>
-              <form action={criarAdminDaEmpresa} className="mt-3 grid grid-cols-2 gap-2">
+              <form action={criarAdminDaEmpresa} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input type="hidden" name="organization_id" value={org.id} />
                 <input name="nome" placeholder="Nome do admin" required className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
                 <input name="email" type="email" placeholder="Email" required className="rounded-md border border-slate-300 px-3 py-2 text-sm" />

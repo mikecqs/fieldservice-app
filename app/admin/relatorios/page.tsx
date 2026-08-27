@@ -28,7 +28,7 @@ export default async function RelatoriosPage() {
         <p className="mt-0.5 text-sm text-slate-500">Visão geral da atividade da empresa.</p>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="text-xs font-medium text-slate-500">Total faturado</div>
           <div className="text-2xl font-bold text-slate-900">
