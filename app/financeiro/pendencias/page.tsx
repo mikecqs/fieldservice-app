@@ -27,29 +27,29 @@ export default async function PendenciasPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900">Pendências</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Serviços com correção pedida — ainda não podem seguir para faturação.</p>
+        <h1 className="text-xl font-bold text-white">Pendências</h1>
+        <p className="mt-0.5 text-sm text-neutral-400">Serviços com correção pedida — ainda não podem seguir para faturação.</p>
       </div>
 
       <div className="space-y-2">
         {(pendentes ?? []).map((s: any) => (
-          <div key={s.id} className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <div key={s.id} className="rounded-lg border border-red-500/20 bg-red-500/10 p-4">
             <div className="mb-1 flex items-start justify-between">
               <div>
-                <div className="font-medium text-slate-800">{s.clients?.nome}</div>
-                <div className="text-sm text-slate-600">{s.tipo} · {s.descricao}</div>
+                <div className="font-medium text-neutral-100">{s.clients?.nome}</div>
+                <div className="text-sm text-neutral-300">{s.tipo} · {s.descricao}</div>
               </div>
-              <span className="font-semibold text-slate-700">
+              <span className="font-semibold text-neutral-200">
                 {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
               </span>
             </div>
             {motivoPorServico.get(s.id) && (
-              <p className="mt-1 text-sm text-red-800">Motivo: {motivoPorServico.get(s.id)}</p>
+              <p className="mt-1 text-sm text-red-400">Motivo: {motivoPorServico.get(s.id)}</p>
             )}
           </div>
         ))}
         {(pendentes ?? []).length === 0 && (
-          <p className="py-10 text-center text-sm text-slate-400">Sem pendências — tudo a seguir normalmente.</p>
+          <p className="py-10 text-center text-sm text-neutral-500">Sem pendências — tudo a seguir normalmente.</p>
         )}
       </div>
     </div>

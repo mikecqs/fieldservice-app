@@ -32,7 +32,7 @@ function EventoResumo({ s }: { s: Servico }) {
   return (
     <Link
       href={`/admin/servicos/${s.id}`}
-      className={`block rounded border-l-4 border-current px-1.5 py-1 text-[11px] leading-tight ${ESTADO_COLOR[s.estado] ?? "bg-slate-100 text-slate-600"}`}
+      className={`block rounded border-l-4 border-current px-1.5 py-1 text-[11px] leading-tight ${ESTADO_COLOR[s.estado] ?? "bg-neutral-800 text-neutral-300"}`}
     >
       <div className="font-semibold">
         {emoji && <span className="mr-0.5">{emoji}</span>}
@@ -49,11 +49,11 @@ function GrelhaHoraria({ dias, servicosPorDia }: { dias: Date[]; servicosPorDia:
   const alturaTotal = horas.length * ALTURA_HORA;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900">
       <div className="flex min-w-[600px]">
-        <div className="w-14 shrink-0 border-r border-slate-100 pt-8">
+        <div className="w-14 shrink-0 border-r border-neutral-800 pt-8">
           {horas.map((h) => (
-            <div key={h} style={{ height: ALTURA_HORA }} className="border-t border-slate-100 pl-1 text-[10px] text-slate-400">
+            <div key={h} style={{ height: ALTURA_HORA }} className="border-t border-neutral-800 pl-1 text-[10px] text-neutral-500">
               {h}:00
             </div>
           ))}
@@ -63,13 +63,13 @@ function GrelhaHoraria({ dias, servicosPorDia }: { dias: Date[]; servicosPorDia:
           const servicos = (servicosPorDia.get(iso) ?? []).filter((s) => s.hora_agendada);
           const hoje = iso === toISO(new Date());
           return (
-            <div key={iso} className="flex-1 border-r border-slate-100 last:border-r-0">
-              <div className={`sticky top-0 border-b border-slate-100 px-1 py-1.5 text-center text-xs ${hoje ? "bg-indigo-50 font-bold text-indigo-800" : "text-slate-500"}`}>
+            <div key={iso} className="flex-1 border-r border-neutral-800 last:border-r-0">
+              <div className={`sticky top-0 border-b border-neutral-800 px-1 py-1.5 text-center text-xs ${hoje ? "bg-neutral-800 font-bold text-neutral-200" : "text-neutral-400"}`}>
                 {DIAS_SEMANA[dia.getDay() === 0 ? 6 : dia.getDay() - 1]} {dia.getDate()}
               </div>
               <div className="relative" style={{ height: alturaTotal }}>
                 {horas.map((h) => (
-                  <div key={h} className="border-t border-slate-50" style={{ height: ALTURA_HORA }} />
+                  <div key={h} className="border-t border-neutral-900" style={{ height: ALTURA_HORA }} />
                 ))}
                 {servicos.map((s) => {
                   const inicio = Math.max(minutosDoDia(s.hora_agendada!), HORA_INICIO_GRELHA * 60);
@@ -99,9 +99,9 @@ function CalendarioMes({ refDate, servicosPorDia }: { refDate: Date; servicosPor
   const mesAtual = refDate.getMonth();
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900">
       <div className="min-w-[700px]">
-      <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50 text-center text-xs font-semibold text-slate-500">
+      <div className="grid grid-cols-7 border-b border-neutral-800 bg-neutral-800 text-center text-xs font-semibold text-neutral-400">
         {DIAS_SEMANA.map((d) => (
           <div key={d} className="py-2">{d}</div>
         ))}
@@ -113,10 +113,10 @@ function CalendarioMes({ refDate, servicosPorDia }: { refDate: Date; servicosPor
           const foraDoMes = dia.getMonth() !== mesAtual;
           const hoje = iso === toISO(new Date());
           return (
-            <div key={iso} className={`min-h-[92px] border-b border-r border-slate-100 p-1 ${foraDoMes ? "bg-slate-50/60" : ""}`}>
+            <div key={iso} className={`min-h-[92px] border-b border-r border-neutral-800 p-1 ${foraDoMes ? "bg-neutral-900/60" : ""}`}>
               <Link
                 href={`/admin/agenda?view=dia&data=${iso}`}
-                className={`mb-1 inline-block rounded px-1.5 text-xs ${hoje ? "bg-indigo-900 font-bold text-white" : foraDoMes ? "text-slate-300" : "text-slate-600"}`}
+                className={`mb-1 inline-block rounded px-1.5 text-xs ${hoje ? "bg-white font-bold text-neutral-950" : foraDoMes ? "text-neutral-600" : "text-neutral-300"}`}
               >
                 {dia.getDate()}
               </Link>
@@ -125,7 +125,7 @@ function CalendarioMes({ refDate, servicosPorDia }: { refDate: Date; servicosPor
                   <EventoResumo key={s.id} s={s} />
                 ))}
                 {servicos.length > 3 && (
-                  <Link href={`/admin/agenda?view=dia&data=${iso}`} className="block text-[10px] text-indigo-700 hover:underline">
+                  <Link href={`/admin/agenda?view=dia&data=${iso}`} className="block text-[10px] text-neutral-200 hover:underline">
                     +{servicos.length - 3} mais
                   </Link>
                 )}
@@ -216,25 +216,25 @@ export default async function AgendaPage({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Agenda</h1>
-          <p className="mt-0.5 text-sm text-slate-500">{titulo}</p>
+          <h1 className="text-xl font-bold text-white">Agenda</h1>
+          <p className="mt-0.5 text-sm text-neutral-400">{titulo}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href={`/admin/agenda?view=${view}&data=${toISO(anterior)}`} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+          <Link href={`/admin/agenda?view=${view}&data=${toISO(anterior)}`} className="rounded-md border border-neutral-700 px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800">
             ←
           </Link>
-          <Link href={`/admin/agenda?view=${view}&data=${hoje}`} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+          <Link href={`/admin/agenda?view=${view}&data=${hoje}`} className="rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800">
             Hoje
           </Link>
-          <Link href={`/admin/agenda?view=${view}&data=${toISO(seguinte)}`} className="rounded-md border border-slate-300 px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+          <Link href={`/admin/agenda?view=${view}&data=${toISO(seguinte)}`} className="rounded-md border border-neutral-700 px-2.5 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800">
             →
           </Link>
-          <div className="ml-2 flex overflow-hidden rounded-md border border-slate-300">
+          <div className="ml-2 flex overflow-hidden rounded-md border border-neutral-700">
             {[["dia", "Dia"], ["semana", "Semana"], ["mes", "Mês"]].map(([v, label]) => (
               <Link
                 key={v}
                 href={linkView(v)}
-                className={`px-3 py-1.5 text-sm ${view === v ? "bg-indigo-900 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                className={`px-3 py-1.5 text-sm ${view === v ? "bg-white text-neutral-950" : "bg-neutral-900 text-neutral-300 hover:bg-neutral-800"}`}
               >
                 {label}
               </Link>
@@ -250,8 +250,8 @@ export default async function AgendaPage({
       )}
 
       {(pendentes ?? []).length > 0 && (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">
+        <div className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+          <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-400">
             Pendentes de agendamento · {(pendentes ?? []).length}
           </h2>
           <div className="space-y-1.5">
@@ -259,7 +259,7 @@ export default async function AgendaPage({
               <Link
                 key={s.id}
                 href={`/admin/servicos/${s.id}`}
-                className="block rounded-md border border-amber-200 bg-white p-2.5 text-sm text-amber-900 hover:bg-amber-100"
+                className="block rounded-md border border-amber-500/20 bg-neutral-900 p-2.5 text-sm text-amber-300 hover:bg-amber-500/15"
               >
                 {s.clients?.nome} — {s.tipo} · {s.descricao} · <span className="text-xs">{ESTADO_LABEL[s.estado]}</span>
               </Link>

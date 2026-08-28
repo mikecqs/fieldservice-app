@@ -46,7 +46,11 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       .eq("id", params.id)
       .single(),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
-    supabase.from("visits").select("*").eq("service_id", params.id).order("data", { ascending: false }),
+    supabase
+      .from("visits")
+      .select("*, visit_materials_used(nome, qtd, preco_unit)")
+      .eq("service_id", params.id)
+      .order("data", { ascending: false }),
     supabase
       .from("service_validations")
       .select("acao, motivo, created_at, profiles(nome)")
@@ -81,28 +85,31 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
     materialBloqueando: (comprasPendentes ?? []).length > 0,
   });
   const badgePreparacao = PREPARACAO_BADGE[preparacao.nivel];
+  const previstoMap = new Map<string, number>(
+    (servico.service_materials_planned ?? []).map((m: any) => [m.nome, Number(m.qtd)])
+  );
   const mostrarPreparacao = ["por_agendar", "agendado", "nova_visita", "correcao_necessaria"].includes(servico.estado);
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link href="/admin/servicos" className="mb-4 inline-block text-sm text-slate-500 hover:text-slate-800">
+      <Link href="/admin/servicos" className="mb-4 inline-block text-sm text-neutral-400 hover:text-neutral-100">
         ← Serviços
       </Link>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <div className="mb-1 flex items-start justify-between">
           <div>
-            <h1 className="text-lg font-bold text-slate-900">{servico.clients?.nome}</h1>
-            <p className="text-sm text-slate-500">{servico.tipo} · {servico.descricao}</p>
+            <h1 className="text-lg font-bold text-white">{servico.clients?.nome}</h1>
+            <p className="text-sm text-neutral-400">{servico.tipo} · {servico.descricao}</p>
             {servico.client_addresses && (
-              <p className="mt-1 text-xs text-slate-400">{servico.client_addresses.label}: {servico.client_addresses.endereco}</p>
+              <p className="mt-1 text-xs text-neutral-500">{servico.client_addresses.label}: {servico.client_addresses.endereco}</p>
             )}
           </div>
-          <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[servico.estado] ?? "bg-slate-100 text-slate-600"}`}>
+          <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[servico.estado] ?? "bg-neutral-800 text-neutral-300"}`}>
             {ESTADO_LABEL[servico.estado] ?? servico.estado}
           </span>
         </div>
-        <p className="mt-2 text-sm font-semibold text-slate-700">
+        <p className="mt-2 text-sm font-semibold text-neutral-200">
           {Number(servico.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
         </p>
         {mostrarPreparacao && (
@@ -115,13 +122,13 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           </div>
         )}
         {servico.estado === "correcao_necessaria" && validacoes?.[0]?.motivo && (
-          <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
+          <div className="mt-3 rounded-md bg-red-500/10 p-3 text-sm text-red-400">
             <span className="font-semibold">Motivo da rejeição:</span> {validacoes[0].motivo}
           </div>
         )}
 
         {servico.estado === "aguarda_validacao" && (
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-800 pt-4">
             <form action={validarServico}>
               <input type="hidden" name="id" value={servico.id} />
               <button className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800">
@@ -129,20 +136,20 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
               </button>
             </form>
             <details className="relative">
-              <summary className="list-none cursor-pointer rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">
+              <summary className="list-none cursor-pointer rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10">
                 Mandar para trás
               </summary>
               <form
                 action={enviarParaCorrecao}
-                className="absolute left-0 z-10 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg"
+                className="absolute left-0 z-10 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 shadow-lg"
               >
                 <input type="hidden" name="id" value={servico.id} />
-                <span className="block text-xs font-medium text-slate-600">Motivo (obrigatório)</span>
+                <span className="block text-xs font-medium text-neutral-300">Motivo (obrigatório)</span>
                 <textarea
                   name="motivo"
                   required
                   rows={3}
-                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs"
+                  className="w-full rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
                   placeholder="Ex: guia do Wintouch indica 5 câmaras, técnico registou 4."
                 />
                 <button className="w-full rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
@@ -153,58 +160,58 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           </div>
         )}
 
-        <details className="mt-4 border-t border-slate-100 pt-3">
-          <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600">Forçar estado manualmente</summary>
+        <details className="mt-4 border-t border-neutral-800 pt-3">
+          <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300">Forçar estado manualmente</summary>
           <form action={mudarEstado} className="mt-2 flex items-center gap-1.5">
             <input type="hidden" name="id" value={servico.id} />
             <select
               name="estado"
               defaultValue={ESTADOS.includes(servico.estado) ? servico.estado : ""}
-              className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+              className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-200"
             >
               {!ESTADOS.includes(servico.estado) && <option value="" disabled>—</option>}
               {ESTADOS.map((e) => (
                 <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
               ))}
             </select>
-            <button className="rounded bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800">
+            <button className="rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800">
               Aplicar
             </button>
           </form>
         </details>
       </div>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Agendamento</h2>
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Agendamento</h2>
         <AgendamentoForm servico={servico} />
       </div>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Técnicos atribuídos</h2>
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Técnicos atribuídos</h2>
         <div className="mb-3 space-y-1.5">
           {(servico.service_technicians ?? []).map((t: any) => (
-            <div key={t.user_id} className="flex items-center justify-between rounded-md border border-slate-100 p-2 text-sm">
+            <div key={t.user_id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2 text-sm">
               {t.profiles?.nome}
               <form action={removerTecnico}>
                 <input type="hidden" name="service_id" value={servico.id} />
                 <input type="hidden" name="user_id" value={t.user_id} />
-                <button className="text-xs text-red-600 hover:underline">remover</button>
+                <button className="text-xs text-red-400 hover:underline">remover</button>
               </form>
             </div>
           ))}
           {(servico.service_technicians ?? []).length === 0 && (
-            <p className="text-sm text-slate-400">Ainda sem técnicos atribuídos.</p>
+            <p className="text-sm text-neutral-500">Ainda sem técnicos atribuídos.</p>
           )}
         </div>
         {disponiveis.length > 0 && (
           <form action={atribuirTecnico} className="flex gap-2">
             <input type="hidden" name="service_id" value={servico.id} />
-            <select name="user_id" className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <select name="user_id" className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm">
               {disponiveis.map((t: any) => (
                 <option key={t.id} value={t.id}>{t.nome}</option>
               ))}
             </select>
-            <button className="rounded-md bg-indigo-900 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-800">
+            <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
               Atribuir
             </button>
           </form>
@@ -212,11 +219,11 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       </div>
 
       {(equipamentosCliente ?? []).length > 0 && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">Equipamento relacionado</h2>
+        <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+          <h2 className="mb-3 text-sm font-semibold text-neutral-100">Equipamento relacionado</h2>
           <form action={associarEquipamento} className="flex gap-2">
             <input type="hidden" name="id" value={servico.id} />
-            <select name="equipment_id" defaultValue={servico.equipment_id ?? ""} className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <select name="equipment_id" defaultValue={servico.equipment_id ?? ""} className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm">
               <option value="">— Nenhum —</option>
               {(equipamentosCliente ?? []).map((e: any) => (
                 <option key={e.id} value={e.id}>
@@ -224,54 +231,54 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
                 </option>
               ))}
             </select>
-            <button className="rounded-md bg-indigo-900 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-800">
+            <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
               Guardar
             </button>
           </form>
-          <Link href={`/admin/clientes/${servico.client_id}`} className="mt-2 inline-block text-xs text-indigo-700 underline">
+          <Link href={`/admin/clientes/${servico.client_id}`} className="mt-2 inline-block text-xs text-neutral-200 underline">
             Ver equipamentos e histórico do cliente →
           </Link>
         </div>
       )}
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Materiais planeados</h2>
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Materiais planeados</h2>
         <div className="mb-3 space-y-1.5">
           {(servico.service_materials_planned ?? []).map((m: any) => (
-            <div key={m.id} className="flex items-center justify-between rounded-md border border-slate-100 p-2 text-sm">
+            <div key={m.id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2 text-sm">
               {m.nome} · {m.qtd}
               <form action={removerMaterialPlaneado}>
                 <input type="hidden" name="id" value={m.id} />
                 <input type="hidden" name="service_id" value={servico.id} />
-                <button className="text-xs text-red-600 hover:underline">remover</button>
+                <button className="text-xs text-red-400 hover:underline">remover</button>
               </form>
             </div>
           ))}
           {(servico.service_materials_planned ?? []).length === 0 && (
-            <p className="text-sm text-slate-400">Sem materiais planeados.</p>
+            <p className="text-sm text-neutral-500">Sem materiais planeados.</p>
           )}
         </div>
         <form action={adicionarMaterialPlaneado} className="flex gap-2">
           <input type="hidden" name="service_id" value={servico.id} />
-          <input name="nome" placeholder="Material" required className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          <input name="qtd" type="number" step="0.01" defaultValue="1" className="w-20 rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          <button className="rounded-md bg-indigo-900 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-800">
+          <input name="nome" placeholder="Material" required className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+          <input name="qtd" type="number" step="0.01" defaultValue="1" className="w-20 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+          <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
             Adicionar
           </button>
         </form>
       </div>
 
       {(eventos ?? []).length > 0 && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">Histórico</h2>
+        <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+          <h2 className="mb-3 text-sm font-semibold text-neutral-100">Histórico</h2>
           <div className="space-y-2">
             {(eventos ?? []).map((e: any, i: number) => (
-              <div key={i} className="rounded-md border border-slate-100 p-3 text-sm">
-                <div className="mb-1 flex justify-between text-xs text-slate-500">
-                  <span className="font-semibold text-slate-700">{EVENTO_LABEL[e.tipo] ?? e.tipo}</span>
+              <div key={i} className="rounded-md border border-neutral-800 p-3 text-sm">
+                <div className="mb-1 flex justify-between text-xs text-neutral-400">
+                  <span className="font-semibold text-neutral-200">{EVENTO_LABEL[e.tipo] ?? e.tipo}</span>
                   <span>{new Date(e.created_at).toLocaleString("pt-PT")} · {e.profiles?.nome ?? "—"}</span>
                 </div>
-                <p className="text-slate-700">{e.descricao}</p>
+                <p className="text-neutral-200">{e.descricao}</p>
               </div>
             ))}
           </div>
@@ -279,16 +286,48 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       )}
 
       {(visitas ?? []).length > 0 && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">Histórico de visitas</h2>
+        <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+          <h2 className="mb-3 text-sm font-semibold text-neutral-100">Histórico de visitas</h2>
           <div className="space-y-2">
             {(visitas ?? []).map((v: any) => (
-              <div key={v.id} className="rounded-md border border-slate-100 p-3 text-sm">
-                <div className="mb-1 flex justify-between text-xs text-slate-400">
+              <div key={v.id} className="rounded-md border border-neutral-800 p-3 text-sm">
+                <div className="mb-1 flex justify-between text-xs text-neutral-500">
                   <span>{v.data}</span>
                   <span>{v.resultado ?? "em curso"}</span>
                 </div>
-                {v.trabalho_realizado && <p className="text-slate-700">{v.trabalho_realizado}</p>}
+                {v.trabalho_realizado && <p className="text-neutral-200">{v.trabalho_realizado}</p>}
+                {(v.visit_materials_used ?? []).length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-neutral-800 pt-2">
+                    {(v.visit_materials_used ?? []).map((m: any, i: number) => {
+                      const previsto = previstoMap.get(m.nome);
+                      const difere = previsto !== undefined && previsto !== Number(m.qtd);
+                      return (
+                        <div key={i} className="flex items-center justify-between text-xs text-neutral-400">
+                          <span>
+                            {m.nome} × {m.qtd}
+                            {difere && (
+                              <span className="ml-1.5 text-amber-400">(previsto: {previsto})</span>
+                            )}
+                          </span>
+                          <span>
+                            {(Number(m.qtd) * Number(m.preco_unit)).toLocaleString("pt-PT", {
+                              style: "currency",
+                              currency: "EUR",
+                            })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {v.valor_calculado != null && (
+                  <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-xs font-semibold text-neutral-200">
+                    <span>Valor calculado (materiais + mão de obra)</span>
+                    <span>
+                      {Number(v.valor_calculado).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                    </span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -296,21 +335,21 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       )}
 
       {(validacoes ?? []).length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">Histórico de validações</h2>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+          <h2 className="mb-3 text-sm font-semibold text-neutral-100">Histórico de validações</h2>
           <div className="space-y-2">
             {(validacoes ?? []).map((v: any, i: number) => (
               <div
                 key={i}
                 className={`rounded-md border p-3 text-sm ${
-                  v.acao === "validado" ? "border-emerald-100 bg-emerald-50" : "border-red-100 bg-red-50"
+                  v.acao === "validado" ? "border-emerald-500/20 bg-emerald-500/10" : "border-red-500/20 bg-red-500/10"
                 }`}
               >
-                <div className="mb-1 flex justify-between text-xs text-slate-500">
+                <div className="mb-1 flex justify-between text-xs text-neutral-400">
                   <span className="font-semibold">{v.acao === "validado" ? "Validado" : "Rejeitado"}</span>
                   <span>{new Date(v.created_at).toLocaleString("pt-PT")} · {v.profiles?.nome}</span>
                 </div>
-                {v.motivo && <p className="text-slate-700">{v.motivo}</p>}
+                {v.motivo && <p className="text-neutral-200">{v.motivo}</p>}
               </div>
             ))}
           </div>

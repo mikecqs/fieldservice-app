@@ -38,7 +38,7 @@ export default async function AtencaoPage() {
       .from("purchases")
       .select("id, descricao, estado, service_id, services(data_agendada, clients(nome))")
       .in("estado", ["por_encomendar", "encomendada", "parcial"]),
-    supabase.from("budgets").select("id, estado, enviado_em, clients(nome)").in("estado", ["enviado", "aguarda_resposta", "followup"]),
+    supabase.from("budgets").select("id, estado, enviado_em, followup_em, clients(nome)").in("estado", ["enviado", "aguarda_resposta", "followup"]),
     supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "correcao_necessaria"),
     supabase
       .from("services")
@@ -69,6 +69,9 @@ export default async function AtencaoPage() {
     supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
   ]);
 
+  // followup_em é preenchido automaticamente em marcarEnviado (7 dias após
+  // o envio) — nunca dependemos só do settings.followup_dias_default aqui,
+  // já era só usado para orçamentos antigos sem essa data.
   const followupDias = settings?.followup_dias_default ?? 3;
 
   const comprasUrgentes = (comprasBloqueando ?? []).filter((c: any) => {
@@ -78,6 +81,7 @@ export default async function AtencaoPage() {
 
   const orcamentosParados = (orcamentos ?? []).filter((o: any) => {
     if (o.estado === "followup") return true;
+    if (o.followup_em) return o.followup_em <= hoje;
     if (!o.enviado_em) return false;
     const diasPassados = (Date.now() - new Date(o.enviado_em).getTime()) / 86400000;
     return diasPassados >= followupDias;
@@ -180,8 +184,8 @@ export default async function AtencaoPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900">Atenção</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
+        <h1 className="text-xl font-bold text-white">Atenção</h1>
+        <p className="mt-0.5 text-sm text-neutral-400">
           {totalAlertas === 0 ? "Tudo em dia, sem alertas pendentes." : `${totalAlertas} situação(ões) a precisar de ação.`}
         </p>
       </div>
@@ -191,7 +195,7 @@ export default async function AtencaoPage() {
           .filter((g) => g.itens.length > 0)
           .map((g) => (
             <div key={g.titulo}>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">
+              <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-400">
                 {g.titulo} · {g.itens.length}
               </h2>
               <div className="space-y-1.5">
@@ -199,7 +203,7 @@ export default async function AtencaoPage() {
                   <Link
                     key={item.id}
                     href={g.href(item)}
-                    className="block rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 hover:bg-amber-100"
+                    className="block rounded-md border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300 hover:bg-amber-500/15"
                   >
                     {g.render(item)}
                   </Link>
@@ -208,7 +212,7 @@ export default async function AtencaoPage() {
             </div>
           ))}
         {totalAlertas === 0 && (
-          <p className="py-10 text-center text-sm text-slate-400">Sem alertas — bom trabalho.</p>
+          <p className="py-10 text-center text-sm text-neutral-500">Sem alertas — bom trabalho.</p>
         )}
       </div>
     </div>

@@ -24,35 +24,35 @@ export default async function RelatoriosPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900">Relatórios</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Visão geral da atividade da empresa.</p>
+        <h1 className="text-xl font-bold text-white">Relatórios</h1>
+        <p className="mt-0.5 text-sm text-neutral-400">Visão geral da atividade da empresa.</p>
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-medium text-slate-500">Total faturado</div>
-          <div className="text-2xl font-bold text-slate-900">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="text-xs font-medium text-neutral-400">Total faturado</div>
+          <div className="text-2xl font-bold text-white">
             {faturadoTotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-medium text-slate-500">Taxa de aceitação de orçamentos</div>
-          <div className="text-2xl font-bold text-slate-900">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="text-xs font-medium text-neutral-400">Taxa de aceitação de orçamentos</div>
+          <div className="text-2xl font-bold text-white">
             {taxaConversao === null ? "—" : `${taxaConversao.toFixed(0)}%`}
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Serviços por estado</h2>
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Serviços por estado</h2>
         <div className="space-y-1.5">
           {[...porEstadoServico.entries()].map(([estado, count]) => (
             <div key={estado} className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">{estado}</span>
-              <span className="font-medium text-slate-800">{count}</span>
+              <span className="text-neutral-300">{estado}</span>
+              <span className="font-medium text-neutral-100">{count}</span>
             </div>
           ))}
-          {porEstadoServico.size === 0 && <p className="text-sm text-slate-400">Ainda sem serviços.</p>}
+          {porEstadoServico.size === 0 && <p className="text-sm text-neutral-500">Ainda sem serviços.</p>}
         </div>
       </div>
     </div>

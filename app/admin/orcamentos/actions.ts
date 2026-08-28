@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { calcularOrcamento } from "@/lib/orcamento";
 import { registarEventoServico } from "@/lib/service-events";
+import { registarEventoOrcamento } from "@/lib/budget-events";
 
 export async function criarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -19,6 +20,13 @@ export async function criarOrcamento(formData: FormData) {
     .select()
     .single();
   if (error || !budget) throw new Error(error?.message || "Não foi possível criar o orçamento.");
+
+  await registarEventoOrcamento(supabase, {
+    organizationId,
+    budgetId: budget.id,
+    tipo: "criado",
+    descricao: "Orçamento criado.",
+  });
 
   redirect(`/admin/orcamentos/${budget.id}`);
 }
@@ -63,24 +71,66 @@ export async function atualizarIva(formData: FormData) {
   revalidatePath(`/admin/orcamentos/${id}`);
 }
 
+// Marcar como enviado avança logo para "aguarda resposta" (o Admin não tem
+// de fazer esse segundo clique manual) e agenda automaticamente o
+// follow-up para daqui a 7 dias — é isto que a Central de Atenção lê depois
+// (ver "Orçamento sem resposta"). Como o botão só existe enquanto o
+// orçamento está em rascunho, uma vez clicado desaparece — não há como
+// disparar isto duas vezes para o mesmo orçamento, logo não há follow-up
+// duplicado mesmo que o orçamento seja reaberto/consultado depois.
 export async function marcarEnviado(formData: FormData) {
+  const organizationId = await getOrgId();
   const supabase = createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
+
+  const hoje = new Date();
+  const enviado_em = hoje.toISOString().slice(0, 10);
+  const followupDate = new Date(hoje);
+  followupDate.setDate(followupDate.getDate() + 7);
+  const followup_em = followupDate.toISOString().slice(0, 10);
+
   await supabase
     .from("budgets")
-    .update({ estado: "enviado", enviado_em: new Date().toISOString().slice(0, 10) })
+    .update({ estado: "aguarda_resposta", enviado_em, followup_em })
     .eq("id", id);
+
+  await registarEventoOrcamento(supabase, {
+    organizationId,
+    budgetId: id,
+    tipo: "enviado",
+    descricao: `Marcado como enviado — follow-up agendado automaticamente para ${followup_em}.`,
+  });
+
   revalidatePath(`/admin/orcamentos/${id}`);
   revalidatePath("/admin/orcamentos");
+  revalidatePath("/admin/atencao");
 }
 
+const AVANCAR_ESTADO_EVENTO: Record<string, "followup" | "recusado" | "cancelado"> = {
+  followup: "followup",
+  recusado: "recusado",
+  cancelado: "cancelado",
+};
+
 export async function avancarEstado(formData: FormData) {
+  const organizationId = await getOrgId();
   const supabase = createClient();
   const id = String(formData.get("id") || "");
   const estado = String(formData.get("estado") || "");
   if (!id || !estado) return;
   await supabase.from("budgets").update({ estado }).eq("id", id);
+
+  const tipoEvento = AVANCAR_ESTADO_EVENTO[estado];
+  if (tipoEvento) {
+    await registarEventoOrcamento(supabase, {
+      organizationId,
+      budgetId: id,
+      tipo: tipoEvento,
+      descricao: `Estado alterado para "${estado}".`,
+    });
+  }
+
   revalidatePath(`/admin/orcamentos/${id}`);
   revalidatePath("/admin/orcamentos");
 }
@@ -130,6 +180,12 @@ export async function aceitarOrcamento(formData: FormData) {
     serviceId: service.id,
     tipo: "criado",
     descricao: "Serviço criado a partir de orçamento aceite.",
+  });
+  await registarEventoOrcamento(supabase, {
+    organizationId,
+    budgetId: id,
+    tipo: "aceite",
+    descricao: "Orçamento aceite — serviço criado.",
   });
 
   revalidatePath("/admin/orcamentos");

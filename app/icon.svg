@@ -1,4 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <rect width="32" height="32" rx="6" fill="#f97316" />
-  <text x="16" y="21" font-family="monospace" font-size="13" font-weight="700" fill="white" text-anchor="middle">nX</text>
+  <rect width="32" height="32" rx="7" fill="#ffffff" />
+  <g transform="translate(4 4)">
+    <rect x="5" y="4" width="3.2" height="16" rx="0.8" fill="#0a0a0a" />
+    <rect x="15.8" y="4" width="3.2" height="16" rx="0.8" fill="#0a0a0a" />
+    <rect x="10.4" y="3.15" width="3.2" height="17.71" rx="0.8" fill="#0a0a0a" transform="rotate(25.4 12 12)" />
+  </g>
 </svg>

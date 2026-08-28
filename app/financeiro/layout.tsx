@@ -10,7 +10,7 @@ export default async function FinanceiroLayout({ children }: { children: React.R
   const profile = await requireRole(["FINANCE"]);
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-slate-50 md:flex-row">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-neutral-950 md:flex-row">
       <FinanceiroSidebar orgNome={(profile as any)?.organizations?.nome ?? "—"} nome={profile?.nome} />
       <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
     </div>

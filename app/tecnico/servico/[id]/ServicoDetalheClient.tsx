@@ -19,23 +19,42 @@ const MAO_OBRA_OPCOES: [string, string][] = [
   ["outro", "Outro"],
 ];
 
+// Tem de espelhar exatamente o CASE de tech_finish_visit — é só para a
+// pré-visualização do total no telemóvel, o valor que realmente fica
+// gravado é sempre calculado outra vez no servidor.
+const HORAS_MAO_OBRA: Record<string, number> = {
+  "1h": 1, "2h": 2, "3h": 3, "4h": 4, "5h": 5, "6h": 6, "7h": 7, "8h": 8,
+  dia_completo: 8, "2dias": 16, outro: 0,
+};
+
+function formatEuros(v: number) {
+  return v.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
+}
+
+type LinhaMaterial = { nome: string; qtd: string; precoUnit: string };
+type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
+
 const ESTADO_LABEL: Record<string, [string, string]> = {
-  agendado: ["Agendado", "bg-indigo-100 text-indigo-800"],
-  em_curso: ["Em curso", "bg-amber-100 text-amber-800"],
-  aguarda_validacao: ["Aguarda validação", "bg-amber-100 text-amber-800"],
-  concluido: ["Concluído", "bg-emerald-100 text-emerald-800"],
-  correcao_necessaria: ["Correção necessária", "bg-red-100 text-red-800"],
-  nova_visita: ["Nova visita", "bg-orange-100 text-orange-800"],
-  nao_realizado: ["Não realizado", "bg-red-100 text-red-700"],
+  agendado: ["Agendado", "bg-neutral-800 text-neutral-200"],
+  em_curso: ["Em curso", "bg-amber-500/15 text-amber-400"],
+  aguarda_validacao: ["Aguarda validação", "bg-amber-500/15 text-amber-400"],
+  concluido: ["Concluído", "bg-emerald-500/15 text-emerald-400"],
+  correcao_necessaria: ["Correção necessária", "bg-red-500/15 text-red-400"],
+  nova_visita: ["Nova visita", "bg-orange-500/15 text-orange-400"],
+  nao_realizado: ["Não realizado", "bg-red-500/15 text-red-400"],
 };
 
 export function ServicoDetalheClient({
   servico,
   materiaisPrevistos,
+  catalogo,
+  valorHoraMaoObra,
   visitaAbertaId,
 }: {
   servico: any;
   materiaisPrevistos: { nome: string; qtd: number }[];
+  catalogo: CatalogItem[];
+  valorHoraMaoObra: number;
   visitaAbertaId: string | null;
 }) {
   const router = useRouter();
@@ -45,7 +64,9 @@ export function ServicoDetalheClient({
   const [aGuardar, setAGuardar] = useState(false);
   const [resultado, setResultado] = useState<"concluido" | "nova_visita" | "nao_realizado">("concluido");
   const [trabalho, setTrabalho] = useState("");
-  const [materiaisTxt, setMateriaisTxt] = useState("");
+  const [materiaisLinhas, setMateriaisLinhas] = useState<LinhaMaterial[]>(() =>
+    materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: "0" }))
+  );
   const [maoObraTipo, setMaoObraTipo] = useState("");
   const [maoObraDetalhe, setMaoObraDetalhe] = useState("");
   const [agendouNovaData, setAgendouNovaData] = useState<"sim" | "nao" | null>(null);
@@ -60,7 +81,32 @@ export function ServicoDetalheClient({
 
   const isInstalacao = servico.tipo === "Instalação";
 
-  const [label, cls] = ESTADO_LABEL[servico.estado] ?? [servico.estado, "bg-slate-100 text-slate-700"];
+  const [label, cls] = ESTADO_LABEL[servico.estado] ?? [servico.estado, "bg-neutral-800 text-neutral-200"];
+
+  const atualizarLinha = (i: number, patch: Partial<LinhaMaterial>) => {
+    setMateriaisLinhas((linhas) => linhas.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  };
+
+  const removerLinha = (i: number) => {
+    setMateriaisLinhas((linhas) => linhas.filter((_, idx) => idx !== i));
+  };
+
+  const adicionarLinhaManual = () => {
+    setMateriaisLinhas((linhas) => [...linhas, { nome: "", qtd: "1", precoUnit: "0" }]);
+  };
+
+  const adicionarDoCatalogo = (item: CatalogItem) => {
+    setMateriaisLinhas((linhas) => [
+      ...linhas,
+      { nome: item.descricao, qtd: "1", precoUnit: String(item.preco_venda) },
+    ]);
+  };
+
+  const totalMateriais = materiaisLinhas.reduce(
+    (soma, l) => soma + (Number(l.qtd) || 0) * (Number(l.precoUnit) || 0),
+    0
+  );
+  const totalMaoObra = (HORAS_MAO_OBRA[maoObraTipo] ?? 0) * valorHoraMaoObra;
 
   const iniciar = async () => {
     setAGuardar(true);
@@ -165,11 +211,9 @@ export function ServicoDetalheClient({
     try {
       const materiais =
         resultado === "concluido"
-          ? materiaisTxt
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-              .map((nome) => ({ nome, qtd: 1 }))
+          ? materiaisLinhas
+              .filter((m) => m.nome.trim() && Number(m.qtd) > 0)
+              .map((m) => ({ nome: m.nome.trim(), qtd: Number(m.qtd), precoUnit: Number(m.precoUnit) || 0 }))
           : [];
       await concluirVisita({
         visitId: idParaSubmeter,
@@ -200,22 +244,22 @@ export function ServicoDetalheClient({
 
   return (
     <div className="px-4 py-4">
-      <Link href="/tecnico" className="mb-3 inline-block text-sm text-slate-500">
+      <Link href="/tecnico" className="mb-3 inline-block text-sm text-neutral-400">
         ← Agenda
       </Link>
 
       <div className="mb-3 flex items-center justify-between">
         <span className={`rounded px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>
-        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{servico.tipo}</span>
+        <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">{servico.tipo}</span>
       </div>
 
       {servico.estado === "correcao_necessaria" && servico.motivo_correcao && (
-        <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+        <div className="mb-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
           <span className="font-semibold">⚠️ O Admin pediu uma correção:</span> {servico.motivo_correcao}
         </div>
       )}
 
-      <h1 className="text-xl font-bold text-slate-900">{servico.cliente_nome}</h1>
+      <h1 className="text-xl font-bold text-white">{servico.cliente_nome}</h1>
       {servico.detalhes_visiveis ? (
         <>
           {servico.morada && (
@@ -223,12 +267,12 @@ export function ServicoDetalheClient({
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(servico.morada)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1 flex items-center gap-1 text-sm text-indigo-700 underline"
+              className="mt-1 flex items-center gap-1 text-sm text-neutral-200 underline"
             >
               📍 {servico.morada}
             </a>
           )}
-          {servico.cliente_telefone && <p className="mt-1 text-sm text-slate-500">{servico.cliente_telefone}</p>}
+          {servico.cliente_telefone && <p className="mt-1 text-sm text-neutral-400">{servico.cliente_telefone}</p>}
           {servico.cliente_telefone && (
             <a
               href={`tel:${servico.cliente_telefone}`}
@@ -239,26 +283,26 @@ export function ServicoDetalheClient({
           )}
         </>
       ) : (
-        <p className="mt-1 text-sm font-medium text-amber-700">
+        <p className="mt-1 text-sm font-medium text-amber-400">
           🔒 Morada, contacto e descrição ficam visíveis quando este for o próximo serviço.
         </p>
       )}
 
       {servico.detalhes_visiveis && (
-        <div className="mt-4 rounded-lg bg-white p-3 shadow-sm">
-          <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Descrição</div>
-          <p className="text-sm text-slate-700">{servico.descricao}</p>
+        <div className="mt-4 rounded-lg bg-neutral-900 p-3 shadow-sm">
+          <div className="mb-1 text-xs font-semibold uppercase text-neutral-500">Descrição</div>
+          <p className="text-sm text-neutral-200">{servico.descricao}</p>
         </div>
       )}
 
       {servico.notas && (
-        <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">{servico.notas}</div>
+        <div className="mt-3 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-400">{servico.notas}</div>
       )}
 
       {materiaisPrevistos.length > 0 && (
         <div className="mt-3">
-          <div className="mb-1 text-xs font-semibold uppercase text-slate-400">Materiais previstos</div>
-          <ul className="list-disc pl-5 text-sm text-slate-600">
+          <div className="mb-1 text-xs font-semibold uppercase text-neutral-500">Materiais previstos</div>
+          <ul className="list-disc pl-5 text-sm text-neutral-300">
             {materiaisPrevistos.map((m, i) => (
               <li key={i}>
                 {m.nome} × {m.qtd}
@@ -268,13 +312,13 @@ export function ServicoDetalheClient({
         </div>
       )}
 
-      {erro && <p className="mt-3 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mt-3 text-sm text-red-400">{erro}</p>}
 
       <div className="mt-6">
         {!servico.desbloqueado &&
           ["agendado", "nova_visita", "correcao_necessaria"].includes(servico.estado) &&
           !aFinalizar && (
-            <div className="rounded-lg bg-slate-100 p-3 text-center text-sm text-slate-500">
+            <div className="rounded-lg bg-neutral-800 p-3 text-center text-sm text-neutral-400">
               🔒 Fecha o serviço anterior para poderes iniciar este.
             </div>
           )}
@@ -285,7 +329,7 @@ export function ServicoDetalheClient({
             <button
               onClick={iniciar}
               disabled={aGuardar}
-              className="w-full rounded-md bg-indigo-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-40"
+              className="w-full rounded-md bg-white px-4 py-3 text-sm font-medium text-neutral-950 disabled:opacity-40"
             >
               {aGuardar
                 ? "A iniciar…"
@@ -308,17 +352,17 @@ export function ServicoDetalheClient({
         )}
 
         {aFinalizar && sucesso && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-6 text-center">
             <div className="mb-1 text-2xl">✓</div>
-            <p className="text-sm font-semibold text-emerald-800">Serviço encerrado com sucesso.</p>
-            <p className="mt-1 text-xs text-emerald-700">A voltar à agenda…</p>
+            <p className="text-sm font-semibold text-emerald-400">Serviço encerrado com sucesso.</p>
+            <p className="mt-1 text-xs text-emerald-400">A voltar à agenda…</p>
           </div>
         )}
 
         {aFinalizar && !sucesso && (
-          <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
             <div>
-              <div className="mb-2 text-sm font-semibold text-slate-700">Resultado</div>
+              <div className="mb-2 text-sm font-semibold text-neutral-200">Resultado</div>
               <div className="space-y-2">
                 {[
                   ["concluido", "Serviço concluído"],
@@ -328,7 +372,7 @@ export function ServicoDetalheClient({
                   <label
                     key={val}
                     className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
-                      resultado === val ? "border-indigo-500 bg-indigo-50" : "border-slate-200"
+                      resultado === val ? "border-white bg-neutral-800" : "border-neutral-800"
                     }`}
                   >
                     <input
@@ -337,7 +381,9 @@ export function ServicoDetalheClient({
                       checked={resultado === val}
                       onChange={() => {
                         setResultado(val as any);
-                        setMateriaisTxt("");
+                        setMateriaisLinhas(
+                          materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: "0" }))
+                        );
                         setMaoObraTipo("");
                         setMaoObraDetalhe("");
                         setAgendouNovaData(null);
@@ -358,12 +404,12 @@ export function ServicoDetalheClient({
 
             {resultado === "concluido" && !isInstalacao && (
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-600">Problema identificado (obrigatório)</span>
+                <span className="mb-1 block text-xs font-medium text-neutral-300">Problema identificado (obrigatório)</span>
                 <textarea
                   rows={2}
                   value={problemaIdentificado}
                   onChange={(e) => setProblemaIdentificado(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
                   placeholder="ex: disjuntor a disparar por sobrecarga"
                 />
               </label>
@@ -372,61 +418,126 @@ export function ServicoDetalheClient({
             {resultado === "concluido" && isInstalacao && (
               <div className="grid grid-cols-3 gap-2">
                 <label className="col-span-2 block">
-                  <span className="mb-1 block text-xs font-medium text-slate-600">Equipamento instalado (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">Equipamento instalado (obrigatório)</span>
                   <input
                     value={equipamentoInstalado}
                     onChange={(e) => setEquipamentoInstalado(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
                     placeholder="ex: Câmara IP 4MP"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-slate-600">Qtd (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">Qtd (obrigatório)</span>
                   <input
                     type="number"
                     min="1"
                     step="1"
                     value={quantidadeInstalada}
                     onChange={(e) => setQuantidadeInstalada(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
                   />
                 </label>
               </div>
             )}
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">
+              <span className="mb-1 block text-xs font-medium text-neutral-300">
                 {resultado === "concluido" ? "Trabalho realizado (obrigatório)" : "Notas (obrigatório)"}
               </span>
               <textarea
                 rows={3}
                 value={trabalho}
                 onChange={(e) => setTrabalho(e.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
                 placeholder="Descreve o que foi feito…"
               />
             </label>
 
             {resultado === "concluido" && (
               <>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-slate-600">
-                    Materiais utilizados (separados por vírgula, opcional)
+                <div>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">
+                    Materiais utilizados
                   </span>
-                  <input
-                    value={materiaisTxt}
-                    onChange={(e) => setMateriaisTxt(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="ex: Disjuntor 20A, Fita isoladora"
-                  />
-                </label>
+                  {materiaisPrevistos.length > 0 && (
+                    <p className="mb-2 text-xs text-amber-400">
+                      Levaste este material para este serviço e registaste tudo o que utilizaste? Confirma
+                      quantidades e preços — se usaste mais, menos, ou algo diferente do previsto, ajusta aqui.
+                    </p>
+                  )}
+
+                  <div className="space-y-2">
+                    {materiaisLinhas.map((linha, i) => (
+                      <div key={i} className="flex items-center gap-1.5 rounded-md border border-neutral-700 p-2">
+                        <input
+                          value={linha.nome}
+                          onChange={(e) => atualizarLinha(i, { nome: e.target.value })}
+                          placeholder="Material"
+                          className="min-w-0 flex-1 rounded-md border border-neutral-700 bg-transparent px-2 py-1.5 text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={linha.qtd}
+                          onChange={(e) => atualizarLinha(i, { qtd: e.target.value })}
+                          placeholder="Qtd"
+                          className="w-12 shrink-0 rounded-md border border-neutral-700 bg-transparent px-1.5 py-1.5 text-center text-sm"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={linha.precoUnit}
+                          onChange={(e) => atualizarLinha(i, { precoUnit: e.target.value })}
+                          placeholder="€/un"
+                          className="w-16 shrink-0 rounded-md border border-neutral-700 bg-transparent px-1.5 py-1.5 text-center text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removerLinha(i)}
+                          aria-label="Remover material"
+                          className="shrink-0 px-1 text-neutral-500"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {catalogo.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const item = catalogo.find((c) => c.id === e.target.value);
+                        if (item) adicionarDoCatalogo(item);
+                      }}
+                      className="mt-2 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                    >
+                      <option value="">+ Adicionar do catálogo…</option>
+                      {catalogo.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.referencia} — {c.descricao} ({formatEuros(c.preco_venda)})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={adicionarLinhaManual}
+                    className="mt-2 text-xs font-medium text-neutral-300 underline"
+                  >
+                    + Adicionar material manualmente
+                  </button>
+                </div>
 
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-slate-600">Mão de obra (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">Mão de obra (obrigatório)</span>
                   <select
                     value={maoObraTipo}
                     onChange={(e) => setMaoObraTipo(e.target.value)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                    className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
                   >
                     <option value="">Seleciona…</option>
                     {MAO_OBRA_OPCOES.map(([val, lbl]) => (
@@ -439,24 +550,41 @@ export function ServicoDetalheClient({
 
                 {maoObraTipo === "outro" && (
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-slate-600">Descreve a mão de obra</span>
+                    <span className="mb-1 block text-xs font-medium text-neutral-300">Descreve a mão de obra</span>
                     <input
                       value={maoObraDetalhe}
                       onChange={(e) => setMaoObraDetalhe(e.target.value)}
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
                       placeholder="ex: 3 técnicos, meio-dia cada"
                     />
                   </label>
                 )}
 
+                {(totalMateriais > 0 || maoObraTipo) && (
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-400">Materiais</span>
+                      <span className="font-medium text-neutral-200">{formatEuros(totalMateriais)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-sm">
+                      <span className="text-neutral-400">Mão de obra</span>
+                      <span className="font-medium text-neutral-200">{formatEuros(totalMaoObra)}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
+                      <span className="font-semibold text-white">Total do serviço</span>
+                      <span className="font-semibold text-white">{formatEuros(totalMateriais + totalMaoObra)}</span>
+                    </div>
+                  </div>
+                )}
+
                 {isInstalacao && (
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-slate-600">Testes realizados (obrigatório)</span>
+                    <span className="mb-1 block text-xs font-medium text-neutral-300">Testes realizados (obrigatório)</span>
                     <textarea
                       rows={2}
                       value={testesRealizados}
                       onChange={(e) => setTestesRealizados(e.target.value)}
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
                       placeholder="ex: testado funcionamento remoto, gravação confirmada"
                     />
                   </label>
@@ -466,7 +594,7 @@ export function ServicoDetalheClient({
 
             {resultado === "nova_visita" && (
               <div>
-                <span className="mb-2 block text-xs font-medium text-slate-600">
+                <span className="mb-2 block text-xs font-medium text-neutral-300">
                   Agendada nova data com o cliente?
                 </span>
                 <div className="flex gap-2">
@@ -477,8 +605,8 @@ export function ServicoDetalheClient({
                       onClick={() => setAgendouNovaData(v)}
                       className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${
                         agendouNovaData === v
-                          ? "border-indigo-500 bg-indigo-50 text-indigo-800"
-                          : "border-slate-300 text-slate-700"
+                          ? "border-white bg-neutral-800 text-neutral-200"
+                          : "border-neutral-700 text-neutral-200"
                       }`}
                     >
                       {v === "sim" ? "Sim" : "Não"}
@@ -491,18 +619,18 @@ export function ServicoDetalheClient({
                       type="date"
                       value={novaData}
                       onChange={(e) => setNovaData(e.target.value)}
-                      className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm"
                     />
                     <input
                       type="time"
                       value={novaHora}
                       onChange={(e) => setNovaHora(e.target.value)}
-                      className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm"
                     />
                   </div>
                 )}
                 {agendouNovaData === "nao" && (
-                  <p className="mt-2 text-xs text-slate-500">
+                  <p className="mt-2 text-xs text-neutral-400">
                     O Admin vai ver este serviço como pendente de agendamento.
                   </p>
                 )}
@@ -512,14 +640,14 @@ export function ServicoDetalheClient({
             <div className="flex gap-2">
               <button
                 onClick={() => setAFinalizar(false)}
-                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700"
+                className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm text-neutral-200"
               >
                 Voltar
               </button>
               <button
                 onClick={submeter}
                 disabled={aGuardar}
-                className="flex-1 rounded-md bg-indigo-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+                className="flex-1 rounded-md bg-white px-3 py-2 text-sm font-medium text-neutral-950 disabled:opacity-40"
               >
                 {aGuardar ? "A guardar…" : "Confirmar"}
               </button>
@@ -528,13 +656,13 @@ export function ServicoDetalheClient({
         )}
 
         {servico.estado === "aguarda_validacao" && !aFinalizar && (
-          <div className="rounded-lg bg-white p-3 text-sm text-slate-500 shadow-sm">
+          <div className="rounded-lg bg-neutral-900 p-3 text-sm text-neutral-400 shadow-sm">
             Serviço concluído — aguarda validação do Admin antes de seguir para faturação.
           </div>
         )}
 
         {["concluido", "nao_realizado"].includes(servico.estado) && !aFinalizar && (
-          <div className="rounded-lg bg-white p-3 text-sm text-slate-500 shadow-sm">
+          <div className="rounded-lg bg-neutral-900 p-3 text-sm text-neutral-400 shadow-sm">
             Este serviço já foi encerrado. Fala com o administrador para reabrir se for necessário.
           </div>
         )}

@@ -1,9 +1,9 @@
 export type NivelPreparacao = "preparada" | "info_falta" | "bloqueada";
 
 export const PREPARACAO_BADGE: Record<NivelPreparacao, { emoji: string; label: string; cls: string }> = {
-  preparada: { emoji: "🟢", label: "Preparada", cls: "bg-emerald-100 text-emerald-800" },
-  info_falta: { emoji: "🟠", label: "Informação em falta", cls: "bg-amber-100 text-amber-800" },
-  bloqueada: { emoji: "🔴", label: "Bloqueada", cls: "bg-red-100 text-red-800" },
+  preparada: { emoji: "🟢", label: "Preparada", cls: "bg-emerald-500/15 text-emerald-400" },
+  info_falta: { emoji: "🟠", label: "Informação em falta", cls: "bg-amber-500/15 text-amber-400" },
+  bloqueada: { emoji: "🔴", label: "Bloqueada", cls: "bg-red-500/15 text-red-400" },
 };
 
 // Indicação puramente operacional — nunca impede o Admin de agendar ou

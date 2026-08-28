@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { NexiaMark } from "@/components/NexiaMark";
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -27,46 +28,44 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4">
+      <div className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-orange-500 font-mono text-sm font-bold text-white">
-            nX
-          </div>
+          <NexiaMark size={36} />
           <div>
-            <div className="text-sm font-bold leading-tight text-slate-900">nexIA</div>
-            <div className="text-xs leading-tight text-slate-500">Gestão de terreno</div>
+            <div className="text-sm font-bold leading-tight text-white">nexIA</div>
+            <div className="text-xs leading-tight text-neutral-400">Gestão de terreno</div>
           </div>
         </div>
 
         <div className="space-y-3">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-600">Email</span>
+            <span className="mb-1 block text-xs font-medium text-neutral-300">Email</span>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
               onKeyDown={(e) => e.key === "Enter" && entrar()}
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-600">Palavra-passe</span>
+            <span className="mb-1 block text-xs font-medium text-neutral-300">Palavra-passe</span>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
               onKeyDown={(e) => e.key === "Enter" && entrar()}
             />
           </label>
 
-          {erro && <p className="text-sm text-red-600">{erro}</p>}
+          {erro && <p className="text-sm text-red-400">{erro}</p>}
 
           <button
             onClick={entrar}
             disabled={aEnviar || !email || !password}
-            className="w-full rounded-md bg-indigo-900 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-800 disabled:opacity-40"
+            className="w-full rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200 disabled:opacity-40"
           >
             {aEnviar ? "A entrar…" : "Entrar"}
           </button>

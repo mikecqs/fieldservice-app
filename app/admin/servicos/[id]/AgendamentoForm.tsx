@@ -51,40 +51,40 @@ export function AgendamentoForm({ servico }: { servico: any }) {
     <form ref={formRef} onSubmit={onSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <input type="hidden" name="id" value={servico.id} />
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Data</span>
-        <input type="date" name="data_agendada" defaultValue={servico.data_agendada ?? ""} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <span className="mb-1 block text-xs font-medium text-neutral-300">Data</span>
+        <input type="date" name="data_agendada" defaultValue={servico.data_agendada ?? ""} className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
       </label>
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-600">Hora início</span>
-          <input type="time" name="hora_agendada" defaultValue={servico.hora_agendada?.slice(0, 5) ?? ""} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mb-1 block text-xs font-medium text-neutral-300">Hora início</span>
+          <input type="time" name="hora_agendada" defaultValue={servico.hora_agendada?.slice(0, 5) ?? ""} className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-600">Hora fim</span>
-          <input type="time" name="hora_fim_agendada" defaultValue={servico.hora_fim_agendada?.slice(0, 5) ?? ""} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mb-1 block text-xs font-medium text-neutral-300">Hora fim</span>
+          <input type="time" name="hora_fim_agendada" defaultValue={servico.hora_fim_agendada?.slice(0, 5) ?? ""} className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
         </label>
       </div>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Prioridade</span>
-        <select name="prioridade" defaultValue={servico.prioridade} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <span className="mb-1 block text-xs font-medium text-neutral-300">Prioridade</span>
+        <select name="prioridade" defaultValue={servico.prioridade} className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm">
           <option value="baixa">Baixa</option>
           <option value="normal">Normal</option>
           <option value="alta">Alta</option>
         </select>
       </label>
       <label className="col-span-2 block">
-        <span className="mb-1 block text-xs font-medium text-slate-600">Notas</span>
-        <textarea name="notas" defaultValue={servico.notas ?? ""} rows={2} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <span className="mb-1 block text-xs font-medium text-neutral-300">Notas</span>
+        <textarea name="notas" defaultValue={servico.notas ?? ""} rows={2} className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
       </label>
 
       {conflito && (
-        <div className="col-span-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="col-span-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
           <p className="mb-2">⚠️ Conflito de agenda: {conflito}</p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setConflito(null)}
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
             >
               Cancelar
             </button>
@@ -98,11 +98,11 @@ export function AgendamentoForm({ servico }: { servico: any }) {
           </div>
         </div>
       )}
-      {erro && <p className="col-span-2 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="col-span-2 text-sm text-red-400">{erro}</p>}
 
       <button
         disabled={aVerificar}
-        className="col-span-2 rounded-md bg-indigo-900 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-800 disabled:opacity-50"
+        className="col-span-2 rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200 disabled:opacity-50"
       >
         {aVerificar ? "A verificar…" : "Guardar agendamento"}
       </button>

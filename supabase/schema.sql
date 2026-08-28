@@ -77,7 +77,10 @@ create table org_settings (
   -- operacionais (morada, contacto, descrição, notas) do seu próximo
   -- serviço agendado depois de encerrar o anterior. Ver
   -- tech_service_desbloqueado() e services_technician_view.
-  acesso_sequencial_tecnico boolean not null default false
+  acesso_sequencial_tecnico boolean not null default false,
+  -- taxa/hora usada para converter a mão de obra (ex: '2h', 'dia_completo')
+  -- em valor monetário no cálculo automático do fecho da OS.
+  valor_hora_mao_obra numeric not null default 0
 );
 
 -- -----------------------------------------------------------------------------
@@ -169,8 +172,36 @@ create table budgets (
   -- número amigável para o PDF/cliente (sequencial, nunca reutilizado) —
   -- o id continua a ser o uuid, isto é só para leitura humana.
   numero int not null default nextval('budgets_numero_seq'),
+  -- follow-up automático: preenchido quando o orçamento é marcado como
+  -- enviado (ver marcarEnviado), sempre X dias depois do envio.
+  followup_em date,
   created_at timestamptz not null default now()
 );
+
+-- -----------------------------------------------------------------------------
+-- HISTÓRICO DO ORÇAMENTO — mesmo espírito de service_events: nunca se apaga,
+-- guarda sempre quem/quando/porquê de cada transição.
+-- -----------------------------------------------------------------------------
+create table budget_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  budget_id uuid not null references budgets(id) on delete cascade,
+  tipo text not null check (tipo in ('criado','enviado','followup','aceite','recusado','cancelado')),
+  descricao text not null,
+  utilizador uuid references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table budget_events enable row level security;
+
+create policy "admin manages budget_events" on budget_events for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org());
+
+create policy "finance reads budget_events" on budget_events for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
+
+grant select, insert on budget_events to authenticated;
 
 create table budget_items (
   id uuid primary key default gen_random_uuid(),
@@ -201,6 +232,10 @@ alter table catalog_items enable row level security;
 create policy "admin manages catalog_items" on catalog_items for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org());
+
+-- técnico só lê (para preçar materiais no fecho da OS), nunca gere o catálogo.
+create policy "technician reads catalog_items" on catalog_items for select
+  using (organization_id = my_org() and my_role() = 'TECHNICIAN');
 
 grant select, insert, update, delete on catalog_items to authenticated;
 
@@ -269,6 +304,10 @@ create table visits (
   equipamento_instalado text,
   quantidade_instalada numeric,
   testes_realizados text,
+  -- valor do serviço calculado automaticamente no fecho (materiais com
+  -- preço + mão de obra × taxa/hora) — só informativo para o Admin,
+  -- nunca substitui services.valor sozinho.
+  valor_calculado numeric,
   created_by uuid references profiles(id),
   created_at timestamptz not null default now()
 );
@@ -277,7 +316,10 @@ create table visit_materials_used (
   id uuid primary key default gen_random_uuid(),
   visit_id uuid not null references visits(id) on delete cascade,
   nome text not null,
-  qtd numeric not null default 1
+  qtd numeric not null default 1,
+  -- preço à data da utilização (não o preço atual do catálogo, que pode
+  -- mudar depois) — é o que permite calcular o valor do serviço no fecho.
+  preco_unit numeric not null default 0
 );
 
 create table visit_photos (
@@ -426,6 +468,11 @@ create policy "admin manages org_settings" on org_settings for all
   with check (organization_id = my_org());
 create policy "super admin all org_settings" on org_settings for all
   using (is_super_admin()) with check (is_super_admin());
+
+-- técnico só lê (para ver o valor/hora da mão de obra no fecho da OS) —
+-- nada aqui é sensível, é só configuração operacional da própria empresa.
+create policy "technician reads org_settings" on org_settings for select
+  using (organization_id = my_org() and my_role() = 'TECHNICIAN');
 
 -- clients
 create policy "admin manages clients" on clients for all
@@ -795,6 +842,10 @@ declare
   v_org_id uuid;
   v_tipo text;
   v_novo_estado text;
+  v_valor_hora numeric;
+  v_horas numeric;
+  v_valor_materiais numeric;
+  v_valor_mao_obra numeric;
 begin
   if p_resultado not in ('concluido', 'nova_visita', 'nao_realizado') then
     raise exception 'Resultado inválido.';
@@ -861,12 +912,32 @@ begin
         testes_realizados = case when p_resultado = 'concluido' and v_tipo = 'Instalação' then p_testes_realizados else null end
     where id = p_visit_id;
 
-  insert into visit_materials_used (visit_id, nome, qtd)
-  select p_visit_id, item->>'nome', coalesce((item->>'qtd')::numeric, 1)
+  insert into visit_materials_used (visit_id, nome, qtd, preco_unit)
+  select p_visit_id, item->>'nome', coalesce((item->>'qtd')::numeric, 1), coalesce((item->>'preco_unit')::numeric, 0)
   from jsonb_array_elements(p_materiais) as item;
 
   insert into visit_photos (visit_id, storage_path)
   select p_visit_id, unnest(p_fotos);
+
+  -- valor calculado do serviço: materiais (qtd × preço) + mão de obra
+  -- (horas × taxa/hora da empresa) — só informativo para o Admin durante a
+  -- validação; nunca substitui services.valor sozinho, isso continua a ser
+  -- decisão do Admin no fecho de faturação.
+  if p_resultado = 'concluido' then
+    select coalesce(sum((item->>'qtd')::numeric * (item->>'preco_unit')::numeric), 0)
+      into v_valor_materiais
+      from jsonb_array_elements(p_materiais) as item;
+
+    select valor_hora_mao_obra into v_valor_hora from org_settings where organization_id = v_org_id;
+    v_horas := case p_mao_obra_tipo
+      when '1h' then 1 when '2h' then 2 when '3h' then 3 when '4h' then 4
+      when '5h' then 5 when '6h' then 6 when '7h' then 7 when '8h' then 8
+      when 'dia_completo' then 8 when '2dias' then 16 else 0
+    end;
+    v_valor_mao_obra := v_horas * coalesce(v_valor_hora, 0);
+
+    update visits set valor_calculado = v_valor_materiais + v_valor_mao_obra where id = p_visit_id;
+  end if;
 
   -- 'concluido' fica a aguardar validação do Admin antes de ir para
   -- faturação — ver "VALIDAÇÃO ADMINISTRATIVA DO FECHO DE OS" acima.

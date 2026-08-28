@@ -14,13 +14,18 @@ const TIPO_LABEL: Record<string, string> = {
 
 export default async function OrcamentoDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
-  const [{ data: orcamento }, { data: catalogo }] = await Promise.all([
+  const [{ data: orcamento }, { data: catalogo }, { data: eventos }] = await Promise.all([
     supabase
       .from("budgets")
       .select("*, clients(nome, telefone, email), budget_items(*)")
       .eq("id", params.id)
       .single(),
     supabase.from("catalog_items").select("id, referencia, descricao, preco_venda").order("referencia").limit(500),
+    supabase
+      .from("budget_events")
+      .select("tipo, descricao, created_at, profiles(nome)")
+      .eq("budget_id", params.id)
+      .order("created_at", { ascending: false }),
   ]);
 
   if (!orcamento) notFound();
@@ -33,25 +38,28 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
 
   return (
     <div className="mx-auto max-w-2xl">
-      <Link href="/admin/orcamentos" className="mb-4 inline-block text-sm text-slate-500 hover:text-slate-800">
+      <Link href="/admin/orcamentos" className="mb-4 inline-block text-sm text-neutral-400 hover:text-neutral-100">
         ← Orçamentos
       </Link>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <div className="mb-1 flex items-start justify-between">
-          <h1 className="text-lg font-bold text-slate-900">#{orcamento.numero} · {orcamento.clients?.nome}</h1>
-          <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+          <h1 className="text-lg font-bold text-white">#{orcamento.numero} · {orcamento.clients?.nome}</h1>
+          <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">
             {orcamento.estado}
           </span>
         </div>
-        <p className="text-xs text-slate-400">Criado {orcamento.criado_em}</p>
+        <p className="text-xs text-neutral-500">Criado {orcamento.criado_em}</p>
+        {orcamento.followup_em && orcamento.estado !== "aceite" && orcamento.estado !== "recusado" && orcamento.estado !== "cancelado" && (
+          <p className="mt-1 text-xs text-amber-400">Follow-up agendado para {orcamento.followup_em}</p>
+        )}
 
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-neutral-800 pt-3">
           <a
             href={`/admin/orcamentos/${orcamento.id}/pdf`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
           >
             📄 Download PDF
           </a>
@@ -59,7 +67,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
             href={`https://wa.me/${telefoneWhatsapp ?? ""}?text=${encodeURIComponent(mensagemPartilha)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+            className="rounded-md border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10"
           >
             📱 Partilhar por WhatsApp
           </a>
@@ -68,7 +76,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
               href={`mailto:${orcamento.clients.email}?subject=${encodeURIComponent("Orçamento")}&body=${encodeURIComponent(
                 mensagemPartilha + "\n\n(Descarrega o PDF acima e anexa-o a este email antes de enviar.)"
               )}`}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
             >
               ✉️ Partilhar por email
             </a>
@@ -80,7 +88,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
             {orcamento.estado === "rascunho" && (
               <form action={marcarEnviado}>
                 <input type="hidden" name="id" value={orcamento.id} />
-                <button className="rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800">
+                <button className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
                   Marcar como enviado
                 </button>
               </form>
@@ -89,7 +97,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
               <form action={avancarEstado}>
                 <input type="hidden" name="id" value={orcamento.id} />
                 <input type="hidden" name="estado" value="aguarda_resposta" />
-                <button className="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                <button className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800">
                   Aguarda resposta
                 </button>
               </form>
@@ -98,7 +106,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
               <form action={avancarEstado}>
                 <input type="hidden" name="id" value={orcamento.id} />
                 <input type="hidden" name="estado" value="followup" />
-                <button className="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+                <button className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800">
                   Marcar follow-up
                 </button>
               </form>
@@ -112,14 +120,14 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
             <form action={avancarEstado}>
               <input type="hidden" name="id" value={orcamento.id} />
               <input type="hidden" name="estado" value="recusado" />
-              <button className="rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50">
+              <button className="rounded-md border border-red-500/30 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10">
                 Recusado
               </button>
             </form>
             <form action={avancarEstado}>
               <input type="hidden" name="id" value={orcamento.id} />
               <input type="hidden" name="estado" value="cancelado" />
-              <button className="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50">
+              <button className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:bg-neutral-800">
                 Cancelar
               </button>
             </form>
@@ -129,46 +137,46 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
         {orcamento.estado === "aceite" && orcamento.service_id && (
           <Link
             href={`/admin/servicos/${orcamento.service_id}`}
-            className="mt-4 inline-block text-sm text-indigo-700 underline"
+            className="mt-4 inline-block text-sm text-neutral-200 underline"
           >
             Ver serviço criado →
           </Link>
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Linhas do orçamento</h2>
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Linhas do orçamento</h2>
         <div className="space-y-1.5">
           {items.map((i: any) => (
-            <div key={i.id} className="flex items-center justify-between rounded-md border border-slate-100 p-2.5 text-sm">
+            <div key={i.id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2.5 text-sm">
               <div>
-                <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                <span className="mr-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">
                   {TIPO_LABEL[i.tipo] ?? i.tipo}
                 </span>
                 {i.descricao} · {i.qtd} × {Number(i.valor_unit).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-medium text-slate-700">
+                <span className="font-medium text-neutral-200">
                   {(i.qtd * i.valor_unit).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </span>
                 {orcamento.estado === "rascunho" && (
                   <form action={removerItem}>
                     <input type="hidden" name="id" value={i.id} />
                     <input type="hidden" name="budget_id" value={orcamento.id} />
-                    <button className="text-xs text-red-600 hover:underline">remover</button>
+                    <button className="text-xs text-red-400 hover:underline">remover</button>
                   </form>
                 )}
               </div>
             </div>
           ))}
-          {items.length === 0 && <p className="py-4 text-center text-sm text-slate-400">Sem linhas ainda.</p>}
+          {items.length === 0 && <p className="py-4 text-center text-sm text-neutral-500">Sem linhas ainda.</p>}
         </div>
-        <div className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm">
-          <div className="flex justify-end gap-2 text-slate-500">
+        <div className="mt-3 space-y-1 border-t border-neutral-800 pt-3 text-sm">
+          <div className="flex justify-end gap-2 text-neutral-400">
             <span>Subtotal:</span>
             <span>{subtotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>
           </div>
-          <div className="flex items-center justify-end gap-2 text-slate-500">
+          <div className="flex items-center justify-end gap-2 text-neutral-400">
             {orcamento.estado === "rascunho" ? (
               <form action={atualizarIva} className="flex items-center gap-1.5">
                 <input type="hidden" name="id" value={orcamento.id} />
@@ -179,10 +187,10 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
                   step="0.01"
                   min="0"
                   defaultValue={orcamento.iva_percent}
-                  className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs"
+                  className="w-16 rounded-md border border-neutral-700 px-1.5 py-0.5 text-xs"
                 />
                 <span>%</span>
-                <button className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-200">
+                <button className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200 hover:bg-neutral-800">
                   Atualizar
                 </button>
               </form>
@@ -191,7 +199,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
             )}
             <span>{ivaValor.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>
           </div>
-          <div className="flex justify-end gap-2 text-base font-bold text-slate-900">
+          <div className="flex justify-end gap-2 text-base font-bold text-white">
             <span>Total:</span>
             <span>{total.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>
           </div>
@@ -201,6 +209,23 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
           <AdicionarItemForm budgetId={orcamento.id} catalogo={catalogo ?? []} />
         )}
       </div>
+
+      {(eventos ?? []).length > 0 && (
+        <div className="mt-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+          <h2 className="mb-3 text-sm font-semibold text-neutral-100">Histórico</h2>
+          <div className="space-y-2">
+            {(eventos ?? []).map((e: any, i: number) => (
+              <div key={i} className="rounded-md border border-neutral-800 p-3 text-sm">
+                <div className="mb-1 flex justify-between text-xs text-neutral-500">
+                  <span className="font-semibold text-neutral-200">{e.tipo}</span>
+                  <span>{new Date(e.created_at).toLocaleString("pt-PT")} · {e.profiles?.nome ?? "—"}</span>
+                </div>
+                <p className="text-neutral-300">{e.descricao}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

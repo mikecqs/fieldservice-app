@@ -47,13 +47,13 @@ export default async function AgendaTecnicoPage() {
   return (
     <div className="px-4 py-4">
       {proximoAtrasoAviso && (
-        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-medium text-amber-300">
           {proximoAtrasoAviso}
         </div>
       )}
-      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">A minha agenda</h2>
+      <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-neutral-400">A minha agenda</h2>
       {(!servicos || servicos.length === 0) && (
-        <p className="py-10 text-center text-sm text-slate-400">Sem serviços atribuídos.</p>
+        <p className="py-10 text-center text-sm text-neutral-500">Sem serviços atribuídos.</p>
       )}
       <div className="space-y-3">
         {ativos.map((s: any) => (
@@ -63,7 +63,7 @@ export default async function AgendaTecnicoPage() {
 
       {fechados.length > 0 && (
         <>
-          <h2 className="mb-3 mt-6 text-sm font-bold uppercase tracking-wide text-slate-400">Fechados</h2>
+          <h2 className="mb-3 mt-6 text-sm font-bold uppercase tracking-wide text-neutral-500">Fechados</h2>
           <div className="space-y-3 opacity-60">
             {fechados.map((s: any) => (
               <ServicoCard key={s.id} s={s} hoje={hoje} />
@@ -79,24 +79,24 @@ function ServicoCard({ s, hoje }: { s: any; hoje: string }) {
   return (
     <Link
       href={`/tecnico/servico/${s.id}`}
-      className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50"
+      className="block rounded-xl border border-neutral-800 bg-neutral-900 p-4 shadow-sm active:bg-neutral-800"
     >
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-mono text-sm font-bold text-indigo-900">{s.hora_agendada?.slice(0, 5) ?? "—"}</span>
+        <span className="font-mono text-sm font-bold text-neutral-100">{s.hora_agendada?.slice(0, 5) ?? "—"}</span>
         <div className="flex items-center gap-1.5">
           {s.data_agendada === hoje && (
-            <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">Hoje</span>
+            <span className="rounded bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-400">Hoje</span>
           )}
           <EstadoBadge estado={s.estado} />
         </div>
       </div>
-      <div className="text-base font-semibold text-slate-800">{s.cliente_nome}</div>
+      <div className="text-base font-semibold text-neutral-100">{s.cliente_nome}</div>
       {s.estado === "correcao_necessaria" && s.motivo_correcao ? (
-        <div className="text-sm font-medium text-red-700">⚠️ Correção: {s.motivo_correcao}</div>
+        <div className="text-sm font-medium text-red-400">⚠️ Correção: {s.motivo_correcao}</div>
       ) : s.detalhes_visiveis ? (
-        <div className="text-sm text-slate-500">{s.descricao}</div>
+        <div className="text-sm text-neutral-400">{s.descricao}</div>
       ) : (
-        <div className="text-sm text-slate-400">🔒 Detalhes disponíveis quando este for o próximo serviço</div>
+        <div className="text-sm text-neutral-500">🔒 Detalhes disponíveis quando este for o próximo serviço</div>
       )}
     </Link>
   );
@@ -104,14 +104,14 @@ function ServicoCard({ s, hoje }: { s: any; hoje: string }) {
 
 function EstadoBadge({ estado }: { estado: string }) {
   const map: Record<string, [string, string]> = {
-    agendado: ["Agendado", "bg-indigo-100 text-indigo-800"],
-    em_curso: ["Em curso", "bg-amber-100 text-amber-800"],
-    aguarda_validacao: ["Aguarda validação", "bg-amber-100 text-amber-800"],
-    concluido: ["Concluído", "bg-emerald-100 text-emerald-800"],
-    correcao_necessaria: ["Correção necessária", "bg-red-100 text-red-800"],
-    nova_visita: ["Nova visita", "bg-orange-100 text-orange-800"],
-    nao_realizado: ["Não realizado", "bg-red-100 text-red-700"],
+    agendado: ["Agendado", "bg-neutral-800 text-neutral-200"],
+    em_curso: ["Em curso", "bg-amber-500/15 text-amber-400"],
+    aguarda_validacao: ["Aguarda validação", "bg-amber-500/15 text-amber-400"],
+    concluido: ["Concluído", "bg-emerald-500/15 text-emerald-400"],
+    correcao_necessaria: ["Correção necessária", "bg-red-500/15 text-red-400"],
+    nova_visita: ["Nova visita", "bg-orange-500/15 text-orange-400"],
+    nao_realizado: ["Não realizado", "bg-red-500/15 text-red-400"],
   };
-  const [label, cls] = map[estado] ?? [estado, "bg-slate-100 text-slate-700"];
+  const [label, cls] = map[estado] ?? [estado, "bg-neutral-800 text-neutral-200"];
   return <span className={`rounded px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }

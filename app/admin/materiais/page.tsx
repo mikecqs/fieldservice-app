@@ -29,8 +29,8 @@ export default async function MateriaisPage() {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900">Materiais</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
+        <h1 className="text-xl font-bold text-white">Materiais</h1>
+        <p className="mt-0.5 text-sm text-neutral-400">
           Materiais planeados nos serviços ainda em curso — não há um catálogo, isto vem diretamente do que foi
           planeado em cada serviço.
         </p>
@@ -38,17 +38,17 @@ export default async function MateriaisPage() {
 
       <div className="space-y-2">
         {ativos.map((m: any) => (
-          <div key={m.id} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4">
+          <div key={m.id} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 p-4">
             <div>
-              <div className="font-medium text-slate-800">{m.nome} · {m.qtd}</div>
-              <div className="text-xs text-slate-400">
+              <div className="font-medium text-neutral-100">{m.nome} · {m.qtd}</div>
+              <div className="text-xs text-neutral-500">
                 {m.services?.clients?.nome} — {m.services?.descricao}
               </div>
             </div>
             {pendentes.has(`${m.service_id}::${m.nome}`) ? (
               <button
                 disabled
-                className="cursor-not-allowed rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700"
+                className="cursor-not-allowed rounded-md bg-emerald-500/15 px-3 py-1.5 text-xs font-medium text-emerald-400"
               >
                 ✓ Adicionado
               </button>
@@ -57,7 +57,7 @@ export default async function MateriaisPage() {
                 <input type="hidden" name="nome" value={m.nome} />
                 <input type="hidden" name="qtd" value={m.qtd} />
                 <input type="hidden" name="service_id" value={m.service_id} />
-                <button className="rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800">
+                <button className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
                   Criar compra
                 </button>
               </form>
@@ -65,7 +65,7 @@ export default async function MateriaisPage() {
           </div>
         ))}
         {ativos.length === 0 && (
-          <p className="py-10 text-center text-sm text-slate-400">Sem materiais planeados em serviços ativos.</p>
+          <p className="py-10 text-center text-sm text-neutral-500">Sem materiais planeados em serviços ativos.</p>
         )}
       </div>
     </div>

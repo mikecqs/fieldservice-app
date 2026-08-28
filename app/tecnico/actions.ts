@@ -35,7 +35,7 @@ export async function concluirVisita(input: {
   serviceId: string;
   resultado: "concluido" | "nova_visita" | "nao_realizado";
   trabalhoRealizado: string;
-  materiais: { nome: string; qtd: number }[];
+  materiais: { nome: string; qtd: number; precoUnit?: number }[];
   fotos: string[];
   maoObraTipo?: string | null;
   maoObraDetalhe?: string | null;
@@ -51,7 +51,7 @@ export async function concluirVisita(input: {
     p_visit_id: input.visitId,
     p_resultado: input.resultado,
     p_trabalho_realizado: input.trabalhoRealizado,
-    p_materiais: input.materiais,
+    p_materiais: input.materiais.map((m) => ({ nome: m.nome, qtd: m.qtd, preco_unit: m.precoUnit ?? 0 })),
     p_fotos: input.fotos,
     p_mao_obra_tipo: input.maoObraTipo ?? null,
     p_mao_obra_detalhe: input.maoObraDetalhe ?? null,

@@ -47,32 +47,32 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
 
   return (
     <div className="mx-auto max-w-3xl">
-      <Link href="/admin/clientes" className="mb-4 inline-block text-sm text-slate-500 hover:text-slate-800">
+      <Link href="/admin/clientes" className="mb-4 inline-block text-sm text-neutral-400 hover:text-neutral-100">
         ← Clientes
       </Link>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h1 className="text-lg font-bold text-slate-900">{cliente.nome}</h1>
-            {cliente.empresa && <p className="text-sm text-slate-500">{cliente.empresa}</p>}
+            <h1 className="text-lg font-bold text-white">{cliente.nome}</h1>
+            {cliente.empresa && <p className="text-sm text-neutral-400">{cliente.empresa}</p>}
           </div>
-          <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+          <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">
             NIF {cliente.nif || "—"}
           </span>
         </div>
-        <div className="grid grid-cols-1 gap-1 text-sm text-slate-600 sm:grid-cols-2 sm:gap-4">
+        <div className="grid grid-cols-1 gap-1 text-sm text-neutral-300 sm:grid-cols-2 sm:gap-4">
           <div>{cliente.telefone}</div>
           <div>{cliente.email}</div>
         </div>
         <div className="mt-3 space-y-1.5">
           {(cliente.client_addresses ?? []).map((m: any) => (
-            <div key={m.id} className="text-sm text-slate-600">
+            <div key={m.id} className="text-sm text-neutral-300">
               <span className="font-medium">{m.label}:</span> {m.endereco}
             </div>
           ))}
         </div>
-        {cliente.notas && <p className="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-500">{cliente.notas}</p>}
+        {cliente.notas && <p className="mt-3 rounded-md bg-neutral-800 p-3 text-xs text-neutral-400">{cliente.notas}</p>}
       </div>
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -84,13 +84,13 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
         />
       </div>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Equipamentos · {(equipamentos ?? []).length}</h2>
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Equipamentos · {(equipamentos ?? []).length}</h2>
         <div className="mb-4 space-y-3">
           {(equipamentos ?? []).map((e: any) => {
             const intervencoes = intervencoesPorEquipamento.get(e.id) ?? [];
             return (
-              <div key={e.id} className="rounded-lg border border-slate-100 p-3">
+              <div key={e.id} className="rounded-lg border border-neutral-800 p-3">
                 <div className="flex items-start gap-3">
                   {fotosUrls.has(e.id) && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -98,25 +98,25 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-slate-800">{e.equipamento}</span>
-                      {e.marca && <span className="text-xs text-slate-500">{e.marca} {e.modelo}</span>}
+                      <span className="font-medium text-neutral-100">{e.equipamento}</span>
+                      {e.marca && <span className="text-xs text-neutral-400">{e.marca} {e.modelo}</span>}
                     </div>
-                    <div className="mt-0.5 text-xs text-slate-400">
+                    <div className="mt-0.5 text-xs text-neutral-500">
                       {e.numero_serie && <span>Nº série: {e.numero_serie} · </span>}
                       {e.data_instalacao && <span>Instalado em {e.data_instalacao} · </span>}
                       {e.client_addresses?.label && <span>{e.client_addresses.label}</span>}
                     </div>
-                    {e.notas && <p className="mt-1 text-xs text-slate-500">{e.notas}</p>}
+                    {e.notas && <p className="mt-1 text-xs text-neutral-400">{e.notas}</p>}
                   </div>
                   <form action={removerEquipamento}>
                     <input type="hidden" name="id" value={e.id} />
                     <input type="hidden" name="client_id" value={params.id} />
-                    <button className="text-xs text-red-600 hover:underline">remover</button>
+                    <button className="text-xs text-red-400 hover:underline">remover</button>
                   </form>
                 </div>
                 {intervencoes.length > 0 && (
-                  <div className="mt-2 border-t border-slate-100 pt-2">
-                    <div className="mb-1 text-[10px] font-semibold uppercase text-slate-400">
+                  <div className="mt-2 border-t border-neutral-800 pt-2">
+                    <div className="mb-1 text-[10px] font-semibold uppercase text-neutral-500">
                       Histórico de intervenções · {intervencoes.length}
                     </div>
                     <div className="space-y-1">
@@ -124,7 +124,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
                         <Link
                           key={s.id}
                           href={`/admin/servicos/${s.id}`}
-                          className="block rounded bg-slate-50 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                          className="block rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800"
                         >
                           {s.tipo} · {s.descricao} {s.data_agendada ? `· ${s.data_agendada}` : ""}
                         </Link>
@@ -136,36 +136,36 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
             );
           })}
           {(equipamentos ?? []).length === 0 && (
-            <p className="text-sm text-slate-400">Ainda sem equipamentos registados.</p>
+            <p className="text-sm text-neutral-500">Ainda sem equipamentos registados.</p>
           )}
         </div>
 
         <details>
-          <summary className="cursor-pointer text-sm font-medium text-indigo-700">+ Registar equipamento</summary>
+          <summary className="cursor-pointer text-sm font-medium text-neutral-200">+ Registar equipamento</summary>
           <form action={criarEquipamento} encType="multipart/form-data" className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <input type="hidden" name="client_id" value={params.id} />
-            <input name="equipamento" placeholder="Equipamento (ex: Câmara IP, Central de alarme)" required className="col-span-2 rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <input name="equipamento" placeholder="Equipamento (ex: Câmara IP, Central de alarme)" required className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
             {(cliente.client_addresses ?? []).length > 0 && (
-              <select name="address_id" className="col-span-2 rounded-md border border-slate-300 px-3 py-2 text-sm">
+              <select name="address_id" className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm">
                 <option value="">Localização — sem especificar</option>
                 {(cliente.client_addresses ?? []).map((a: any) => (
                   <option key={a.id} value={a.id}>{a.label}: {a.endereco}</option>
                 ))}
               </select>
             )}
-            <input name="marca" placeholder="Marca" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <input name="modelo" placeholder="Modelo" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <input name="numero_serie" placeholder="Número de série / referência" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <input name="marca" placeholder="Marca" className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+            <input name="modelo" placeholder="Modelo" className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+            <input name="numero_serie" placeholder="Número de série / referência" className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">Data de instalação</span>
-              <input name="data_instalacao" type="date" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+              <span className="mb-1 block text-xs font-medium text-neutral-300">Data de instalação</span>
+              <input name="data_instalacao" type="date" className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
             </label>
-            <textarea name="notas" placeholder="Notas (opcional)" rows={2} className="col-span-2 rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <textarea name="notas" placeholder="Notas (opcional)" rows={2} className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
             <label className="col-span-2 block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">Fotografia (opcional)</span>
+              <span className="mb-1 block text-xs font-medium text-neutral-300">Fotografia (opcional)</span>
               <input name="foto" type="file" accept="image/*" className="w-full text-sm" />
             </label>
-            <button className="col-span-2 mt-1 rounded-md bg-indigo-900 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-800">
+            <button className="col-span-2 mt-1 rounded-md bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
               Registar equipamento
             </button>
           </form>
@@ -180,9 +180,9 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
 
 function StatBox({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-2 text-xs font-medium text-slate-500">{label}</div>
-      <div className="text-2xl font-bold text-slate-900">{value}</div>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+      <div className="mb-2 text-xs font-medium text-neutral-400">{label}</div>
+      <div className="text-2xl font-bold text-white">{value}</div>
     </div>
   );
 }
@@ -191,12 +191,12 @@ function Bloco({ titulo, itens, render }: { titulo: string; itens: any[] | null;
   if (!itens || itens.length === 0) return null;
   return (
     <div className="mb-5">
-      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
         {titulo} · {itens.length}
       </h3>
       <div className="space-y-1.5">
         {itens.map((item) => (
-          <div key={item.id} className="rounded-md border border-slate-100 bg-white p-3 text-sm text-slate-700">
+          <div key={item.id} className="rounded-md border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-200">
             {render(item)}
           </div>
         ))}

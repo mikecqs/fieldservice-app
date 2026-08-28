@@ -7,26 +7,26 @@ export function ItemRows() {
 
   return (
     <div className="space-y-2">
-      <span className="block text-xs font-medium text-slate-600">Itens a comprar</span>
+      <span className="block text-xs font-medium text-neutral-300">Itens a comprar</span>
       {rows.map((key) => (
         <div key={key} className="flex gap-2">
           <input
             name="item_nome"
             placeholder="Material"
-            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm"
           />
           <input
             name="item_qtd"
             type="number"
             step="0.01"
             defaultValue="1"
-            className="w-24 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="w-24 rounded-md border border-neutral-700 px-3 py-2 text-sm"
           />
           {rows.length > 1 && (
             <button
               type="button"
               onClick={() => setRows(rows.filter((r) => r !== key))}
-              className="rounded-md border border-slate-300 px-2 text-xs text-slate-500 hover:bg-slate-50"
+              className="rounded-md border border-neutral-700 px-2 text-xs text-neutral-400 hover:bg-neutral-800"
             >
               ×
             </button>
@@ -36,7 +36,7 @@ export function ItemRows() {
       <button
         type="button"
         onClick={() => setRows([...rows, Date.now()])}
-        className="text-xs text-indigo-700 hover:underline"
+        className="text-xs text-neutral-200 hover:underline"
       >
         + adicionar item
       </button>

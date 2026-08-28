@@ -55,37 +55,37 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-xl font-bold text-slate-900">Dashboard</h1>
-      <p className="mb-6 text-sm text-slate-500">O que precisa da sua atenção agora.</p>
+      <h1 className="mb-1 text-xl font-bold text-white">Dashboard</h1>
+      <p className="mb-6 text-sm text-neutral-400">O que precisa da sua atenção agora.</p>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-2 text-xs font-medium text-slate-500">{s.label}</div>
-            <div className="text-2xl font-bold text-slate-900">{s.value}</div>
+          <div key={s.label} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <div className="mb-2 text-xs font-medium text-neutral-400">{s.label}</div>
+            <div className="text-2xl font-bold text-white">{s.value}</div>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-1 text-sm font-bold text-slate-800">
+      <div className="mt-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+        <h2 className="mb-1 text-sm font-bold text-neutral-100">
           Amanhã — {amanhaComPreparacao.length} serviço{amanhaComPreparacao.length === 1 ? "" : "s"}
         </h2>
         {amanhaComPreparacao.length === 0 ? (
-          <p className="text-sm text-slate-400">Sem serviços agendados para amanhã.</p>
+          <p className="text-sm text-neutral-500">Sem serviços agendados para amanhã.</p>
         ) : (
           <>
             <div className="mt-2 flex flex-wrap gap-3 text-sm">
-              <span className="text-emerald-700">🟢 {preparados.length} preparado{preparados.length === 1 ? "" : "s"}</span>
+              <span className="text-emerald-400">🟢 {preparados.length} preparado{preparados.length === 1 ? "" : "s"}</span>
               {infoFalta.length > 0 && (
-                <span className="text-amber-700">🟠 {infoFalta.length} com informação em falta</span>
+                <span className="text-amber-400">🟠 {infoFalta.length} com informação em falta</span>
               )}
               {bloqueados.length > 0 && (
-                <span className="text-red-700">🔴 {bloqueados.length} bloqueado{bloqueados.length === 1 ? "" : "s"}</span>
+                <span className="text-red-400">🔴 {bloqueados.length} bloqueado{bloqueados.length === 1 ? "" : "s"}</span>
               )}
             </div>
             {(infoFalta.length > 0 || bloqueados.length > 0) && (
-              <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+              <div className="mt-3 space-y-1.5 border-t border-neutral-800 pt-3">
                 {[...bloqueados, ...infoFalta].map((s: any) => (
                   <Link
                     key={s.id}
@@ -101,10 +101,10 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <p className="mt-6 text-sm text-slate-400">
+      <p className="mt-6 text-sm text-neutral-500">
         Para o panorama completo de alertas (pedidos incompletos, atrasos, material em falta,
         follow-ups de orçamentos…), vê a{" "}
-        <Link href="/admin/atencao" className="text-indigo-700 underline">
+        <Link href="/admin/atencao" className="text-neutral-200 underline">
           Central de Atenção
         </Link>
         .
