@@ -3,6 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+// Vai sempre buscar a visita aberta mais recente diretamente à BD — usado
+// pelo botão "Terminar serviço" para nunca depender de um valor de
+// visitaAbertaId que possa ter ficado desatualizado num render anterior
+// (era exatamente isto que fazia o botão "Confirmar" não fazer nada: se o
+// id da visita passado por prop estivesse desatualizado/nulo, submeter()
+// saía em silêncio sem gravar nem avisar o técnico de nada).
+export async function obterVisitaAberta(serviceId: string) {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("visits")
+    .select("id")
+    .eq("service_id", serviceId)
+    .is("hora_fim_real", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 export async function iniciarServico(serviceId: string) {
   const supabase = createClient();
   const { data, error } = await supabase.rpc("tech_start_service", { p_service_id: serviceId });

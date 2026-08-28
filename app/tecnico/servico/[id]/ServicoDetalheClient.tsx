@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { iniciarServico, concluirVisita } from "../../actions";
+import { iniciarServico, concluirVisita, obterVisitaAberta } from "../../actions";
 
 const MAO_OBRA_OPCOES: [string, string][] = [
   ["1h", "1 hora"],
@@ -39,7 +39,9 @@ export function ServicoDetalheClient({
   visitaAbertaId: string | null;
 }) {
   const router = useRouter();
+  const [visitaId, setVisitaId] = useState<string | null>(visitaAbertaId);
   const [aFinalizar, setAFinalizar] = useState(false);
+  const [aAbrirFinalizar, setAAbrirFinalizar] = useState(false);
   const [aGuardar, setAGuardar] = useState(false);
   const [resultado, setResultado] = useState<"concluido" | "nova_visita" | "nao_realizado">("concluido");
   const [trabalho, setTrabalho] = useState("");
@@ -50,13 +52,16 @@ export function ServicoDetalheClient({
   const [novaData, setNovaData] = useState("");
   const [novaHora, setNovaHora] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const [sucesso, setSucesso] = useState(false);
 
   const [label, cls] = ESTADO_LABEL[servico.estado] ?? [servico.estado, "bg-slate-100 text-slate-700"];
 
   const iniciar = async () => {
     setAGuardar(true);
+    setErro(null);
     try {
-      await iniciarServico(servico.id);
+      const novaVisitaId = await iniciarServico(servico.id);
+      setVisitaId(novaVisitaId);
       router.refresh();
     } catch (e: any) {
       setErro(e.message);
@@ -65,8 +70,40 @@ export function ServicoDetalheClient({
     }
   };
 
+  // Antes de mostrar o formulário de fecho, vai sempre confirmar qual é a
+  // visita aberta diretamente à BD — nunca confiar apenas no valor recebido
+  // por prop no render inicial da página, que pode estar desatualizado.
+  const abrirFinalizar = async () => {
+    setAAbrirFinalizar(true);
+    setErro(null);
+    try {
+      const id = await obterVisitaAberta(servico.id);
+      if (!id) {
+        setErro("Não encontrei nenhuma visita em curso para este serviço. Recarrega a página e tenta novamente.");
+        return;
+      }
+      setVisitaId(id);
+      setAFinalizar(true);
+    } catch (e: any) {
+      setErro(e.message);
+    } finally {
+      setAAbrirFinalizar(false);
+    }
+  };
+
   const submeter = async () => {
-    if (!visitaAbertaId) return;
+    let idParaSubmeter = visitaId;
+    if (!idParaSubmeter) {
+      // Rede de segurança: mesmo que por alguma razão o id se tenha perdido
+      // entretanto, tenta ir buscá-lo mais uma vez antes de desistir — nunca
+      // falhar em silêncio como acontecia antes.
+      idParaSubmeter = await obterVisitaAberta(servico.id);
+      if (!idParaSubmeter) {
+        setErro("Não encontrei a visita em curso. Recarrega a página e tenta novamente antes de confirmar.");
+        return;
+      }
+      setVisitaId(idParaSubmeter);
+    }
 
     if (resultado === "concluido") {
       if (!trabalho.trim()) {
@@ -110,7 +147,7 @@ export function ServicoDetalheClient({
               .map((nome) => ({ nome, qtd: 1 }))
           : [];
       await concluirVisita({
-        visitId: visitaAbertaId,
+        visitId: idParaSubmeter,
         serviceId: servico.id,
         resultado,
         trabalhoRealizado: trabalho,
@@ -121,11 +158,13 @@ export function ServicoDetalheClient({
         novaDataAgendada: resultado === "nova_visita" && agendouNovaData === "sim" ? novaData : null,
         novaHoraAgendada: resultado === "nova_visita" && agendouNovaData === "sim" ? novaHora : null,
       });
-      router.push("/tecnico");
-      router.refresh();
+      setSucesso(true);
+      setTimeout(() => {
+        router.push("/tecnico");
+        router.refresh();
+      }, 900);
     } catch (e: any) {
       setErro(e.message);
-    } finally {
       setAGuardar(false);
     }
   };
@@ -231,14 +270,23 @@ export function ServicoDetalheClient({
 
         {servico.estado === "em_curso" && !aFinalizar && (
           <button
-            onClick={() => setAFinalizar(true)}
-            className="w-full rounded-md bg-orange-500 px-4 py-3 text-sm font-medium text-white hover:bg-orange-600"
+            onClick={abrirFinalizar}
+            disabled={aAbrirFinalizar}
+            className="w-full rounded-md bg-orange-500 px-4 py-3 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-40"
           >
-            Terminar serviço
+            {aAbrirFinalizar ? "A preparar…" : "Terminar serviço"}
           </button>
         )}
 
-        {aFinalizar && (
+        {aFinalizar && sucesso && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
+            <div className="mb-1 text-2xl">✓</div>
+            <p className="text-sm font-semibold text-emerald-800">Serviço encerrado com sucesso.</p>
+            <p className="mt-1 text-xs text-emerald-700">A voltar à agenda…</p>
+          </div>
+        )}
+
+        {aFinalizar && !sucesso && (
           <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
             <div>
               <div className="mb-2 text-sm font-semibold text-slate-700">Resultado</div>
