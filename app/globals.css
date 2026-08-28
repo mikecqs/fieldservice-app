@@ -1,3 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* O tema escuro põe o texto do body a branco (herdado por `color: inherit`
+     do preflight do Tailwind), mas nunca definiu um fundo escuro para os
+     próprios campos — o browser usa o fundo branco por omissão, o que dava
+     texto branco sobre fundo branco em todos os formulários da app. Isto
+     corrige de uma vez só, em vez de repetir bg-/text- em cada input. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    background-color: theme("colors.neutral.900");
+    color: theme("colors.white");
+    color-scheme: dark;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: theme("colors.neutral.500");
+    opacity: 1;
+  }
+
+  input:disabled,
+  textarea:disabled,
+  select:disabled {
+    opacity: 0.6;
+  }
+}
