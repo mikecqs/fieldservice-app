@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDuracao, formatEuros, type FinanceiroRange } from "@/lib/financeiro";
+import { ExportarFinanceiroExcel } from "@/components/ExportarFinanceiroExcel";
 
 const PRESETS = [
   { value: "hoje", label: "Hoje" },
@@ -21,11 +22,14 @@ export function DashboardFinanceiro({
 }) {
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-xl font-bold text-white">Dashboard financeiro</h1>
-        <p className="mt-0.5 text-sm text-neutral-400">
-          {range.label} · {range.desde} a {range.ate}
-        </p>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-white">Dashboard financeiro</h1>
+          <p className="mt-0.5 text-sm text-neutral-400">
+            {range.label} · {range.desde} a {range.ate}
+          </p>
+        </div>
+        <ExportarFinanceiroExcel stats={stats} range={range} />
       </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -80,6 +84,8 @@ export function DashboardFinanceiro({
         <Stat label="Pendentes (agora)" value={String(stats.producao.pendentes)} />
         <Stat label="Serviço mais realizado" value={stats.producao.servicoMaisRealizado ?? "—"} />
         <Stat label="Novas visitas" value={String(stats.producao.novasVisitas)} />
+        <Stat label="Orçamentos criados" value={String(stats.producao.orcamentos)} />
+        <Stat label="Não realizados" value={String(stats.producao.naoRealizados)} />
       </div>
       {Object.keys(stats.producao.porTipo).length > 0 && (
         <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
@@ -97,9 +103,13 @@ export function DashboardFinanceiro({
 
       <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Tempos médios</h2>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+        <Stat label="Pedido → orçamento" value={formatDuracao(stats.tempos.pedidoOrcamentoHoras)} />
         <Stat label="Pedido → conclusão" value={formatDuracao(stats.tempos.pedidoConclusaoHoras)} />
         <Stat label="Agendamento → início" value={formatDuracao(stats.tempos.agendamentoInicioHoras)} />
         <Stat label="Início → conclusão" value={formatDuracao(stats.tempos.inicioConclusaoHoras)} />
+        <Stat label="Fecho → validação" value={formatDuracao(stats.tempos.fechoValidacaoHoras)} />
+        <Stat label="Validação → faturação" value={formatDuracao(stats.tempos.validacaoFaturacaoHoras)} />
+        <Stat label="Pedido → faturação" value={formatDuracao(stats.tempos.pedidoFaturacaoHoras)} />
       </div>
       {Object.keys(stats.tempos.porTipoHoras).length > 0 && (
         <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-4">

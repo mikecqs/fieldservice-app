@@ -24,9 +24,16 @@ function hasSessionCookie(request: NextRequest) {
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isAuthRoute = path.startsWith("/login");
+  // /esqueci-password e /redefinir-password também têm de ficar acessíveis
+  // sem sessão — em particular /redefinir-password: o link do email só cria
+  // a sessão de recuperação depois do JS da página correr no browser, por
+  // isso o primeiro pedido a chegar aqui ainda não tem cookie nenhum. Se
+  // fosse tratada como rota protegida normal, o middleware mandava logo para
+  // /login e perdia-se o código de recuperação que vinha no URL.
+  const isPublicAuthRoute = isAuthRoute || path.startsWith("/esqueci-password") || path.startsWith("/redefinir-password");
   const hasSession = hasSessionCookie(request);
 
-  if (!hasSession && !isAuthRoute) {
+  if (!hasSession && !isPublicAuthRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

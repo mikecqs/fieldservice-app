@@ -56,7 +56,7 @@ export async function getFinanceiroStats(supabase: ReturnType<typeof createClien
       .select("id, tipo, estado, valor, faturacao_estado, faturacao_valor, faturacao_data, request_id, created_at"),
     supabase.from("service_events").select("service_id, tipo, created_at").order("created_at", { ascending: true }),
     supabase.from("requests").select("id, created_at"),
-    supabase.from("budgets").select("id, criado_em, budget_items(tipo, qtd, valor_unit)"),
+    supabase.from("budgets").select("id, criado_em, request_id, budget_items(tipo, qtd, valor_unit)"),
   ]);
 
   const servicoPorId = new Map((servicos ?? []).map((s) => [s.id, s]));
@@ -77,6 +77,8 @@ export async function getFinanceiroStats(supabase: ReturnType<typeof createClien
   const eventosNoRange = (eventos ?? []).filter((e) => emRange(e.created_at));
   const concluidosNoRange = eventosNoRange.filter((e) => e.tipo === "concluido");
   const novaVisitaNoRange = eventosNoRange.filter((e) => e.tipo === "nova_visita");
+  const naoRealizadoNoRange = eventosNoRange.filter((e) => e.tipo === "nao_realizado");
+  const orcamentosNoRange = (budgets ?? []).filter((b) => b.criado_em && emRange(b.criado_em));
   const pendentes = (servicos ?? []).filter((s) => !["concluido", "cancelado", "nao_realizado"].includes(s.estado)).length;
 
   const porTipoCount = new Map<string, number>();
@@ -106,26 +108,49 @@ export async function getFinanceiroStats(supabase: ReturnType<typeof createClien
   const temposPedidoConclusao: number[] = [];
   const temposAgendamentoInicio: number[] = [];
   const temposInicioConclusao: number[] = [];
+  const temposFechoValidacao: number[] = [];
+  const temposValidacaoFaturacao: number[] = [];
+  const temposPedidoFaturacao: number[] = [];
   const temposPorTipo = new Map<string, number[]>();
 
   for (const [serviceId, m] of primeiroEvento) {
     const concluidoAt = m.get("concluido");
-    if (!concluidoAt || !emRange(concluidoAt)) continue;
-
     const servico = servicoPorId.get(serviceId);
-    const agendadoAt = m.get("agendado");
-    const iniciadoAt = m.get("iniciado") ?? m.get("corrigido");
-
     const pedido = servico?.request_id ? requestPorId.get(servico.request_id) : null;
-    if (pedido?.created_at) temposPedidoConclusao.push(diffHoras(pedido.created_at, concluidoAt));
-    if (agendadoAt && iniciadoAt) temposAgendamentoInicio.push(diffHoras(agendadoAt, iniciadoAt));
-    if (iniciadoAt) {
-      const horas = diffHoras(iniciadoAt, concluidoAt);
-      temposInicioConclusao.push(horas);
-      const tipo = servico?.tipo ?? "—";
-      if (!temposPorTipo.has(tipo)) temposPorTipo.set(tipo, []);
-      temposPorTipo.get(tipo)!.push(horas);
+    const validadoAt = m.get("validado");
+    const faturadoAt = m.get("faturado");
+
+    if (concluidoAt && emRange(concluidoAt)) {
+      const agendadoAt = m.get("agendado");
+      const iniciadoAt = m.get("iniciado") ?? m.get("corrigido");
+
+      if (pedido?.created_at) temposPedidoConclusao.push(diffHoras(pedido.created_at, concluidoAt));
+      if (agendadoAt && iniciadoAt) temposAgendamentoInicio.push(diffHoras(agendadoAt, iniciadoAt));
+      if (iniciadoAt) {
+        const horas = diffHoras(iniciadoAt, concluidoAt);
+        temposInicioConclusao.push(horas);
+        const tipo = servico?.tipo ?? "—";
+        if (!temposPorTipo.has(tipo)) temposPorTipo.set(tipo, []);
+        temposPorTipo.get(tipo)!.push(horas);
+      }
     }
+
+    if (validadoAt && emRange(validadoAt) && concluidoAt) {
+      temposFechoValidacao.push(diffHoras(concluidoAt, validadoAt));
+    }
+    if (faturadoAt && emRange(faturadoAt)) {
+      if (validadoAt) temposValidacaoFaturacao.push(diffHoras(validadoAt, faturadoAt));
+      if (pedido?.created_at) temposPedidoFaturacao.push(diffHoras(pedido.created_at, faturadoAt));
+    }
+  }
+
+  // Pedido → orçamento: independente de o serviço já ter sido concluído —
+  // o que importa aqui é apenas quando o orçamento foi criado.
+  const temposPedidoOrcamento: number[] = [];
+  for (const b of budgets ?? []) {
+    if (!b.criado_em || !emRange(b.criado_em)) continue;
+    const pedido = (b as any).request_id ? requestPorId.get((b as any).request_id) : null;
+    if (pedido?.created_at) temposPedidoOrcamento.push(diffHoras(pedido.created_at, b.criado_em));
   }
 
   const media = (arr: number[]) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
@@ -150,11 +175,17 @@ export async function getFinanceiroStats(supabase: ReturnType<typeof createClien
       porTipo: Object.fromEntries(porTipoCount),
       servicoMaisRealizado,
       novasVisitas: novaVisitaNoRange.length,
+      naoRealizados: naoRealizadoNoRange.length,
+      orcamentos: orcamentosNoRange.length,
     },
     tempos: {
+      pedidoOrcamentoHoras: media(temposPedidoOrcamento),
       pedidoConclusaoHoras: media(temposPedidoConclusao),
       agendamentoInicioHoras: media(temposAgendamentoInicio),
       inicioConclusaoHoras: media(temposInicioConclusao),
+      fechoValidacaoHoras: media(temposFechoValidacao),
+      validacaoFaturacaoHoras: media(temposValidacaoFaturacao),
+      pedidoFaturacaoHoras: media(temposPedidoFaturacao),
       porTipoHoras: Object.fromEntries([...temposPorTipo].map(([k, v]) => [k, media(v)])),
     },
     valores,

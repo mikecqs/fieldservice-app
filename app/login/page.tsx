@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { NexiaMark } from "@/components/NexiaMark";
 
@@ -69,6 +70,10 @@ export default function LoginPage() {
           >
             {aEnviar ? "A entrar…" : "Entrar"}
           </button>
+
+          <Link href="/esqueci-password" className="block text-center text-xs text-neutral-400 underline">
+            Esqueceu-se da password?
+          </Link>
         </div>
       </div>
     </div>

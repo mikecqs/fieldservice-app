@@ -11,28 +11,40 @@ import { registarEventoServico } from "@/lib/service-events";
 // decidir (Cancelar ou Agendar na mesma). A decisão final continua sempre em
 // atualizarAgendamento.
 export async function verificarConflitoAgenda(input: {
-  serviceId: string;
+  // Um serviço já existente (edição) deriva os técnicos a partir dele; um
+  // agendamento ainda por criar (popup da agenda) ainda não tem serviceId,
+  // por isso pode indicar diretamente que técnicos vão ser atribuídos.
+  serviceId?: string;
+  technicianIds?: string[];
   data: string;
   horaInicio: string;
   horaFim: string;
 }) {
   const supabase = createClient();
 
-  const { data: tecnicos } = await supabase
-    .from("service_technicians")
-    .select("user_id, profiles(nome)")
-    .eq("service_id", input.serviceId);
-
-  const tecnicoIds = (tecnicos ?? []).map((t) => t.user_id);
+  let tecnicoIds = input.technicianIds ?? [];
+  let nomesConhecidos: Record<string, string> = {};
+  if (tecnicoIds.length > 0) {
+    const { data: perfis } = await supabase.from("profiles").select("id, nome").in("id", tecnicoIds);
+    nomesConhecidos = Object.fromEntries((perfis ?? []).map((p) => [p.id, p.nome]));
+  } else if (input.serviceId) {
+    const { data: tecnicos } = await supabase
+      .from("service_technicians")
+      .select("user_id, profiles(nome)")
+      .eq("service_id", input.serviceId);
+    tecnicoIds = (tecnicos ?? []).map((t) => t.user_id);
+    nomesConhecidos = Object.fromEntries((tecnicos ?? []).map((t: any) => [t.user_id, t.profiles?.nome]).filter(([, n]) => n));
+  }
   if (tecnicoIds.length === 0) return { conflito: false as const };
 
-  const { data: outros } = await supabase
+  let query = supabase
     .from("services")
     .select("id, descricao, hora_agendada, hora_fim_agendada, clients(nome), service_technicians!inner(user_id)")
     .eq("data_agendada", input.data)
-    .neq("id", input.serviceId)
     .in("service_technicians.user_id", tecnicoIds)
     .not("estado", "in", "(cancelado,concluido,nao_realizado)");
+  if (input.serviceId) query = query.neq("id", input.serviceId);
+  const { data: outros } = await query;
 
   const conflitos = (outros ?? []).filter(
     (s) => s.hora_agendada && s.hora_fim_agendada && s.hora_agendada < input.horaFim && s.hora_fim_agendada > input.horaInicio
@@ -40,7 +52,7 @@ export async function verificarConflitoAgenda(input: {
 
   if (conflitos.length === 0) return { conflito: false as const };
 
-  const nomesTecnicos = (tecnicos ?? []).map((t: any) => t.profiles?.nome).filter(Boolean).join(", ");
+  const nomesTecnicos = tecnicoIds.map((id) => nomesConhecidos[id]).filter(Boolean).join(", ");
   const detalhes = conflitos
     .map((s: any) => `${s.clients?.nome ?? "cliente"} às ${s.hora_agendada?.slice(0, 5)}–${s.hora_fim_agendada?.slice(0, 5)}`)
     .join("; ");
