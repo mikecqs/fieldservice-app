@@ -1,13 +1,23 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ESTADO_LABEL, ESTADO_COLOR } from "./estados";
+import { calcularPreparacao, PREPARACAO_BADGE } from "@/lib/preparacao";
+
+const ESTADOS_POR_EXECUTAR = ["por_agendar", "agendado", "nova_visita", "correcao_necessaria"];
 
 export default async function ServicosPage() {
   const supabase = createClient();
-  const { data: servicos } = await supabase
-    .from("services")
-    .select("id, tipo, descricao, prioridade, estado, data_agendada, hora_agendada, clients(nome)")
-    .order("created_at", { ascending: false });
+  const [{ data: servicos }, { data: comprasPendentes }] = await Promise.all([
+    supabase
+      .from("services")
+      .select(
+        "id, tipo, descricao, prioridade, estado, data_agendada, hora_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id)"
+      )
+      .order("created_at", { ascending: false }),
+    supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
+  ]);
+
+  const materialPendentePorServico = new Set((comprasPendentes ?? []).map((c: any) => c.service_id));
 
   return (
     <div>
@@ -25,7 +35,19 @@ export default async function ServicosPage() {
       </div>
 
       <div className="space-y-2">
-        {(servicos ?? []).map((s: any) => (
+        {(servicos ?? []).map((s: any) => {
+          const prep = calcularPreparacao({
+            temTecnico: (s.service_technicians ?? []).length > 0,
+            morada: s.client_addresses?.endereco,
+            temContacto: !!(s.clients?.telefone || s.clients?.email),
+            descricao: s.descricao,
+            dataAgendada: s.data_agendada,
+            horaAgendada: s.hora_agendada,
+            materialBloqueando: materialPendentePorServico.has(s.id),
+          });
+          const badge = PREPARACAO_BADGE[prep.nivel];
+          const mostrarPreparacao = ESTADOS_POR_EXECUTAR.includes(s.estado);
+          return (
           <Link
             key={s.id}
             href={`/admin/servicos/${s.id}`}
@@ -33,6 +55,11 @@ export default async function ServicosPage() {
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
+                {mostrarPreparacao && (
+                  <span title={prep.motivos.join(", ")} className="text-sm">
+                    {badge.emoji}
+                  </span>
+                )}
                 <span className="font-medium text-slate-800">{s.clients?.nome}</span>
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{s.tipo}</span>
                 {s.prioridade === "alta" && (
@@ -52,7 +79,8 @@ export default async function ServicosPage() {
               </span>
             </div>
           </Link>
-        ))}
+          );
+        })}
         {(servicos ?? []).length === 0 && (
           <p className="py-10 text-center text-sm text-slate-400">Ainda sem serviços.</p>
         )}

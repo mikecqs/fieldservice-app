@@ -134,6 +134,18 @@ export async function mudarEstado(formData: FormData) {
   revalidatePath("/admin/servicos");
 }
 
+// Liga (ou desliga) este serviço a um equipamento do cliente — é isto que
+// faz o histórico do equipamento (na ficha do cliente) mostrar as
+// intervenções futuras/passadas relacionadas com ele.
+export async function associarEquipamento(formData: FormData) {
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  const equipment_id = String(formData.get("equipment_id") || "") || null;
+  if (!id) return;
+  await supabase.from("services").update({ equipment_id }).eq("id", id);
+  revalidatePath(`/admin/servicos/${id}`);
+}
+
 export async function atribuirTecnico(formData: FormData) {
   const supabase = createClient();
   const service_id = String(formData.get("service_id") || "");

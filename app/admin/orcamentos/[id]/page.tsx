@@ -39,7 +39,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
         <div className="mb-1 flex items-start justify-between">
-          <h1 className="text-lg font-bold text-slate-900">{orcamento.clients?.nome}</h1>
+          <h1 className="text-lg font-bold text-slate-900">#{orcamento.numero} · {orcamento.clients?.nome}</h1>
           <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
             {orcamento.estado}
           </span>

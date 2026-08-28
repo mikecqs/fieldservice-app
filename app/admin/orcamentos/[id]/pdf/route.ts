@@ -53,7 +53,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (org?.nif) page.drawText(`NIF: ${org.nif}`, { x: margem + 42, y: y - 22, size: 9, font: fontRegular, color: cinza });
 
   y -= 60;
-  page.drawText("ORÇAMENTO", { x: margem, y, size: 18, font: fontBold, color: cinzaEscuro });
+  page.drawText(`ORÇAMENTO Nº ${orcamento.numero}`, { x: margem, y, size: 18, font: fontBold, color: cinzaEscuro });
   page.drawText(`Data: ${orcamento.criado_em}`, { x: 595.28 - margem - 120, y, size: 10, font: fontRegular, color: cinza });
 
   y -= 30;
@@ -102,7 +102,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return new NextResponse(Buffer.from(bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="orcamento-${orcamento.id.slice(0, 8)}.pdf"`,
+      "Content-Disposition": `attachment; filename="orcamento-${orcamento.numero}.pdf"`,
     },
   });
 }

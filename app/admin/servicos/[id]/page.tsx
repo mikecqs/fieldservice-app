@@ -10,9 +10,11 @@ import {
   removerMaterialPlaneado,
   validarServico,
   enviarParaCorrecao,
+  associarEquipamento,
 } from "../actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../estados";
 import { AgendamentoForm } from "./AgendamentoForm";
+import { calcularPreparacao, PREPARACAO_BADGE } from "@/lib/preparacao";
 
 const EVENTO_LABEL: Record<string, string> = {
   criado: "Criado",
@@ -37,10 +39,10 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
   const supabase = createClient();
   const organizationId = await getOrgId();
 
-  const [{ data: servico }, { data: tecnicos }, { data: visitas }, { data: validacoes }, { data: eventos }] = await Promise.all([
+  const [{ data: servico }, { data: tecnicos }, { data: visitas }, { data: validacoes }, { data: eventos }, { data: comprasPendentes }] = await Promise.all([
     supabase
       .from("services")
-      .select("*, clients(nome), client_addresses(label, endereco), service_technicians(user_id, profiles(nome)), service_materials_planned(*)")
+      .select("*, clients(nome, telefone, email), client_addresses(label, endereco), service_technicians(user_id, profiles(nome)), service_materials_planned(*)")
       .eq("id", params.id)
       .single(),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
@@ -55,12 +57,31 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       .select("tipo, descricao, created_at, profiles(nome)")
       .eq("service_id", params.id)
       .order("created_at", { ascending: false }),
+    supabase.from("purchases").select("id").eq("service_id", params.id).in("estado", ["por_encomendar", "encomendada", "parcial"]),
   ]);
 
   if (!servico) notFound();
 
+  const { data: equipamentosCliente } = await supabase
+    .from("client_equipment")
+    .select("id, equipamento, marca, modelo")
+    .eq("client_id", servico.client_id)
+    .order("equipamento");
+
   const atribuidos = new Set((servico.service_technicians ?? []).map((t: any) => t.user_id));
   const disponiveis = (tecnicos ?? []).filter((t) => !atribuidos.has(t.id));
+
+  const preparacao = calcularPreparacao({
+    temTecnico: (servico.service_technicians ?? []).length > 0,
+    morada: servico.client_addresses?.endereco,
+    temContacto: !!(servico.clients?.telefone || servico.clients?.email),
+    descricao: servico.descricao,
+    dataAgendada: servico.data_agendada,
+    horaAgendada: servico.hora_agendada,
+    materialBloqueando: (comprasPendentes ?? []).length > 0,
+  });
+  const badgePreparacao = PREPARACAO_BADGE[preparacao.nivel];
+  const mostrarPreparacao = ["por_agendar", "agendado", "nova_visita", "correcao_necessaria"].includes(servico.estado);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -84,6 +105,15 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
         <p className="mt-2 text-sm font-semibold text-slate-700">
           {Number(servico.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
         </p>
+        {mostrarPreparacao && (
+          <div className={`mt-3 flex items-start gap-2 rounded-md p-2.5 text-xs ${badgePreparacao.cls}`}>
+            <span>{badgePreparacao.emoji}</span>
+            <div>
+              <span className="font-semibold">{badgePreparacao.label}</span>
+              {preparacao.motivos.length > 0 && <span> — {preparacao.motivos.join(", ")}</span>}
+            </div>
+          </div>
+        )}
         {servico.estado === "correcao_necessaria" && validacoes?.[0]?.motivo && (
           <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
             <span className="font-semibold">Motivo da rejeição:</span> {validacoes[0].motivo}
@@ -180,6 +210,29 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           </form>
         )}
       </div>
+
+      {(equipamentosCliente ?? []).length > 0 && (
+        <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">Equipamento relacionado</h2>
+          <form action={associarEquipamento} className="flex gap-2">
+            <input type="hidden" name="id" value={servico.id} />
+            <select name="equipment_id" defaultValue={servico.equipment_id ?? ""} className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm">
+              <option value="">— Nenhum —</option>
+              {(equipamentosCliente ?? []).map((e: any) => (
+                <option key={e.id} value={e.id}>
+                  {e.equipamento}{e.marca ? ` · ${e.marca}` : ""}{e.modelo ? ` ${e.modelo}` : ""}
+                </option>
+              ))}
+            </select>
+            <button className="rounded-md bg-indigo-900 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-800">
+              Guardar
+            </button>
+          </form>
+          <Link href={`/admin/clientes/${servico.client_id}`} className="mt-2 inline-block text-xs text-indigo-700 underline">
+            Ver equipamentos e histórico do cliente →
+          </Link>
+        </div>
+      )}
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="mb-3 text-sm font-semibold text-slate-800">Materiais planeados</h2>

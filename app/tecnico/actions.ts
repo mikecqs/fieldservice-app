@@ -41,6 +41,10 @@ export async function concluirVisita(input: {
   maoObraDetalhe?: string | null;
   novaDataAgendada?: string | null;
   novaHoraAgendada?: string | null;
+  problemaIdentificado?: string | null;
+  equipamentoInstalado?: string | null;
+  quantidadeInstalada?: number | null;
+  testesRealizados?: string | null;
 }) {
   const supabase = createClient();
   const { error } = await supabase.rpc("tech_finish_visit", {
@@ -53,6 +57,10 @@ export async function concluirVisita(input: {
     p_mao_obra_detalhe: input.maoObraDetalhe ?? null,
     p_nova_data_agendada: input.novaDataAgendada ?? null,
     p_nova_hora_agendada: input.novaHoraAgendada ?? null,
+    p_problema_identificado: input.problemaIdentificado ?? null,
+    p_equipamento_instalado: input.equipamentoInstalado ?? null,
+    p_quantidade_instalada: input.quantidadeInstalada ?? null,
+    p_testes_realizados: input.testesRealizados ?? null,
   });
   if (error) throw new Error(error.message);
   revalidatePath(`/tecnico/servico/${input.serviceId}`);

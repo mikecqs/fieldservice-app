@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
 import { toISO, parseISO, addDays, mondayOf, monthGridRange, DIAS_SEMANA, MESES } from "@/lib/agenda-dates";
+import { calcularPreparacao, PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
 
 const HORA_INICIO_GRELHA = 7;
 const HORA_FIM_GRELHA = 20;
@@ -17,6 +18,7 @@ type Servico = {
   hora_fim_agendada: string | null;
   clients: { nome: string } | null;
   service_technicians: { profiles: { nome: string } | null }[];
+  preparacaoNivel?: NivelPreparacao;
 };
 
 function minutosDoDia(hora: string) {
@@ -26,12 +28,14 @@ function minutosDoDia(hora: string) {
 
 function EventoResumo({ s }: { s: Servico }) {
   const tecnicos = s.service_technicians.map((t) => t.profiles?.nome).filter(Boolean).join(", ");
+  const emoji = s.preparacaoNivel ? PREPARACAO_BADGE[s.preparacaoNivel].emoji : null;
   return (
     <Link
       href={`/admin/servicos/${s.id}`}
       className={`block rounded border-l-4 border-current px-1.5 py-1 text-[11px] leading-tight ${ESTADO_COLOR[s.estado] ?? "bg-slate-100 text-slate-600"}`}
     >
       <div className="font-semibold">
+        {emoji && <span className="mr-0.5">{emoji}</span>}
         {s.hora_agendada?.slice(0, 5)}
         {s.hora_fim_agendada ? `–${s.hora_fim_agendada.slice(0, 5)}` : ""} · {s.clients?.nome}
       </div>
@@ -157,10 +161,12 @@ export default async function AgendaPage({
     dias = Array.from({ length: 7 }, (_, i) => addDays(desde, i));
   }
 
-  const [{ data: servicos }, { data: pendentes }] = await Promise.all([
+  const [{ data: servicos }, { data: pendentes }, { data: comprasPendentes }] = await Promise.all([
     supabase
       .from("services")
-      .select("id, tipo, descricao, estado, data_agendada, hora_agendada, hora_fim_agendada, clients(nome), service_technicians(profiles(nome))")
+      .select(
+        "id, tipo, descricao, estado, data_agendada, hora_agendada, hora_fim_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id, profiles(nome))"
+      )
       .gte("data_agendada", toISO(desde))
       .lte("data_agendada", toISO(ate))
       .not("data_agendada", "is", null)
@@ -171,12 +177,25 @@ export default async function AgendaPage({
       .is("data_agendada", null)
       .in("estado", ["por_agendar", "nova_visita"])
       .order("created_at", { ascending: false }),
+    supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
   ]);
 
+  const materialPendentePorServico = new Set((comprasPendentes ?? []).map((c: any) => c.service_id));
+
   const servicosPorDia = new Map<string, Servico[]>();
-  for (const s of (servicos ?? []) as any as Servico[]) {
+  for (const s of (servicos ?? []) as any[]) {
+    const preparacaoNivel = calcularPreparacao({
+      temTecnico: (s.service_technicians ?? []).length > 0,
+      morada: s.client_addresses?.endereco,
+      temContacto: !!(s.clients?.telefone || s.clients?.email),
+      descricao: s.descricao,
+      dataAgendada: s.data_agendada,
+      horaAgendada: s.hora_agendada,
+      materialBloqueando: materialPendentePorServico.has(s.id),
+    }).nivel;
+    const servico: Servico = { ...s, preparacaoNivel };
     const lista = servicosPorDia.get(s.data_agendada) ?? [];
-    lista.push(s);
+    lista.push(servico);
     servicosPorDia.set(s.data_agendada, lista);
   }
 

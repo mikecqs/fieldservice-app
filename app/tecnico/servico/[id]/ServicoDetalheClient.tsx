@@ -51,8 +51,14 @@ export function ServicoDetalheClient({
   const [agendouNovaData, setAgendouNovaData] = useState<"sim" | "nao" | null>(null);
   const [novaData, setNovaData] = useState("");
   const [novaHora, setNovaHora] = useState("");
+  const [problemaIdentificado, setProblemaIdentificado] = useState("");
+  const [equipamentoInstalado, setEquipamentoInstalado] = useState("");
+  const [quantidadeInstalada, setQuantidadeInstalada] = useState("");
+  const [testesRealizados, setTestesRealizados] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
+
+  const isInstalacao = servico.tipo === "Instalação";
 
   const [label, cls] = ESTADO_LABEL[servico.estado] ?? [servico.estado, "bg-slate-100 text-slate-700"];
 
@@ -106,6 +112,21 @@ export function ServicoDetalheClient({
     }
 
     if (resultado === "concluido") {
+      if (isInstalacao) {
+        if (!equipamentoInstalado.trim()) {
+          setErro("Indica o equipamento instalado.");
+          return;
+        }
+        if (!quantidadeInstalada || Number(quantidadeInstalada) <= 0) {
+          setErro("Indica a quantidade instalada.");
+          return;
+        }
+      } else {
+        if (!problemaIdentificado.trim()) {
+          setErro("Descreve o problema identificado.");
+          return;
+        }
+      }
       if (!trabalho.trim()) {
         setErro("Descreve o trabalho realizado antes de concluir.");
         return;
@@ -116,6 +137,10 @@ export function ServicoDetalheClient({
       }
       if (maoObraTipo === "outro" && !maoObraDetalhe.trim()) {
         setErro("Descreve a mão de obra em \"Outro\".");
+        return;
+      }
+      if (isInstalacao && !testesRealizados.trim()) {
+        setErro("Descreve os testes realizados.");
         return;
       }
     } else {
@@ -157,6 +182,10 @@ export function ServicoDetalheClient({
         maoObraDetalhe: resultado === "concluido" && maoObraTipo === "outro" ? maoObraDetalhe : null,
         novaDataAgendada: resultado === "nova_visita" && agendouNovaData === "sim" ? novaData : null,
         novaHoraAgendada: resultado === "nova_visita" && agendouNovaData === "sim" ? novaHora : null,
+        problemaIdentificado: resultado === "concluido" && !isInstalacao ? problemaIdentificado : null,
+        equipamentoInstalado: resultado === "concluido" && isInstalacao ? equipamentoInstalado : null,
+        quantidadeInstalada: resultado === "concluido" && isInstalacao ? Number(quantidadeInstalada) : null,
+        testesRealizados: resultado === "concluido" && isInstalacao ? testesRealizados : null,
       });
       setSucesso(true);
       setTimeout(() => {
@@ -314,6 +343,10 @@ export function ServicoDetalheClient({
                         setAgendouNovaData(null);
                         setNovaData("");
                         setNovaHora("");
+                        setProblemaIdentificado("");
+                        setEquipamentoInstalado("");
+                        setQuantidadeInstalada("");
+                        setTestesRealizados("");
                         setErro(null);
                       }}
                     />
@@ -322,6 +355,44 @@ export function ServicoDetalheClient({
                 ))}
               </div>
             </div>
+
+            {resultado === "concluido" && !isInstalacao && (
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-slate-600">Problema identificado (obrigatório)</span>
+                <textarea
+                  rows={2}
+                  value={problemaIdentificado}
+                  onChange={(e) => setProblemaIdentificado(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  placeholder="ex: disjuntor a disparar por sobrecarga"
+                />
+              </label>
+            )}
+
+            {resultado === "concluido" && isInstalacao && (
+              <div className="grid grid-cols-3 gap-2">
+                <label className="col-span-2 block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Equipamento instalado (obrigatório)</span>
+                  <input
+                    value={equipamentoInstalado}
+                    onChange={(e) => setEquipamentoInstalado(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="ex: Câmara IP 4MP"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Qtd (obrigatório)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quantidadeInstalada}
+                    onChange={(e) => setQuantidadeInstalada(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+            )}
 
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-slate-600">
@@ -374,6 +445,19 @@ export function ServicoDetalheClient({
                       onChange={(e) => setMaoObraDetalhe(e.target.value)}
                       className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                       placeholder="ex: 3 técnicos, meio-dia cada"
+                    />
+                  </label>
+                )}
+
+                {isInstalacao && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-slate-600">Testes realizados (obrigatório)</span>
+                    <textarea
+                      rows={2}
+                      value={testesRealizados}
+                      onChange={(e) => setTestesRealizados(e.target.value)}
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="ex: testado funcionamento remoto, gravação confirmada"
                     />
                   </label>
                 )}

@@ -26,7 +26,7 @@ export default async function OrcamentosPage() {
   const supabase = createClient();
   const { data: orcamentos } = await supabase
     .from("budgets")
-    .select("id, estado, criado_em, enviado_em, iva_percent, clients(nome), budget_items(qtd, valor_unit)")
+    .select("id, numero, estado, criado_em, enviado_em, iva_percent, clients(nome), budget_items(qtd, valor_unit)")
     .order("created_at", { ascending: false });
 
   const { data: clients } = await supabase.from("clients").select("id, nome").order("nome");
@@ -68,7 +68,7 @@ export default async function OrcamentosPage() {
               className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 hover:border-indigo-300 hover:shadow-sm"
             >
               <div>
-                <div className="font-medium text-slate-800">{o.clients?.nome}</div>
+                <div className="font-medium text-slate-800">#{o.numero} · {o.clients?.nome}</div>
                 <div className="text-xs text-slate-400">Criado {o.criado_em}</div>
               </div>
               <div className="flex items-center gap-3">

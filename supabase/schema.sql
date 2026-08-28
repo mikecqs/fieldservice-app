@@ -104,6 +104,36 @@ create table client_addresses (
 );
 
 -- -----------------------------------------------------------------------------
+-- EQUIPAMENTOS DO CLIENTE — associados a uma localização, com histórico de
+-- intervenções (services.equipment_id, abaixo, na secção de serviços).
+-- -----------------------------------------------------------------------------
+create table client_equipment (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  client_id uuid not null references clients(id) on delete cascade,
+  address_id uuid references client_addresses(id),
+  equipamento text not null,
+  marca text,
+  modelo text,
+  numero_serie text,
+  data_instalacao date,
+  notas text,
+  foto_path text,
+  created_at timestamptz not null default now()
+);
+
+alter table client_equipment enable row level security;
+
+create policy "admin manages client_equipment" on client_equipment for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org());
+
+create policy "finance reads client_equipment" on client_equipment for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
+
+grant select, insert, update, delete on client_equipment to authenticated;
+
+-- -----------------------------------------------------------------------------
 -- PEDIDOS
 -- -----------------------------------------------------------------------------
 create table requests (
@@ -122,6 +152,8 @@ create table requests (
 -- -----------------------------------------------------------------------------
 -- ORÇAMENTOS
 -- -----------------------------------------------------------------------------
+create sequence if not exists budgets_numero_seq;
+
 create table budgets (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
@@ -134,6 +166,9 @@ create table budgets (
   enviado_em date,
   service_id uuid, -- preenchido quando aceite e convertido em serviço
   iva_percent numeric not null default 23,
+  -- número amigável para o PDF/cliente (sequencial, nunca reutilizado) —
+  -- o id continua a ser o uuid, isto é só para leitura humana.
+  numero int not null default nextval('budgets_numero_seq'),
   created_at timestamptz not null default now()
 );
 
@@ -179,6 +214,7 @@ create table services (
   address_id uuid references client_addresses(id),
   request_id uuid references requests(id),
   budget_id uuid references budgets(id),
+  equipment_id uuid references client_equipment(id),
   tipo text not null,
   descricao text not null,
   prioridade text not null default 'normal' check (prioridade in ('baixa','normal','alta')),
@@ -225,6 +261,14 @@ create table visits (
   resultado text check (resultado in ('concluido','nova_visita','nao_realizado')),
   mao_obra_tipo text check (mao_obra_tipo in ('1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro')),
   mao_obra_detalhe text,
+  -- checklist de fecho, diferente consoante o tipo do serviço (ver
+  -- tech_finish_visit): problema_identificado/testes_realizados aplicam-se
+  -- a Manutenção/Instalação respetivamente; quantidade_instalada só a
+  -- Instalação. Ficam a null quando não se aplicam ao tipo.
+  problema_identificado text,
+  equipamento_instalado text,
+  quantidade_instalada numeric,
+  testes_realizados text,
   created_by uuid references profiles(id),
   created_at timestamptz not null default now()
 );
@@ -735,7 +779,11 @@ create or replace function tech_finish_visit(
   p_mao_obra_tipo text default null,
   p_mao_obra_detalhe text default null,
   p_nova_data_agendada date default null,
-  p_nova_hora_agendada time default null
+  p_nova_hora_agendada time default null,
+  p_problema_identificado text default null,
+  p_equipamento_instalado text default null,
+  p_quantidade_instalada numeric default null,
+  p_testes_realizados text default null
 )
 returns void
 language plpgsql
@@ -745,6 +793,7 @@ as $$
 declare
   v_service_id uuid;
   v_org_id uuid;
+  v_tipo text;
   v_novo_estado text;
 begin
   if p_resultado not in ('concluido', 'nova_visita', 'nao_realizado') then
@@ -761,6 +810,15 @@ begin
     end if;
   end if;
 
+  select service_id into v_service_id from visits
+  where id = p_visit_id and created_by = auth.uid();
+
+  if v_service_id is null then
+    raise exception 'Visita não encontrada ou não pertence a este técnico.';
+  end if;
+
+  select organization_id, tipo into v_org_id, v_tipo from services where id = v_service_id;
+
   if p_resultado = 'concluido' then
     if p_mao_obra_tipo is null or length(trim(p_mao_obra_tipo)) = 0 then
       raise exception 'Mão de obra é obrigatória para concluir o serviço.';
@@ -771,23 +829,36 @@ begin
     if p_mao_obra_tipo = 'outro' and length(trim(coalesce(p_mao_obra_detalhe, ''))) = 0 then
       raise exception 'Descreve a mão de obra em "Outro".';
     end if;
+
+    -- checklist de fecho: campos obrigatórios diferentes consoante o tipo
+    -- do serviço, validados sempre aqui (nunca só na UI).
+    if v_tipo = 'Instalação' then
+      if length(trim(coalesce(p_equipamento_instalado, ''))) = 0 then
+        raise exception 'Equipamento instalado é obrigatório.';
+      end if;
+      if p_quantidade_instalada is null or p_quantidade_instalada <= 0 then
+        raise exception 'Quantidade instalada é obrigatória.';
+      end if;
+      if length(trim(coalesce(p_testes_realizados, ''))) = 0 then
+        raise exception 'Testes realizados são obrigatórios.';
+      end if;
+    else
+      if length(trim(coalesce(p_problema_identificado, ''))) = 0 then
+        raise exception 'Problema identificado é obrigatório.';
+      end if;
+    end if;
   end if;
-
-  select service_id into v_service_id from visits
-  where id = p_visit_id and created_by = auth.uid();
-
-  if v_service_id is null then
-    raise exception 'Visita não encontrada ou não pertence a este técnico.';
-  end if;
-
-  select organization_id into v_org_id from services where id = v_service_id;
 
   update visits
     set hora_fim_real = current_time,
         trabalho_realizado = p_trabalho_realizado,
         resultado = p_resultado,
         mao_obra_tipo = case when p_resultado = 'concluido' then p_mao_obra_tipo else null end,
-        mao_obra_detalhe = case when p_resultado = 'concluido' then p_mao_obra_detalhe else null end
+        mao_obra_detalhe = case when p_resultado = 'concluido' then p_mao_obra_detalhe else null end,
+        problema_identificado = case when p_resultado = 'concluido' and v_tipo != 'Instalação' then p_problema_identificado else null end,
+        equipamento_instalado = case when p_resultado = 'concluido' and v_tipo = 'Instalação' then p_equipamento_instalado else null end,
+        quantidade_instalada = case when p_resultado = 'concluido' and v_tipo = 'Instalação' then p_quantidade_instalada else null end,
+        testes_realizados = case when p_resultado = 'concluido' and v_tipo = 'Instalação' then p_testes_realizados else null end
     where id = p_visit_id;
 
   insert into visit_materials_used (visit_id, nome, qtd)
@@ -833,7 +904,7 @@ begin
 end;
 $$;
 
-grant execute on function tech_finish_visit(uuid, text, text, jsonb, text[], text, text, date, time) to authenticated;
+grant execute on function tech_finish_visit(uuid, text, text, jsonb, text[], text, text, date, time, text, text, numeric, text) to authenticated;
 
 -- =============================================================================
 -- RPCs DE FATURAÇÃO — usadas tanto por ADMIN como por FINANCE (role #10).
@@ -973,6 +1044,18 @@ $$;
 create trigger on_organization_created
   after insert on organizations
   for each row execute function handle_new_organization();
+
+-- =============================================================================
+-- STORAGE: bucket para fotografias de equipamentos do cliente (opcional).
+-- Caminho sempre "{organization_id}/{...}" — é isso que a policy verifica.
+-- =============================================================================
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('equipamentos', 'equipamentos', false, 5242880)
+on conflict (id) do nothing;
+
+create policy "admin manages equipamentos storage" on storage.objects for all
+  using (bucket_id = 'equipamentos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (bucket_id = 'equipamentos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 -- =============================================================================
 -- PRÓXIMO PASSO: criar o teu utilizador SUPER_ADMIN
