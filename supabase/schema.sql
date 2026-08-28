@@ -1129,6 +1129,204 @@ create policy "admin manages equipamentos storage" on storage.objects for all
   with check (bucket_id = 'equipamentos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 -- =============================================================================
+-- INTEGRAÇÃO GOOGLE SHEETS — espelho de gestão em tempo real por empresa.
+-- Arquitetura: Supabase → Google Sheets, nunca ao contrário. Cada alteração
+-- relevante enfileira um item em google_sheets_sync_queue (nunca se perde,
+-- mesmo que o pg_net falhe) e tenta acordar o processamento quase de
+-- imediato via webhook; uma varredura periódica (cron) apanha o que ficou
+-- pendente. google_sheets_row_map guarda a linha exata de cada entidade em
+-- cada folha, para o processamento fazer upsert em vez de duplicar linhas.
+-- =============================================================================
+create extension if not exists pg_net;
+
+create table google_sheets_integrations (
+  organization_id uuid primary key references organizations(id) on delete cascade,
+  status text not null default 'desligado' check (status in ('desligado','ativo','erro')),
+  spreadsheet_id text,
+  spreadsheet_url text,
+  google_email text,
+  refresh_token text,
+  last_synced_at timestamptz,
+  last_error text,
+  connected_by uuid references profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table google_sheets_integrations enable row level security;
+
+create policy "admin manages google_sheets_integrations" on google_sheets_integrations for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+-- refresh_token nunca pode ser lido pelo browser (nem por engano com
+-- ".select('*')") — só o service_role (backend) o lê, e esse ignora grants.
+-- Reforço a nível de coluna, não só de linha (RLS).
+revoke select (refresh_token) on google_sheets_integrations from authenticated, anon;
+
+create table google_sheets_sync_queue (
+  id bigserial primary key,
+  organization_id uuid not null references organizations(id) on delete cascade,
+  entity_type text not null,
+  entity_id uuid not null,
+  action text not null default 'upsert' check (action in ('upsert','delete')),
+  status text not null default 'pending' check (status in ('pending','done','failed')),
+  attempts int not null default 0,
+  last_error text,
+  created_at timestamptz not null default now(),
+  processed_at timestamptz
+);
+create index google_sheets_sync_queue_pending_idx on google_sheets_sync_queue(organization_id, status, created_at);
+alter table google_sheets_sync_queue enable row level security;
+
+create table google_sheets_row_map (
+  organization_id uuid not null references organizations(id) on delete cascade,
+  sheet_name text not null,
+  entity_id uuid not null,
+  row_number int not null,
+  primary key (organization_id, sheet_name, entity_id)
+);
+alter table google_sheets_row_map enable row level security;
+
+create or replace function enqueue_sheets_sync(p_org_id uuid, p_entity_type text, p_entity_id uuid, p_action text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_org_id is null then return; end if;
+  if not exists (select 1 from google_sheets_integrations where organization_id = p_org_id and status = 'ativo') then
+    return;
+  end if;
+
+  insert into google_sheets_sync_queue (organization_id, entity_type, entity_id, action)
+  values (p_org_id, p_entity_type, p_entity_id, p_action);
+
+  -- URL/segredo do webhook embutidos diretamente (não dá para usar
+  -- ALTER DATABASE ... SET no Postgres gerido do Supabase — permissão
+  -- negada ao role "postgres" da pooler connection). Se o domínio de
+  -- produção mudar, atualizar aqui.
+  begin
+    perform net.http_post(
+      url := 'https://fieldservice-app-nine.vercel.app/api/integrations/google-sheets/process',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-sync-secret', '9dc301211a7b37c8a6bf827d1e042628330efcbc35792ec08e18640561340c6c'),
+      body := jsonb_build_object('organization_id', p_org_id)
+    );
+  exception when others then
+    null; -- a fila garante que nada se perde mesmo que o pg_net falhe
+  end;
+end;
+$$;
+
+create or replace function notify_sheets_sync()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row record;
+  v_action text;
+begin
+  v_action := case when TG_OP = 'DELETE' then 'delete' else 'upsert' end;
+  v_row := case when TG_OP = 'DELETE' then OLD else NEW end;
+  perform enqueue_sheets_sync(v_row.organization_id, TG_ARGV[0], v_row.id, v_action);
+  return null;
+end;
+$$;
+
+create or replace function notify_sheets_sync_via_service()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row record;
+  v_action text;
+  v_org uuid;
+begin
+  v_action := case when TG_OP = 'DELETE' then 'delete' else 'upsert' end;
+  v_row := case when TG_OP = 'DELETE' then OLD else NEW end;
+  select organization_id into v_org from services where id = v_row.service_id;
+  if v_org is not null then
+    perform enqueue_sheets_sync(v_org, TG_ARGV[0], v_row.id, v_action);
+  end if;
+  return null;
+end;
+$$;
+
+create or replace function notify_sheets_sync_via_visit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row record;
+  v_action text;
+  v_org uuid;
+begin
+  v_action := case when TG_OP = 'DELETE' then 'delete' else 'upsert' end;
+  v_row := case when TG_OP = 'DELETE' then OLD else NEW end;
+  select s.organization_id into v_org from visits v join services s on s.id = v.service_id where v.id = v_row.visit_id;
+  if v_org is not null then
+    perform enqueue_sheets_sync(v_org, TG_ARGV[0], v_row.id, v_action);
+  end if;
+  return null;
+end;
+$$;
+
+create or replace function notify_sheets_sync_service_technicians()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row record;
+  v_org uuid;
+begin
+  v_row := case when TG_OP = 'DELETE' then OLD else NEW end;
+  select organization_id into v_org from services where id = v_row.service_id;
+  if v_org is not null then
+    perform enqueue_sheets_sync(v_org, 'service', v_row.service_id, 'upsert');
+  end if;
+  return null;
+end;
+$$;
+
+create or replace function notify_sheets_sync_budget_items()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row record;
+begin
+  v_row := case when TG_OP = 'DELETE' then OLD else NEW end;
+  perform enqueue_sheets_sync(v_row.organization_id, 'budget', v_row.budget_id, 'upsert');
+  return null;
+end;
+$$;
+
+create trigger sheets_sync_clients after insert or update or delete on clients for each row execute function notify_sheets_sync('client');
+create trigger sheets_sync_requests after insert or update or delete on requests for each row execute function notify_sheets_sync('request');
+create trigger sheets_sync_budgets after insert or update or delete on budgets for each row execute function notify_sheets_sync('budget');
+create trigger sheets_sync_services after insert or update or delete on services for each row execute function notify_sheets_sync('service');
+create trigger sheets_sync_visits after insert or update or delete on visits for each row execute function notify_sheets_sync('visit');
+create trigger sheets_sync_service_events after insert on service_events for each row execute function notify_sheets_sync('service_event');
+create trigger sheets_sync_budget_events after insert on budget_events for each row execute function notify_sheets_sync('budget_event');
+create trigger sheets_sync_service_validations after insert on service_validations for each row execute function notify_sheets_sync('service_validation');
+create trigger sheets_sync_technicians after insert or update on profiles for each row when (new.role = 'TECHNICIAN') execute function notify_sheets_sync('technician');
+create trigger sheets_sync_material_planned after insert or update or delete on service_materials_planned for each row execute function notify_sheets_sync_via_service('material_planned');
+create trigger sheets_sync_material_used after insert or update or delete on visit_materials_used for each row execute function notify_sheets_sync_via_visit('material_used');
+create trigger sheets_sync_service_technicians after insert or delete on service_technicians for each row execute function notify_sheets_sync_service_technicians();
+create trigger sheets_sync_budget_items after insert or update or delete on budget_items for each row execute function notify_sheets_sync_budget_items();
+
+-- =============================================================================
 -- PRÓXIMO PASSO: criar o teu utilizador SUPER_ADMIN
 -- =============================================================================
 -- 1. Supabase Dashboard → Authentication → Users → Add user

@@ -45,7 +45,11 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // /api/* fica de fora deste portão: são pedidos servidor-a-servidor (ex:
+  // webhook/cron da sincronização do Google Sheets, sem cookies nenhuns) ou
+  // rotas que tratam a sua própria autenticação (ex: requireRole() dentro do
+  // callback OAuth) — nunca a gate de sessão-por-cookie feita aqui.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

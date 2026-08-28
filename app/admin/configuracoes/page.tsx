@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { guardarConfiguracoes } from "./actions";
+import { sincronizarAgora, desligarGoogleSheets } from "./integracoes-actions";
 
-export default async function ConfiguracoesPage() {
+export default async function ConfiguracoesPage({
+  searchParams,
+}: {
+  searchParams: { sheets?: string; sheets_erro?: string };
+}) {
   const supabase = createClient();
   const organizationId = await getOrgId();
   const { data: settings } = await supabase
@@ -10,6 +15,11 @@ export default async function ConfiguracoesPage() {
     .select("tipos_servico, followup_dias_default")
     .eq("organization_id", organizationId)
     .single();
+  const { data: sheets } = await supabase
+    .from("google_sheets_integrations")
+    .select("status, spreadsheet_url, google_email, last_synced_at, last_error")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
 
   return (
     <div className="mx-auto max-w-lg">
@@ -49,6 +59,97 @@ export default async function ConfiguracoesPage() {
             Guardar
           </button>
         </form>
+      </div>
+
+      <div className="mt-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <h2 className="mb-1 text-sm font-semibold text-neutral-100">Integrações</h2>
+        <p className="mb-4 text-xs text-neutral-500">
+          Espelho de gestão em tempo real da empresa num Google Sheet, para consulta da chefia.
+        </p>
+
+        {searchParams.sheets === "conectado" && (
+          <p className="mb-3 rounded-md border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-xs text-emerald-400">
+            Google Sheets ligado com sucesso — o teu ficheiro já foi criado.
+          </p>
+        )}
+        {searchParams.sheets_erro && (
+          <p className="mb-3 rounded-md border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-400">
+            {searchParams.sheets_erro}
+          </p>
+        )}
+
+        <div className="rounded-lg border border-neutral-800 p-4">
+          <div className="mb-1 flex items-center gap-2 text-sm font-medium text-white">
+            <span>🔗 Google Sheets</span>
+          </div>
+
+          {(!sheets || sheets.status === "desligado") && (
+            <>
+              <p className="mb-3 text-xs text-neutral-400">Desligado.</p>
+              <a
+                href="/api/integrations/google-sheets/connect"
+                className="inline-block rounded-md bg-white px-3.5 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200"
+              >
+                Ligar Google Sheets
+              </a>
+            </>
+          )}
+
+          {sheets?.status === "erro" && (
+            <>
+              <p className="mb-3 text-xs text-amber-400">
+                ⚠️ A sincronização está temporariamente indisponível. Será tentada novamente automaticamente.
+              </p>
+              <a
+                href="/api/integrations/google-sheets/connect"
+                className="inline-block rounded-md bg-white px-3.5 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200"
+              >
+                Voltar a ligar
+              </a>
+            </>
+          )}
+
+          {sheets?.status === "ativo" && (
+            <>
+              <p className="mb-1 text-xs font-medium text-emerald-400">✅ Google Sheets ligado</p>
+              <p className="mb-0.5 text-xs text-neutral-400">Conta: {sheets.google_email ?? "—"}</p>
+              <p className="mb-3 text-xs text-neutral-400">
+                Última sincronização: {sheets.last_synced_at ? new Date(sheets.last_synced_at).toLocaleString("pt-PT") : "ainda sem alterações"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={sheets.spreadsheet_url ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
+                >
+                  Abrir Google Sheets
+                </a>
+                <form action={sincronizarAgora}>
+                  <button className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800">
+                    Sincronizar agora
+                  </button>
+                </form>
+                <details className="relative">
+                  <summary className="list-none cursor-pointer rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10">
+                    Desligar Google Sheets
+                  </summary>
+                  <div className="absolute left-0 z-10 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3 shadow-lg">
+                    <p className="text-xs text-neutral-300">
+                      Tens a certeza? A sincronização para e a autorização é revogada. O Google Sheet e os dados já
+                      lá gravados não são apagados.
+                    </p>
+                    <form action={desligarGoogleSheets}>
+                      <button className="w-full rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
+                        Confirmar
+                      </button>
+                    </form>
+                  </div>
+                </details>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

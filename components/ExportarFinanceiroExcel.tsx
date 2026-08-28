@@ -54,6 +54,7 @@ export function ExportarFinanceiroExcel({ stats, range }: { stats: Stats; range:
     const tempos = [
       ["Transição", "Tempo médio (horas)"],
       ["Pedido → orçamento", stats.tempos.pedidoOrcamentoHoras],
+      ["Pedido → agendamento", stats.tempos.pedidoAgendamentoHoras],
       ["Pedido → conclusão", stats.tempos.pedidoConclusaoHoras],
       ["Agendamento → início", stats.tempos.agendamentoInicioHoras],
       ["Início → conclusão", stats.tempos.inicioConclusaoHoras],

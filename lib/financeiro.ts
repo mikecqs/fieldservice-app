@@ -44,19 +44,33 @@ export function formatEuros(v: number) {
 // service_events, requests, budgets/budget_items) — nada é inventado. As
 // queries não filtram organization_id explicitamente porque a RLS de cada
 // tabela já garante que só vêm linhas da própria empresa.
-export async function getFinanceiroStats(supabase: ReturnType<typeof createClient>, desde: string, ate: string) {
+// organizationId só é necessário quando "supabase" é um cliente que ignora
+// RLS (ex: service role, usado pela sincronização do Google Sheets) — nesse
+// caso é a ÚNICA barreira de isolamento entre empresas, por isso tem de ser
+// aplicado explicitamente a cada query. Com o cliente normal (sessão do
+// utilizador), a RLS já trata disto e o parâmetro pode ser omitido.
+export async function getFinanceiroStats(
+  supabase: ReturnType<typeof createClient>,
+  desde: string,
+  ate: string,
+  organizationId?: string
+) {
   const emRange = (iso: string) => {
     const d = iso.slice(0, 10);
     return d >= desde && d <= ate;
   };
 
+  const withOrg = <T>(q: T): T => (organizationId ? ((q as any).eq("organization_id", organizationId) as T) : q);
+
   const [{ data: servicos }, { data: eventos }, { data: requestsData }, { data: budgets }] = await Promise.all([
-    supabase
-      .from("services")
-      .select("id, tipo, estado, valor, faturacao_estado, faturacao_valor, faturacao_data, request_id, created_at"),
-    supabase.from("service_events").select("service_id, tipo, created_at").order("created_at", { ascending: true }),
-    supabase.from("requests").select("id, created_at"),
-    supabase.from("budgets").select("id, criado_em, request_id, budget_items(tipo, qtd, valor_unit)"),
+    withOrg(
+      supabase
+        .from("services")
+        .select("id, tipo, estado, valor, faturacao_estado, faturacao_valor, faturacao_data, request_id, created_at")
+    ),
+    withOrg(supabase.from("service_events").select("service_id, tipo, created_at")).order("created_at", { ascending: true }),
+    withOrg(supabase.from("requests").select("id, created_at")),
+    withOrg(supabase.from("budgets").select("id, criado_em, request_id, budget_items(tipo, qtd, valor_unit)")),
   ]);
 
   const servicoPorId = new Map((servicos ?? []).map((s) => [s.id, s]));
@@ -106,6 +120,7 @@ export async function getFinanceiroStats(supabase: ReturnType<typeof createClien
   const diffHoras = (a: string, b: string) => (new Date(b).getTime() - new Date(a).getTime()) / 3_600_000;
 
   const temposPedidoConclusao: number[] = [];
+  const temposPedidoAgendamento: number[] = [];
   const temposAgendamentoInicio: number[] = [];
   const temposInicioConclusao: number[] = [];
   const temposFechoValidacao: number[] = [];
@@ -119,9 +134,13 @@ export async function getFinanceiroStats(supabase: ReturnType<typeof createClien
     const pedido = servico?.request_id ? requestPorId.get(servico.request_id) : null;
     const validadoAt = m.get("validado");
     const faturadoAt = m.get("faturado");
+    const agendadoAt = m.get("agendado");
+
+    if (agendadoAt && emRange(agendadoAt) && pedido?.created_at) {
+      temposPedidoAgendamento.push(diffHoras(pedido.created_at, agendadoAt));
+    }
 
     if (concluidoAt && emRange(concluidoAt)) {
-      const agendadoAt = m.get("agendado");
       const iniciadoAt = m.get("iniciado") ?? m.get("corrigido");
 
       if (pedido?.created_at) temposPedidoConclusao.push(diffHoras(pedido.created_at, concluidoAt));
@@ -180,6 +199,7 @@ export async function getFinanceiroStats(supabase: ReturnType<typeof createClien
     },
     tempos: {
       pedidoOrcamentoHoras: media(temposPedidoOrcamento),
+      pedidoAgendamentoHoras: media(temposPedidoAgendamento),
       pedidoConclusaoHoras: media(temposPedidoConclusao),
       agendamentoInicioHoras: media(temposAgendamentoInicio),
       inicioConclusaoHoras: media(temposInicioConclusao),

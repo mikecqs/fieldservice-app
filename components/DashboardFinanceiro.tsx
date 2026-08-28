@@ -104,6 +104,7 @@ export function DashboardFinanceiro({
       <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Tempos médios</h2>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <Stat label="Pedido → orçamento" value={formatDuracao(stats.tempos.pedidoOrcamentoHoras)} />
+        <Stat label="Pedido → agendamento" value={formatDuracao(stats.tempos.pedidoAgendamentoHoras)} />
         <Stat label="Pedido → conclusão" value={formatDuracao(stats.tempos.pedidoConclusaoHoras)} />
         <Stat label="Agendamento → início" value={formatDuracao(stats.tempos.agendamentoInicioHoras)} />
         <Stat label="Início → conclusão" value={formatDuracao(stats.tempos.inicioConclusaoHoras)} />
