@@ -31,10 +31,10 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-md bg-orange-500 font-mono text-sm font-bold text-white">
-            FS
+            nX
           </div>
           <div>
-            <div className="text-sm font-bold leading-tight text-slate-900">FieldService</div>
+            <div className="text-sm font-bold leading-tight text-slate-900">nexIA</div>
             <div className="text-xs leading-tight text-slate-500">Gestão de terreno</div>
           </div>
         </div>

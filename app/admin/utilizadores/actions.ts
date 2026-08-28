@@ -11,7 +11,7 @@ export async function criarUtilizador(formData: FormData) {
   const password = String(formData.get("password") || "");
   const role = String(formData.get("role") || "TECHNICIAN");
   if (!nome || !email || !password) return;
-  if (role !== "ADMIN" && role !== "TECHNICIAN") return;
+  if (!["ADMIN", "TECHNICIAN", "FINANCE"].includes(role)) return;
 
   // Criar utilizador de Auth requer a service role key — só corre aqui no
   // servidor, nunca no browser (ver mesmo padrão em super-admin/actions.ts).

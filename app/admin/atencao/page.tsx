@@ -8,7 +8,7 @@ export default async function AtencaoPage() {
   const hoje = new Date().toISOString().slice(0, 10);
   const em3Dias = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
 
-  const [{ data: settings }, { data: pedidosIncompletos }, { data: servicosAtrasados }, { data: comprasBloqueando }, { data: orcamentos }, { data: correcoesNecessarias }] =
+  const [{ data: settings }, { data: pedidosIncompletos }, { data: servicosAtrasados }, { data: comprasBloqueando }, { data: orcamentos }, { data: correcoesNecessarias }, { data: novasVisitasPorAgendar }] =
     await Promise.all([
       supabase.from("org_settings").select("followup_dias_default").eq("organization_id", organizationId).single(),
       supabase.from("requests").select("id, descricao, clients(nome)").eq("info_falta", true).eq("estado", "novo"),
@@ -24,6 +24,11 @@ export default async function AtencaoPage() {
         .in("estado", ["por_encomendar", "encomendada", "parcial"]),
       supabase.from("budgets").select("id, estado, enviado_em, clients(nome)").in("estado", ["enviado", "aguarda_resposta", "followup"]),
       supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "correcao_necessaria"),
+      supabase
+        .from("services")
+        .select("id, descricao, clients(nome)")
+        .eq("estado", "nova_visita")
+        .is("data_agendada", null),
     ]);
 
   const followupDias = settings?.followup_dias_default ?? 3;
@@ -69,6 +74,12 @@ export default async function AtencaoPage() {
       titulo: "Serviços com correção necessária",
       itens: correcoesNecessarias ?? [],
       render: (s: any) => `${s.clients?.nome} — ${s.descricao}`,
+      href: (s: any) => `/admin/servicos/${s.id}`,
+    },
+    {
+      titulo: "Novas visitas por agendar",
+      itens: novasVisitasPorAgendar ?? [],
+      render: (s: any) => `${s.clients?.nome} — ${s.descricao} (cliente ainda não combinou data)`,
       href: (s: any) => `/admin/servicos/${s.id}`,
     },
   ];

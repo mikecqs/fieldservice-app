@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FieldService",
-  description: "Gestão de serviços técnicos no terreno",
+  title: "nexIA",
+  description: "nexIA — gestão inteligente de serviços técnicos no terreno",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

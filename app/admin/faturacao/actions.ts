@@ -3,27 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+// Admin e Financeiro (role FINANCE) partilham a mesma RPC — ver
+// finance_marcar_faturado em schema.sql, que valida permissão e estado
+// sempre no próprio Postgres, nunca só no frontend.
 export async function marcarFaturado(formData: FormData) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const id = String(formData.get("id") || "");
   const faturacao_valor = Number(formData.get("faturacao_valor") || 0);
   const faturacao_referencia = String(formData.get("faturacao_referencia") || "");
   if (!id) return;
 
-  await supabase
-    .from("services")
-    .update({
-      faturacao_estado: "faturado",
-      faturacao_valor,
-      faturacao_referencia,
-      faturacao_data: new Date().toISOString().slice(0, 10),
-      faturacao_utilizador: user!.id,
-    })
-    .eq("id", id);
+  const { error } = await supabase.rpc("finance_marcar_faturado", {
+    p_service_id: id,
+    p_valor: faturacao_valor,
+    p_referencia: faturacao_referencia,
+  });
+  if (error) throw new Error(error.message);
 
   revalidatePath("/admin/faturacao");
 }

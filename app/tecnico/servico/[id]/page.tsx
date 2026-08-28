@@ -15,7 +15,7 @@ export default async function ServicoTecnicoPage({ params }: { params: { id: str
 
   // Enquanto bloqueado, nem os materiais previstos (que descrevem o
   // trabalho) são pedidos — o servidor nunca chega a ler essa informação.
-  const { data: materiaisPrevistos } = servico.desbloqueado
+  const { data: materiaisPrevistos } = servico.detalhes_visiveis
     ? await supabase.from("service_materials_planned").select("nome, qtd").eq("service_id", params.id)
     : { data: [] };
 

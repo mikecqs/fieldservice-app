@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
-import { adicionarItem, removerItem, marcarEnviado, avancarEstado, aceitarOrcamento, atualizarIva } from "../actions";
+import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento, atualizarIva } from "../actions";
+import { AdicionarItemForm } from "./AdicionarItemForm";
 
 const TIPO_LABEL: Record<string, string> = {
   materiais: "Materiais",
@@ -13,16 +14,22 @@ const TIPO_LABEL: Record<string, string> = {
 
 export default async function OrcamentoDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
-  const { data: orcamento } = await supabase
-    .from("budgets")
-    .select("*, clients(nome), budget_items(*)")
-    .eq("id", params.id)
-    .single();
+  const [{ data: orcamento }, { data: catalogo }] = await Promise.all([
+    supabase
+      .from("budgets")
+      .select("*, clients(nome, telefone, email), budget_items(*)")
+      .eq("id", params.id)
+      .single(),
+    supabase.from("catalog_items").select("id, referencia, descricao, preco_venda").order("referencia").limit(500),
+  ]);
 
   if (!orcamento) notFound();
 
   const items = orcamento.budget_items ?? [];
   const { subtotal, ivaValor, total } = calcularOrcamento(items, orcamento.iva_percent);
+
+  const telefoneWhatsapp = orcamento.clients?.telefone?.replace(/\D/g, "");
+  const mensagemPartilha = `Olá ${orcamento.clients?.nome ?? ""}, aqui tem o orçamento (total ${total.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}). Vou enviar o PDF de seguida.`;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -38,6 +45,35 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
           </span>
         </div>
         <p className="text-xs text-slate-400">Criado {orcamento.criado_em}</p>
+
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+          <a
+            href={`/admin/orcamentos/${orcamento.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            📄 Download PDF
+          </a>
+          <a
+            href={`https://wa.me/${telefoneWhatsapp ?? ""}?text=${encodeURIComponent(mensagemPartilha)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+          >
+            📱 Partilhar por WhatsApp
+          </a>
+          {orcamento.clients?.email && (
+            <a
+              href={`mailto:${orcamento.clients.email}?subject=${encodeURIComponent("Orçamento")}&body=${encodeURIComponent(
+                mensagemPartilha + "\n\n(Descarrega o PDF acima e anexa-o a este email antes de enviar.)"
+              )}`}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              ✉️ Partilhar por email
+            </a>
+          )}
+        </div>
 
         {orcamento.estado !== "aceite" && orcamento.estado !== "cancelado" && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -162,21 +198,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
         </div>
 
         {orcamento.estado === "rascunho" && (
-          <form action={adicionarItem} className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:grid-cols-5">
-            <input type="hidden" name="budget_id" value={orcamento.id} />
-            <select name="tipo" defaultValue="mao_obra" className="rounded-md border border-slate-300 px-2 py-1.5 text-xs">
-              <option value="materiais">Materiais</option>
-              <option value="mao_obra">Mão de obra</option>
-              <option value="deslocacao">Deslocação</option>
-              <option value="outros">Outros</option>
-            </select>
-            <input name="descricao" placeholder="Descrição" required className="col-span-2 rounded-md border border-slate-300 px-2 py-1.5 text-xs" />
-            <input name="qtd" type="number" step="0.01" defaultValue="1" placeholder="Qtd" className="rounded-md border border-slate-300 px-2 py-1.5 text-xs" />
-            <input name="valor_unit" type="number" step="0.01" placeholder="€ unit." className="rounded-md border border-slate-300 px-2 py-1.5 text-xs" />
-            <button className="col-span-2 mt-1 rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800 sm:col-span-5">
-              Adicionar linha
-            </button>
-          </form>
+          <AdicionarItemForm budgetId={orcamento.id} catalogo={catalogo ?? []} />
         )}
       </div>
     </div>

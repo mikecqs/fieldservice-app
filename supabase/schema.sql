@@ -30,7 +30,7 @@ create table organizations (
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   organization_id uuid references organizations(id) on delete cascade,
-  role text not null check (role in ('SUPER_ADMIN','ADMIN','TECHNICIAN')),
+  role text not null check (role in ('SUPER_ADMIN','ADMIN','TECHNICIAN','FINANCE')),
   nome text not null,
   email text not null,
   created_at timestamptz not null default now(),
@@ -148,6 +148,28 @@ create table budget_items (
 );
 
 -- -----------------------------------------------------------------------------
+-- CATÁLOGO — importado de Excel (ex: Wintouch), usado para preencher linhas
+-- de orçamento sem escrever descrição/preço à mão de cada vez.
+-- -----------------------------------------------------------------------------
+create table catalog_items (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  referencia text not null,
+  descricao text not null,
+  preco_venda numeric not null default 0,
+  created_at timestamptz not null default now(),
+  unique (organization_id, referencia)
+);
+
+alter table catalog_items enable row level security;
+
+create policy "admin manages catalog_items" on catalog_items for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org());
+
+grant select, insert, update, delete on catalog_items to authenticated;
+
+-- -----------------------------------------------------------------------------
 -- SERVIÇOS (ordens de serviço)
 -- -----------------------------------------------------------------------------
 create table services (
@@ -162,6 +184,7 @@ create table services (
   prioridade text not null default 'normal' check (prioridade in ('baixa','normal','alta')),
   data_agendada date,
   hora_agendada time,
+  hora_fim_agendada time,
   notas text,
   estado text not null default 'por_agendar'
     check (estado in ('por_agendar','agendado','em_curso','concluido','nova_visita','nao_realizado','cancelado','aguarda_validacao','correcao_necessaria')),
@@ -200,6 +223,8 @@ create table visits (
   hora_fim_real time,
   trabalho_realizado text,
   resultado text check (resultado in ('concluido','nova_visita','nao_realizado')),
+  mao_obra_tipo text check (mao_obra_tipo in ('1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro')),
+  mao_obra_detalhe text,
   created_by uuid references profiles(id),
   created_at timestamptz not null default now()
 );
@@ -232,6 +257,40 @@ create table service_validations (
   utilizador uuid references profiles(id),
   created_at timestamptz not null default now()
 );
+
+-- -----------------------------------------------------------------------------
+-- HISTÓRICO OPERACIONAL DA OS
+-- Um único sítio com toda a vida de um serviço — criação, agendamento,
+-- reagendamento, início, conclusão, nova visita, correção, validação,
+-- faturação — quem e quando. Nunca se apaga nenhum evento.
+-- -----------------------------------------------------------------------------
+create table service_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  service_id uuid not null references services(id) on delete cascade,
+  tipo text not null check (tipo in (
+    'criado','agendado','reagendado','iniciado','concluido','nova_visita',
+    'nao_realizado','correcao_pedida','corrigido','validado','faturado'
+  )),
+  descricao text not null,
+  utilizador uuid references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+create index service_events_service_idx on service_events(service_id, created_at);
+
+alter table service_events enable row level security;
+
+create policy service_events_select on service_events for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+create policy "finance reads service_events" on service_events for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
+
+create policy service_events_insert on service_events for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+grant select, insert on service_events to authenticated;
 
 -- -----------------------------------------------------------------------------
 -- COMPRAS
@@ -328,6 +387,8 @@ create policy "super admin all org_settings" on org_settings for all
 create policy "admin manages clients" on clients for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org());
+create policy "finance reads clients" on clients for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- client_addresses
 create policy "admin manages client_addresses" on client_addresses for all
@@ -338,14 +399,20 @@ create policy "admin manages client_addresses" on client_addresses for all
 create policy "admin manages requests" on requests for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org());
+create policy "finance reads requests" on requests for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- budgets / budget_items
 create policy "admin manages budgets" on budgets for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org());
+create policy "finance reads budgets" on budgets for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
 create policy "admin manages budget_items" on budget_items for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org());
+create policy "finance reads budget_items" on budget_items for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- purchases / purchase_items
 create policy "admin manages purchases" on purchases for all
@@ -363,6 +430,8 @@ create policy "admin manages purchase_items" on purchase_items for all
 create policy "admin manages service_validations" on service_validations for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "finance reads service_validations" on service_validations for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- ---------------------------------------------------------------------------
 -- SERVICES — acesso completo (incluindo valor/faturação) só para ADMIN/SUPER_ADMIN.
@@ -372,6 +441,11 @@ create policy "admin manages service_validations" on service_validations for all
 create policy "admin manages services" on services for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org());
+-- FINANCE só lê — as únicas mutações que lhe interessam (validar, rejeitar,
+-- marcar faturado) passam sempre pelas RPCs finance_* mais abaixo, nunca por
+-- UPDATE direto (evita que consiga alterar valor, técnicos, cliente, etc.).
+create policy "finance reads services" on services for select
+  using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- service_technicians: admin atribui; técnico só lê as suas próprias atribuições
 create policy "admin manages service_technicians" on service_technicians for all
@@ -446,17 +520,21 @@ create policy "technician manages own visit photos" on visit_photos for all
   with check (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()));
 
 -- =============================================================================
--- ACESSO SEQUENCIAL DO TÉCNICO (controlo operacional, não é GPS/tracking)
+-- VISIBILIDADE DO TÉCNICO (controlo operacional, não é GPS/tracking)
 --
--- Quando org_settings.acesso_sequencial_tecnico está ativo, um serviço só
--- fica "desbloqueado" (detalhes visíveis, pode ser iniciado) se todos os
--- serviços anteriores do mesmo técnico (por data_agendada + hora_agendada,
--- encadeando entre dias) já estiverem encerrados — concluído, nova visita,
--- não realizado ou cancelado. Serviços sem data/hora agendada não entram
--- na sequência (não têm posição definida). Isto é avaliado aqui, numa
--- função só de leitura, e usado tanto pela view de agenda como pelo RPC
--- que inicia o serviço — por isso não há forma de contornar via API
--- (nem escondendo campos no ecrã nem chamando o RPC diretamente).
+-- O técnico consegue sempre ver a hora e o cliente de todos os seus
+-- serviços. Os detalhes operacionais (morada, contacto, descrição, notas)
+-- só ficam visíveis para o serviço atual e o seguinte (para poder ligar ao
+-- cliente seguinte se estiver atrasado) — a partir do 2º seguinte, ficam
+-- limitados. Um serviço só pode ser iniciado (RPC tech_start_service) se
+-- não houver nenhum serviço anterior do técnico ainda em aberto — isso é
+-- sempre verdade exatamente para "o atual". Serviços já encerrados
+-- (concluído, nova visita, não realizado, cancelado, aguarda validação,
+-- correção necessária) ou sem data/hora não entram nesta contagem.
+-- Avaliado aqui, numa função só de leitura, usada tanto pela view de
+-- agenda como pelo RPC que inicia o serviço — por isso não há forma de
+-- contornar via API (nem escondendo campos no ecrã nem chamando o RPC
+-- diretamente).
 -- =============================================================================
 create or replace function tech_service_desbloqueado(p_service_id uuid)
 returns boolean
@@ -466,8 +544,7 @@ stable
 set search_path = public
 as $$
   select
-    coalesce((select not os.acesso_sequencial_tecnico from org_settings os where os.organization_id = s.organization_id), true)
-    or s.data_agendada is null or s.hora_agendada is null
+    s.data_agendada is null or s.hora_agendada is null
     or not exists (
       select 1
       from services s2
@@ -484,6 +561,32 @@ $$;
 
 grant execute on function tech_service_desbloqueado(uuid) to authenticated;
 
+create or replace function tech_service_detalhes_visiveis(p_service_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select
+    s.estado not in ('agendado','em_curso')
+    or s.data_agendada is null or s.hora_agendada is null
+    or (
+      select count(*)
+      from services s2
+      join service_technicians st2 on st2.service_id = s2.id
+      where st2.user_id = auth.uid()
+        and s2.estado in ('agendado','em_curso')
+        and s2.data_agendada is not null
+        and s2.hora_agendada is not null
+        and (s2.data_agendada, s2.hora_agendada) < (s.data_agendada, s.hora_agendada)
+    ) < 2
+  from services s
+  where s.id = p_service_id;
+$$;
+
+grant execute on function tech_service_detalhes_visiveis(uuid) to authenticated;
+
 -- =============================================================================
 -- VIEW SEGURA PARA TÉCNICOS
 -- Expõe só o necessário para trabalhar no terreno: sem valor, sem margens,
@@ -493,10 +596,9 @@ grant execute on function tech_service_desbloqueado(uuid) to authenticated;
 -- filtra sempre por auth.uid(), por isso um técnico nunca vê serviços de
 -- outra empresa nem de outro técnico.
 --
--- Os campos operacionais (descrição, notas, contacto, morada) vêm null
--- quando o serviço está bloqueado pela regra de acesso sequencial — o
--- nome do cliente e a hora continuam sempre visíveis, para o técnico
--- saber que o serviço existe e a que horas é.
+-- `desbloqueado` controla se pode iniciar (só o serviço atual);
+-- `detalhes_visiveis` controla se morada/contacto/descrição/notas vêm
+-- preenchidos (atual + seguinte) — o nome do cliente e a hora vêm sempre.
 -- =============================================================================
 create view services_technician_view as
 select
@@ -505,27 +607,30 @@ select
   s.client_id,
   s.address_id,
   s.tipo,
-  case when v.desbloqueado then s.descricao else null end as descricao,
+  case when v.detalhes_visiveis then s.descricao else null end as descricao,
   s.prioridade,
   s.data_agendada,
   s.hora_agendada,
-  case when v.desbloqueado then s.notas else null end as notas,
+  case when v.detalhes_visiveis then s.notas else null end as notas,
   s.estado,
   c.nome as cliente_nome,
-  case when v.desbloqueado then c.telefone else null end as cliente_telefone,
-  case when v.desbloqueado then c.email else null end as cliente_email,
-  case when v.desbloqueado then a.endereco else null end as morada,
+  case when v.detalhes_visiveis then c.telefone else null end as cliente_telefone,
+  case when v.detalhes_visiveis then c.email else null end as cliente_email,
+  case when v.detalhes_visiveis then a.endereco else null end as morada,
   v.desbloqueado,
   (
     select sv.motivo from service_validations sv
     where sv.service_id = s.id and sv.acao = 'rejeitado'
     order by sv.created_at desc limit 1
-  ) as motivo_correcao
+  ) as motivo_correcao,
+  v.detalhes_visiveis
 from services s
 join service_technicians st on st.service_id = s.id
 left join clients c on c.id = s.client_id
 left join client_addresses a on a.id = s.address_id
-cross join lateral (select tech_service_desbloqueado(s.id) as desbloqueado) v
+cross join lateral (
+  select tech_service_desbloqueado(s.id) as desbloqueado, tech_service_detalhes_visiveis(s.id) as detalhes_visiveis
+) v
 where st.user_id = auth.uid();
 
 grant select on services_technician_view to authenticated;
@@ -571,6 +676,8 @@ set search_path = public
 as $$
 declare
   v_visit_id uuid;
+  v_org_id uuid;
+  v_estado_anterior text;
 begin
   if not exists (
     select 1 from service_technicians
@@ -579,13 +686,13 @@ begin
     raise exception 'Serviço não atribuído a este técnico.';
   end if;
 
+  select organization_id, estado into v_org_id, v_estado_anterior
+  from services where id = p_service_id;
+
   -- 'nova_visita' tem de poder reabrir (é o estado que pede uma visita extra);
   -- sem esta condição a visita era sempre criada mesmo fora destes estados,
   -- podendo duplicar visitas em cliques repetidos.
-  if not exists (
-    select 1 from services
-    where id = p_service_id and estado in ('agendado', 'por_agendar', 'nova_visita', 'correcao_necessaria')
-  ) then
+  if v_estado_anterior not in ('agendado', 'por_agendar', 'nova_visita', 'correcao_necessaria') then
     raise exception 'Este serviço não está num estado que permita iniciar uma visita.';
   end if;
 
@@ -598,9 +705,20 @@ begin
     where id = p_service_id;
 
   insert into visits (organization_id, service_id, data, hora_inicio_real, created_by)
-  select s.organization_id, s.id, current_date, current_time, auth.uid()
-  from services s where s.id = p_service_id
+  values (v_org_id, p_service_id, current_date, current_time, auth.uid())
   returning id into v_visit_id;
+
+  -- histórico: distingue reabertura após correção de um início normal.
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, p_service_id,
+    case when v_estado_anterior = 'correcao_necessaria' then 'corrigido' else 'iniciado' end,
+    case when v_estado_anterior = 'correcao_necessaria'
+      then 'Técnico reabriu o serviço após pedido de correção.'
+      else 'Técnico iniciou o serviço.'
+    end,
+    auth.uid()
+  );
 
   return v_visit_id;
 end;
@@ -613,7 +731,11 @@ create or replace function tech_finish_visit(
   p_resultado text,
   p_trabalho_realizado text,
   p_materiais jsonb default '[]'::jsonb,
-  p_fotos text[] default '{}'::text[]
+  p_fotos text[] default '{}'::text[],
+  p_mao_obra_tipo text default null,
+  p_mao_obra_detalhe text default null,
+  p_nova_data_agendada date default null,
+  p_nova_hora_agendada time default null
 )
 returns void
 language plpgsql
@@ -622,13 +744,33 @@ set search_path = public
 as $$
 declare
   v_service_id uuid;
+  v_org_id uuid;
   v_novo_estado text;
 begin
   if p_resultado not in ('concluido', 'nova_visita', 'nao_realizado') then
     raise exception 'Resultado inválido.';
   end if;
-  if p_resultado = 'concluido' and (p_trabalho_realizado is null or length(trim(p_trabalho_realizado)) = 0) then
-    raise exception 'Trabalho realizado é obrigatório para concluir o serviço.';
+
+  -- 'trabalho realizado' serve de notas em qualquer resultado — obrigatório
+  -- em todos os casos (antes só era exigido para 'concluido').
+  if length(trim(coalesce(p_trabalho_realizado, ''))) = 0 then
+    if p_resultado = 'concluido' then
+      raise exception 'Trabalho realizado é obrigatório para concluir o serviço.';
+    else
+      raise exception 'Notas são obrigatórias.';
+    end if;
+  end if;
+
+  if p_resultado = 'concluido' then
+    if p_mao_obra_tipo is null or length(trim(p_mao_obra_tipo)) = 0 then
+      raise exception 'Mão de obra é obrigatória para concluir o serviço.';
+    end if;
+    if p_mao_obra_tipo not in ('1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro') then
+      raise exception 'Tipo de mão de obra inválido.';
+    end if;
+    if p_mao_obra_tipo = 'outro' and length(trim(coalesce(p_mao_obra_detalhe, ''))) = 0 then
+      raise exception 'Descreve a mão de obra em "Outro".';
+    end if;
   end if;
 
   select service_id into v_service_id from visits
@@ -638,10 +780,14 @@ begin
     raise exception 'Visita não encontrada ou não pertence a este técnico.';
   end if;
 
+  select organization_id into v_org_id from services where id = v_service_id;
+
   update visits
     set hora_fim_real = current_time,
         trabalho_realizado = p_trabalho_realizado,
-        resultado = p_resultado
+        resultado = p_resultado,
+        mao_obra_tipo = case when p_resultado = 'concluido' then p_mao_obra_tipo else null end,
+        mao_obra_detalhe = case when p_resultado = 'concluido' then p_mao_obra_detalhe else null end
     where id = p_visit_id;
 
   insert into visit_materials_used (visit_id, nome, qtd)
@@ -656,13 +802,161 @@ begin
   -- O resultado da visita em si (histórico) continua a gravar 'concluido'.
   v_novo_estado := case when p_resultado = 'concluido' then 'aguarda_validacao' else p_resultado end;
 
-  update services
-    set estado = v_novo_estado
-    where id = v_service_id;
+  if p_resultado = 'nova_visita' then
+    -- cliente já combinou nova data: agenda-se logo no mesmo serviço, sem
+    -- perder o histórico (a visita anterior continua gravada em 'visits').
+    -- sem data: fica pendente de agendamento para o Admin.
+    update services
+      set estado = v_novo_estado,
+          data_agendada = p_nova_data_agendada,
+          hora_agendada = p_nova_hora_agendada
+      where id = v_service_id;
+  else
+    update services
+      set estado = v_novo_estado
+      where id = v_service_id;
+  end if;
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, v_service_id,
+    p_resultado,
+    case
+      when p_resultado = 'concluido' then 'Técnico marcou como concluído — aguarda validação do Admin.'
+      when p_resultado = 'nova_visita' and p_nova_data_agendada is not null
+        then 'Técnico pediu nova visita — já agendada com o cliente para ' || p_nova_data_agendada || ' ' || coalesce(p_nova_hora_agendada::text, '') || '.'
+      when p_resultado = 'nova_visita' then 'Técnico pediu nova visita — cliente ainda não combinou data.'
+      else 'Técnico marcou como não foi possível realizar.'
+    end,
+    auth.uid()
+  );
 end;
 $$;
 
-grant execute on function tech_finish_visit(uuid, text, text, jsonb, text[]) to authenticated;
+grant execute on function tech_finish_visit(uuid, text, text, jsonb, text[], text, text, date, time) to authenticated;
+
+-- =============================================================================
+-- RPCs DE FATURAÇÃO — usadas tanto por ADMIN como por FINANCE (role #10).
+-- FINANCE não tem UPDATE direto em `services`: só estas 3 mutações muito
+-- específicas, sempre validadas aqui dentro (nunca confiando no que o
+-- cliente envia), para nunca abrir uma porta para editar valor, técnicos,
+-- cliente, etc. só porque tem acesso à página de faturação.
+-- =============================================================================
+create or replace function finance_validar_servico(p_service_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+
+  select organization_id, estado into v_org_id, v_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_estado != 'aguarda_validacao' then
+    raise exception 'Este serviço não está à espera de validação.';
+  end if;
+
+  update services set estado = 'concluido' where id = p_service_id;
+
+  insert into service_validations (organization_id, service_id, acao, utilizador)
+  values (v_org_id, p_service_id, 'validado', auth.uid());
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (v_org_id, p_service_id, 'validado', 'Admin/Financeiro validou o fecho do serviço.', auth.uid());
+end;
+$$;
+grant execute on function finance_validar_servico(uuid) to authenticated;
+
+create or replace function finance_rejeitar_servico(p_service_id uuid, p_motivo text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+  if p_motivo is null or length(trim(p_motivo)) = 0 then
+    raise exception 'Motivo é obrigatório.';
+  end if;
+
+  select organization_id, estado into v_org_id, v_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_estado != 'aguarda_validacao' then
+    raise exception 'Este serviço não está à espera de validação.';
+  end if;
+
+  update services set estado = 'correcao_necessaria' where id = p_service_id;
+
+  insert into service_validations (organization_id, service_id, acao, motivo, utilizador)
+  values (v_org_id, p_service_id, 'rejeitado', p_motivo, auth.uid());
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (v_org_id, p_service_id, 'correcao_pedida', 'Admin/Financeiro pediu correção: ' || p_motivo, auth.uid());
+end;
+$$;
+grant execute on function finance_rejeitar_servico(uuid, text) to authenticated;
+
+create or replace function finance_marcar_faturado(p_service_id uuid, p_valor numeric, p_referencia text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_estado text;
+  v_faturacao_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+
+  select organization_id, estado, faturacao_estado into v_org_id, v_estado, v_faturacao_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_estado != 'concluido' or v_faturacao_estado != 'por_faturar' then
+    raise exception 'Este serviço não está pronto para faturar.';
+  end if;
+
+  update services
+    set faturacao_estado = 'faturado',
+        faturacao_valor = p_valor,
+        faturacao_referencia = p_referencia,
+        faturacao_data = current_date,
+        faturacao_utilizador = auth.uid()
+    where id = p_service_id;
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, p_service_id, 'faturado',
+    'Faturado — ref. ' || coalesce(nullif(p_referencia, ''), 's/ referência') || ', valor ' || p_valor || '€.',
+    auth.uid()
+  );
+end;
+$$;
+grant execute on function finance_marcar_faturado(uuid, numeric, text) to authenticated;
 
 -- =============================================================================
 -- TRIGGER: cria automaticamente um registo em org_settings quando nasce uma

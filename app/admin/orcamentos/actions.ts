@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { calcularOrcamento } from "@/lib/orcamento";
+import { registarEventoServico } from "@/lib/service-events";
 
 export async function criarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -123,6 +124,13 @@ export async function aceitarOrcamento(formData: FormData) {
   if (budget.request_id) {
     await supabase.from("requests").update({ estado: "convertido" }).eq("id", budget.request_id);
   }
+
+  await registarEventoServico(supabase, {
+    organizationId,
+    serviceId: service.id,
+    tipo: "criado",
+    descricao: "Serviço criado a partir de orçamento aceite.",
+  });
 
   revalidatePath("/admin/orcamentos");
   redirect(`/admin/servicos/${service.id}`);

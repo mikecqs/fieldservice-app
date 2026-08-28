@@ -66,10 +66,10 @@ function ServicoCard({ s, hoje }: { s: any; hoje: string }) {
       <div className="text-base font-semibold text-slate-800">{s.cliente_nome}</div>
       {s.estado === "correcao_necessaria" && s.motivo_correcao ? (
         <div className="text-sm font-medium text-red-700">⚠️ Correção: {s.motivo_correcao}</div>
-      ) : s.desbloqueado ? (
+      ) : s.detalhes_visiveis ? (
         <div className="text-sm text-slate-500">{s.descricao}</div>
       ) : (
-        <div className="text-sm text-slate-400">🔒 Detalhes disponíveis depois de fechares o serviço anterior</div>
+        <div className="text-sm text-slate-400">🔒 Detalhes disponíveis quando este for o próximo serviço</div>
       )}
     </Link>
   );

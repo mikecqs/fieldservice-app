@@ -9,9 +9,9 @@ export default async function SuperAdminLayout({ children }: { children: React.R
       <header className="flex items-center justify-between border-b border-slate-200 bg-indigo-950 px-6 py-4 text-white">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-orange-500 font-mono text-sm font-bold">
-            FS
+            nX
           </div>
-          <span className="font-bold">FieldService · Super Admin</span>
+          <span className="font-bold">nexIA · Super Admin</span>
         </div>
         <SignOutButton className="rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium hover:bg-indigo-800" />
       </header>

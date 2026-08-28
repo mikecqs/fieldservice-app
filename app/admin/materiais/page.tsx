@@ -4,13 +4,26 @@ import { criarCompraRapida } from "../compras/actions";
 export default async function MateriaisPage() {
   const supabase = createClient();
 
-  const { data: planeados } = await supabase
-    .from("service_materials_planned")
-    .select("id, nome, qtd, service_id, services(descricao, estado, clients(nome))")
-    .order("nome");
+  const [{ data: planeados }, { data: comprasPendentes }] = await Promise.all([
+    supabase
+      .from("service_materials_planned")
+      .select("id, nome, qtd, service_id, services(descricao, estado, clients(nome))")
+      .order("nome"),
+    supabase
+      .from("purchases")
+      .select("service_id, purchase_items(nome)")
+      .in("estado", ["por_encomendar", "encomendada", "parcial"])
+      .not("service_id", "is", null),
+  ]);
 
   const ativos = (planeados ?? []).filter(
     (m: any) => !["concluido", "cancelado", "nao_realizado"].includes(m.services?.estado)
+  );
+
+  const pendentes = new Set(
+    (comprasPendentes ?? []).flatMap((c: any) =>
+      (c.purchase_items ?? []).map((i: any) => `${c.service_id}::${i.nome}`)
+    )
   );
 
   return (
@@ -32,14 +45,23 @@ export default async function MateriaisPage() {
                 {m.services?.clients?.nome} — {m.services?.descricao}
               </div>
             </div>
-            <form action={criarCompraRapida}>
-              <input type="hidden" name="nome" value={m.nome} />
-              <input type="hidden" name="qtd" value={m.qtd} />
-              <input type="hidden" name="service_id" value={m.service_id} />
-              <button className="rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800">
-                Criar compra
+            {pendentes.has(`${m.service_id}::${m.nome}`) ? (
+              <button
+                disabled
+                className="cursor-not-allowed rounded-md bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700"
+              >
+                ✓ Adicionado
               </button>
-            </form>
+            ) : (
+              <form action={criarCompraRapida}>
+                <input type="hidden" name="nome" value={m.nome} />
+                <input type="hidden" name="qtd" value={m.qtd} />
+                <input type="hidden" name="service_id" value={m.service_id} />
+                <button className="rounded-md bg-indigo-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-800">
+                  Criar compra
+                </button>
+              </form>
+            )}
           </div>
         ))}
         {ativos.length === 0 && (

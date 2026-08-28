@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 // Nenhuma destas queries filtra explicitamente por organization_id — não
@@ -40,9 +41,12 @@ export default async function DashboardPage() {
       </div>
 
       <p className="mt-6 text-sm text-slate-400">
-        A Central Atenção completa (com os mesmos alertas do protótipo — pedidos incompletos, atrasos,
-        material a bloquear serviços, follow-ups de orçamentos…) fica em <code>/admin/atencao</code> e
-        segue o mesmo padrão de query desta página.
+        Para o panorama completo de alertas (pedidos incompletos, atrasos, material em falta,
+        follow-ups de orçamentos…), vê a{" "}
+        <Link href="/admin/atencao" className="text-indigo-700 underline">
+          Central de Atenção
+        </Link>
+        .
       </p>
     </div>
   );

@@ -6,24 +6,13 @@ import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
 
 const NAV = [
-  { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/atencao", label: "Atenção" },
-  { href: "/admin/pedidos", label: "Pedidos" },
-  { href: "/admin/agenda", label: "Agenda" },
-  { href: "/admin/clientes", label: "Clientes" },
-  { href: "/admin/servicos", label: "Serviços" },
-  { href: "/admin/orcamentos", label: "Orçamentos" },
-  { href: "/admin/catalogo", label: "Catálogo" },
-  { href: "/admin/materiais", label: "Materiais" },
-  { href: "/admin/compras", label: "Compras" },
-  { href: "/admin/financeiro", label: "Financeiro" },
-  { href: "/admin/faturacao", label: "Faturação" },
-  { href: "/admin/relatorios", label: "Relatórios" },
-  { href: "/admin/utilizadores", label: "Utilizadores" },
-  { href: "/admin/configuracoes", label: "Configurações" },
+  { href: "/financeiro", label: "Dashboard" },
+  { href: "/financeiro/faturacao", label: "Faturação" },
+  { href: "/financeiro/pendencias", label: "Pendências" },
+  { href: "/financeiro/historico", label: "Histórico" },
 ];
 
-export function AdminSidebar({ orgNome, nome }: { orgNome: string; nome?: string }) {
+export function FinanceiroSidebar({ orgNome, nome }: { orgNome: string; nome?: string }) {
   const [aberto, setAberto] = useState(false);
   const pathname = usePathname();
 
@@ -39,16 +28,12 @@ export function AdminSidebar({ orgNome, nome }: { orgNome: string; nome?: string
             <path d="M3 6h18M3 12h18M3 18h18" strokeLinecap="round" />
           </svg>
         </button>
-        <span className="text-sm font-bold">nexIA</span>
+        <span className="text-sm font-bold">nexIA · Financeiro</span>
         <span className="w-[22px]" />
       </div>
 
       {aberto && (
-        <div
-          className="fixed inset-0 z-30 bg-black/40 md:hidden"
-          onClick={() => setAberto(false)}
-          aria-hidden="true"
-        />
+        <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setAberto(false)} aria-hidden="true" />
       )}
 
       <aside

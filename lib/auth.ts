@@ -5,6 +5,7 @@ export function homeForRole(role?: string) {
   if (role === "SUPER_ADMIN") return "/super-admin";
   if (role === "ADMIN") return "/admin/dashboard";
   if (role === "TECHNICIAN") return "/tecnico";
+  if (role === "FINANCE") return "/financeiro";
   return "/login";
 }
 
