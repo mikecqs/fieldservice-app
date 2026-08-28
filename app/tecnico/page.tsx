@@ -22,8 +22,35 @@ export default async function AgendaTecnicoPage() {
   const ativos = (servicos ?? []).filter((s: any) => !FECHADOS.includes(s.estado));
   const fechados = (servicos ?? []).filter((s: any) => FECHADOS.includes(s.estado));
 
+  // Alerta de possível atraso: está num serviço em curso e o próximo já
+  // está a chegar (ou já passou da hora) — usa só dados já disponíveis
+  // (nunca GPS/tracking), como pedido.
+  const emCurso = ativos.find((s: any) => s.estado === "em_curso");
+  let proximoAtrasoAviso: string | null = null;
+  if (emCurso) {
+    const indice = ativos.findIndex((s: any) => s.id === emCurso.id);
+    const proximo = ativos
+      .slice(indice + 1)
+      .find((s: any) => s.estado === "agendado" && s.data_agendada === hoje && s.hora_agendada);
+    if (proximo) {
+      const agora = new Date();
+      const [h, m] = proximo.hora_agendada.split(":").map(Number);
+      const previsto = new Date();
+      previsto.setHours(h, m, 0, 0);
+      const minutosPara = (previsto.getTime() - agora.getTime()) / 60000;
+      if (minutosPara <= 30) {
+        proximoAtrasoAviso = `⚠️ O seu próximo serviço começa às ${proximo.hora_agendada.slice(0, 5)} e o serviço atual ainda está em curso.`;
+      }
+    }
+  }
+
   return (
     <div className="px-4 py-4">
+      {proximoAtrasoAviso && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+          {proximoAtrasoAviso}
+        </div>
+      )}
       <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">A minha agenda</h2>
       {(!servicos || servicos.length === 0) && (
         <p className="py-10 text-center text-sm text-slate-400">Sem serviços atribuídos.</p>

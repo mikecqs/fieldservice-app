@@ -20,7 +20,7 @@ export default async function ComprasPage() {
   const supabase = createClient();
   const { data: compras } = await supabase
     .from("purchases")
-    .select("id, descricao, fornecedor, estado, data_prevista, purchase_items(nome, qtd)")
+    .select("id, descricao, fornecedor, estado, data_prevista, service_id, purchase_items(nome, qtd), services(id, tipo, descricao, clients(nome))")
     .order("created_at", { ascending: false });
 
   return (
@@ -44,7 +44,17 @@ export default async function ComprasPage() {
             <div className="mb-2 flex items-start justify-between">
               <div>
                 <div className="font-medium text-slate-800">{c.descricao}</div>
-                {c.fornecedor && <div className="text-xs text-slate-400">Fornecedor: {c.fornecedor}</div>}
+                {c.services ? (
+                  <Link
+                    href={`/admin/servicos/${c.services.id}`}
+                    className="mt-0.5 inline-block text-xs text-indigo-700 underline"
+                  >
+                    {c.services.clients?.nome} — {c.services.tipo} · {c.services.descricao}
+                  </Link>
+                ) : (
+                  <div className="mt-0.5 text-xs text-slate-400">Sem serviço associado</div>
+                )}
+                {c.fornecedor && <div className="mt-0.5 text-xs text-slate-400">Fornecedor: {c.fornecedor}</div>}
                 {c.data_prevista && <div className="text-xs text-slate-400">Previsto: {c.data_prevista}</div>}
               </div>
               <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">

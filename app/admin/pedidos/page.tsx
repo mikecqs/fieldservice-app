@@ -1,13 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { arquivarPedido, converterEmOrcamento, resolverInfoPedido } from "./actions";
-
-const ESTADO_LABEL: Record<string, string> = {
-  novo: "Novo",
-  orcamento: "Em orçamento",
-  convertido: "Convertido",
-  arquivado: "Arquivado",
-};
+import { estadoOperacionalPedido } from "@/lib/pedido-estado";
 
 export default async function PedidosPage() {
   const supabase = createClient();
@@ -15,6 +9,18 @@ export default async function PedidosPage() {
     .from("requests")
     .select("id, tipo, descricao, origem, info_falta, estado, created_at, clients(id, nome)")
     .order("created_at", { ascending: false });
+
+  const pedidoIds = (pedidos ?? []).map((p) => p.id);
+  const [{ data: budgets }, { data: services }] =
+    pedidoIds.length > 0
+      ? await Promise.all([
+          supabase.from("budgets").select("estado, request_id").in("request_id", pedidoIds),
+          supabase.from("services").select("estado, request_id").in("request_id", pedidoIds),
+        ])
+      : [{ data: [] }, { data: [] }];
+
+  const budgetPorPedido = new Map((budgets ?? []).map((b: any) => [b.request_id, b]));
+  const servicePorPedido = new Map((services ?? []).map((s: any) => [s.request_id, s]));
 
   return (
     <div>
@@ -34,7 +40,9 @@ export default async function PedidosPage() {
       </div>
 
       <div className="space-y-3">
-        {(pedidos ?? []).map((p: any) => (
+        {(pedidos ?? []).map((p: any) => {
+          const estadoOperacional = estadoOperacionalPedido(p, budgetPorPedido.get(p.id), servicePorPedido.get(p.id));
+          return (
           <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-4">
             <div className="mb-1 flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -52,8 +60,8 @@ export default async function PedidosPage() {
                 <p className="mt-1 text-sm text-slate-600">{p.descricao}</p>
                 {p.origem && <p className="mt-1 text-xs text-slate-400">Origem: {p.origem}</p>}
               </div>
-              <span className="shrink-0 rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                {ESTADO_LABEL[p.estado] ?? p.estado}
+              <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${estadoOperacional.cls}`}>
+                {estadoOperacional.label}
               </span>
             </div>
 
@@ -89,7 +97,8 @@ export default async function PedidosPage() {
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
         {(pedidos ?? []).length === 0 && (
           <p className="py-10 text-center text-sm text-slate-400">Ainda sem pedidos.</p>
         )}
