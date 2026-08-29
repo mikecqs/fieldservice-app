@@ -4,6 +4,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "nexIA",
   description: "nexIA — gestão inteligente de serviços técnicos no terreno",
+  manifest: "/manifest.json",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "nexIA" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

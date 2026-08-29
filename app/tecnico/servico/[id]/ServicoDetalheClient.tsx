@@ -299,7 +299,7 @@ export function ServicoDetalheClient({
         <div className="mt-3 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-400">{servico.notas}</div>
       )}
 
-      {materiaisPrevistos.length > 0 && (
+      {servico.detalhes_visiveis && materiaisPrevistos.length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-xs font-semibold uppercase text-neutral-500">Materiais previstos</div>
           <ul className="list-disc pl-5 text-sm text-neutral-300">
@@ -459,7 +459,7 @@ export function ServicoDetalheClient({
                   <span className="mb-1 block text-xs font-medium text-neutral-300">
                     Materiais utilizados
                   </span>
-                  {materiaisPrevistos.length > 0 && (
+                  {servico.detalhes_visiveis && materiaisPrevistos.length > 0 && (
                     <p className="mb-2 text-xs text-amber-400">
                       Levaste este material para este serviço e registaste tudo o que utilizaste? Confirma
                       quantidades e preços — se usaste mais, menos, ou algo diferente do previsto, ajusta aqui.

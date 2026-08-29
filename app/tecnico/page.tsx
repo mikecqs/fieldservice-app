@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { AtivarNotificacoes } from "./AtivarNotificacoes";
 
 // Repara na tabela usada: `services_technician_view`, não `services`.
 // A tabela services nem sequer tem policy de SELECT para TECHNICIAN — se
@@ -46,6 +47,7 @@ export default async function AgendaTecnicoPage() {
 
   return (
     <div className="px-4 py-4">
+      <AtivarNotificacoes />
       {proximoAtrasoAviso && (
         <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm font-medium text-amber-300">
           {proximoAtrasoAviso}
