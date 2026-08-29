@@ -4,8 +4,12 @@ Contexto permanente para sessões futuras do Claude Code neste repositório.
 Este ficheiro é um resumo funcional — para detalhe exaustivo do schema ver
 `supabase/schema.sql` (fonte de verdade). `RESUMOTECNICOnexIA.md` é um
 **documento histórico de uma sessão específica**, não uma fonte de verdade:
-já foi confirmado que contém pelo menos uma afirmação falsa (ver secção 10)
-— nunca assumir que algo lá descrito existe sem verificar contra o código.
+a sua descrição de Web Push foi considerada falsa numa auditoria anterior
+desta sessão (nada disso existia no código nesse momento), mas entretanto
+outra sessão implementou mesmo Web Push, tornando essa descrição específica
+retroativamente exata (ver secção 10) — coincidência, não prova de
+fiabilidade geral do documento. Continua a nunca assumir que algo descrito
+em `RESUMOTECNICOnexIA.md` existe sem verificar contra o código.
 
 ## 1. Objetivo e natureza da aplicação
 
@@ -29,9 +33,10 @@ faturação. Cada empresa (tenant) só vê os seus próprios dados.
 - **Deploy**: Vercel (serverless, sem servidor sempre ligado) + GitHub.
   Vercel **não** está ligado ao GitHub para deploy automático — deploy é
   manual (`git push` + `vercel --prod`).
-- Sincronização assíncrona orientada a eventos (só Google Sheets — ver
-  secção 10 sobre Web Push) via triggers Postgres + `pg_net`/`pg_cron`, não
-  polling.
+- Sincronização assíncrona orientada a eventos (Google Sheets) via triggers
+  Postgres + `pg_net`/`pg_cron`, não polling. Web Push (ver secção 10) é
+  diferente: `pg_cron` faz polling a cada minuto a uma condição de estado,
+  não reage a um trigger de evento.
 - **Regras de estado centralizadas em `lib/*-estado.ts`** (padrão
   consolidado nos BLOCOS 5–9): `lib/servico-estado.ts`,
   `lib/orcamento-estado.ts`, `lib/compra-estado.ts`, `lib/pedido-estado.ts`
@@ -364,15 +369,29 @@ Todo o percurso é gravado em `service_events`/`budget_events`/
 
 ## 10. Problemas conhecidos / decisões pendentes
 
-- **Web Push / notificações de atraso não estão implementadas no código
-  deste repositório.** Referências a essa funcionalidade em
-  `RESUMOTECNICOnexIA.md` (VAPID, Service Worker, tabelas
-  `push_subscriptions`/`tech_delay_notifications`, rota
-  `api/push/check-delays`, job `pg_cron` "tech-delay-check") são
-  históricas/incorretas — confirmado por auditoria exaustiva (grep a todo
-  o repositório + `git log --all`) que nada disto existe nem alguma vez
-  existiu; o pacote `web-push` nem está no `package.json`. Não implementar
-  isto sem um pedido explícito e aprovado.
+- **Web Push está implementado** (commit `f3b2177`, integrado ao branch
+  principal por merge — a afirmação anterior desta secção, de que não
+  existia, ficou desatualizada e foi corrigida). Componentes reais no
+  código: tabelas `push_subscriptions`/`tech_delay_notifications`
+  (`supabase/schema.sql`), Service Worker (`public/sw.js`) +
+  `public/manifest.json`, subscrição pelo técnico
+  (`app/tecnico/AtivarNotificacoes.tsx` + `app/tecnico/push-actions.ts`),
+  e a rota `app/api/push/check-delays/route.ts` — chamada a cada minuto por
+  um job `pg_cron` ("tech-delay-check", **agendamento manual, não faz parte
+  de nenhuma migração SQL automática** — repor à mão se a BD for recriada,
+  ver comentário no fim de `schema.sql`), que verifica se o próximo serviço
+  agendado do técnico está em risco de atraso (≤ 30 min, técnico ainda
+  `em_curso` no serviço anterior) e envia a notificação; dedup atómico via
+  chave primária de `tech_delay_notifications` (nunca notifica o mesmo
+  serviço duas vezes). Mecanismo diferente do Google Sheets: aqui é
+  `pg_cron` a **fazer polling** a cada minuto (verifica uma condição de
+  estado), não um trigger orientado a evento.
+  **Não testado em produção** — depende de 4 env vars no Vercel
+  (`VAPID_PRIVATE_KEY`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_SUBJECT`,
+  `PUSH_CHECK_SECRET`) e do agendamento manual do job `pg_cron` acima;
+  sem isso a rota devolve erro 500 ou nunca é chamada. `middleware.ts`
+  já tem a exceção necessária para `sw.js`/`manifest.json` não serem
+  bloqueados pelo portão de sessão (commit `6b55b9c`).
 - **ADMIN mantém acesso direto total (RLS `for all`) a `services`,
   `budgets`, `requests`, `purchases`**, incluindo colunas de faturação —
   decisão de confiança deliberada (ADMIN é um papel de confiança nesta
