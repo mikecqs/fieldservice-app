@@ -13,6 +13,7 @@ import { podeReagendarServico, deveTransicionarParaAgendado } from "@/lib/servic
 export async function criarOuAgendarNoPopup(input: {
   existingServiceId?: string | null;
   clientId?: string | null;
+  addressId?: string | null;
   requestId?: string | null;
   tipo?: string | null;
   descricao?: string | null;
@@ -66,15 +67,26 @@ export async function criarOuAgendarNoPopup(input: {
       descricao: `${current.data_agendada ? "Reagendado" : "Agendado"} para ${input.data} ${input.horaInicio}–${input.horaFim} a partir da agenda.`,
     });
   } else {
-    if (!input.clientId || !input.tipo || !input.descricao) {
-      throw new Error("Cliente, tipo e descrição são obrigatórios para criar um novo agendamento.");
+    if (!input.clientId || !input.addressId || !input.tipo || !input.descricao) {
+      throw new Error("Cliente, morada, tipo e descrição são obrigatórios para criar um novo agendamento.");
     }
+
+    // Nunca confiar que a morada do formulário pertence mesmo ao cliente
+    // selecionado — mesma verificação já usada em criarPedido/criarServico.
+    const { data: morada } = await supabase
+      .from("client_addresses")
+      .select("id")
+      .eq("id", input.addressId)
+      .eq("client_id", input.clientId)
+      .single();
+    if (!morada) throw new Error("A morada selecionada não pertence ao cliente selecionado.");
 
     const { data: service, error } = await supabase
       .from("services")
       .insert({
         organization_id: organizationId,
         client_id: input.clientId,
+        address_id: input.addressId,
         request_id: input.requestId || null,
         tipo: input.tipo,
         descricao: input.descricao,

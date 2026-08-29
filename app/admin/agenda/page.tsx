@@ -54,7 +54,11 @@ export default async function AgendaPage({
       .in("estado", ESTADOS_SERVICO_POR_AGENDAR)
       .order("created_at", { ascending: false }),
     supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
-    supabase.from("clients").select("id, nome").eq("organization_id", organizationId).order("nome"),
+    supabase
+      .from("clients")
+      .select("id, nome, client_addresses(id, label, endereco)")
+      .eq("organization_id", organizationId)
+      .order("nome"),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
     supabase
       .from("requests")

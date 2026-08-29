@@ -13,6 +13,8 @@ const ALTURA_HORA = 48; // px
 
 type Servico = ServicoAgenda & { preparacaoNivel?: NivelPreparacao };
 type Pessoa = { id: string; nome: string };
+type Morada = { id: string; label: string; endereco: string };
+type Cliente = { id: string; nome: string; client_addresses: Morada[] };
 type PedidoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 type ServicoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 
@@ -35,7 +37,7 @@ export function AgendaClient({
   refDateIso: string;
   dias: string[];
   servicosPorDiaEntries: [string, Servico[]][];
-  clientes: Pessoa[];
+  clientes: Cliente[];
   tecnicos: Pessoa[];
   pedidosAbertos: PedidoOpcao[];
   servicosPendentes: ServicoOpcao[];
