@@ -26,22 +26,38 @@ export default function EsqueciPasswordPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4">
       <div className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-8 shadow-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <NexiaMark size={36} />
-          <div>
-            <div className="text-sm font-bold leading-tight text-white">nexIA</div>
-            <div className="text-xs leading-tight text-neutral-400">Recuperar password</div>
+        {!enviado && (
+          <div className="mb-6 flex items-center gap-2">
+            <NexiaMark size={36} />
+            <div>
+              <div className="text-sm font-bold leading-tight text-white">nexIA</div>
+              <div className="text-xs leading-tight text-neutral-400">Recuperar password</div>
+            </div>
           </div>
-        </div>
+        )}
 
         {enviado ? (
-          <div className="space-y-4">
-            <p className="text-sm text-neutral-200">
-              Se existir uma conta ativa associada a este email, receberá instruções para redefinir a password.
+          <div className="flex flex-col items-center py-2 text-center">
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
+              <svg viewBox="0 0 24 24" width={28} height={28} fill="none" aria-hidden="true">
+                <path
+                  d="M5 13l4 4L19 7"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-emerald-400"
+                />
+              </svg>
+            </div>
+            <h1 className="mb-2 text-lg font-bold text-white">Verifique o seu email</h1>
+            <p className="text-sm leading-relaxed text-neutral-400">
+              Se existir uma conta ativa associada a este endereço, enviámos instruções para redefinir a
+              palavra-passe.
             </p>
             <Link
               href="/login"
-              className="block w-full rounded-md bg-white px-4 py-2 text-center text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+              className="mt-7 block w-full rounded-md bg-white px-4 py-2.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
             >
               Voltar ao login
             </Link>

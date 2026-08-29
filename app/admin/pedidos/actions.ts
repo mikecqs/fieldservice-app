@@ -28,6 +28,41 @@ async function criarOrcamentoDePedido(
   return budget;
 }
 
+// Idem, mas para o caminho "sem orçamento": cria logo o serviço (fica por
+// agendar) e liga-o ao pedido. Partilhada entre "Agendamento" (direto, na
+// criação do pedido) e a resposta "Não" à pergunta de orçamento.
+async function criarServicoDePedido(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  requestId: string,
+  pedido: { client_id: string; tipo: string; descricao: string },
+  descricaoEvento: string
+) {
+  const { data: service, error } = await supabase
+    .from("services")
+    .insert({
+      organization_id: organizationId,
+      client_id: pedido.client_id,
+      request_id: requestId,
+      tipo: pedido.tipo,
+      descricao: pedido.descricao,
+    })
+    .select()
+    .single();
+  if (error || !service) throw new Error(error?.message || "Não foi possível criar o serviço.");
+
+  await supabase.from("requests").update({ estado: "convertido" }).eq("id", requestId);
+
+  await registarEventoServico(supabase, {
+    organizationId,
+    serviceId: service.id,
+    tipo: "criado",
+    descricao: descricaoEvento,
+  });
+
+  return service;
+}
+
 export async function criarPedido(formData: FormData) {
   const organizationId = await getOrgId();
   const supabase = createClient();
@@ -49,12 +84,23 @@ export async function criarPedido(formData: FormData) {
 
   revalidatePath("/admin/pedidos");
 
-  // Pedidos do tipo "Orçamento" seguem sempre para lá, sem perguntar nada.
-  // Qualquer outro tipo (Manutenção, Instalação, ou outro configurado em
-  // Configurações) pergunta primeiro se é necessário orçamento.
+  // "Orçamento" e "Agendamento" têm destino direto e óbvio — não faz
+  // sentido perguntar "é necessário orçamento?" quando o próprio tipo já
+  // responde a isso. Qualquer outro tipo (Manutenção, Instalação, ou outro
+  // configurado em Configurações) continua a perguntar, como antes.
   if (tipo === "Orçamento") {
     const budget = await criarOrcamentoDePedido(supabase, organizationId, pedido.id, client_id);
     redirect(`/admin/orcamentos/${budget.id}`);
+  }
+  if (tipo === "Agendamento") {
+    const service = await criarServicoDePedido(
+      supabase,
+      organizationId,
+      pedido.id,
+      pedido,
+      `Serviço criado a partir do pedido (${tipo}) — segue diretamente para agendamento.`
+    );
+    redirect(`/admin/servicos/${service.id}`);
   }
   redirect(`/admin/pedidos/${pedido.id}/decisao`);
 }
@@ -84,27 +130,13 @@ export async function decidirSemOrcamento(formData: FormData) {
   const { data: pedido } = await supabase.from("requests").select("client_id, tipo, descricao").eq("id", requestId).single();
   if (!pedido) return;
 
-  const { data: service, error } = await supabase
-    .from("services")
-    .insert({
-      organization_id: organizationId,
-      client_id: pedido.client_id,
-      request_id: requestId,
-      tipo: pedido.tipo,
-      descricao: pedido.descricao,
-    })
-    .select()
-    .single();
-  if (error || !service) throw new Error(error?.message || "Não foi possível criar o serviço.");
-
-  await supabase.from("requests").update({ estado: "convertido" }).eq("id", requestId);
-
-  await registarEventoServico(supabase, {
+  const service = await criarServicoDePedido(
+    supabase,
     organizationId,
-    serviceId: service.id,
-    tipo: "criado",
-    descricao: `Serviço criado a partir do pedido (${pedido.tipo}), sem orçamento.`,
-  });
+    requestId,
+    pedido,
+    `Serviço criado a partir do pedido (${pedido.tipo}), sem orçamento.`
+  );
 
   revalidatePath("/admin/pedidos");
   redirect(`/admin/servicos/${service.id}`);

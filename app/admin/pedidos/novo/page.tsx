@@ -12,7 +12,7 @@ export default async function NovoPedidoPage() {
     supabase.from("org_settings").select("tipos_servico").eq("organization_id", organizationId).single(),
   ]);
 
-  const tipos = settings?.tipos_servico ?? ["Manutenção", "Instalação", "Orçamento"];
+  const tipos = settings?.tipos_servico ?? ["Agendamento", "Orçamento", "Manutenção", "Instalação"];
 
   return (
     <div className="mx-auto max-w-lg">

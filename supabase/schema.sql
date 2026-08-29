@@ -71,7 +71,7 @@ $$;
 -- -----------------------------------------------------------------------------
 create table org_settings (
   organization_id uuid primary key references organizations(id) on delete cascade,
-  tipos_servico text[] not null default array['Manutenção','Instalação','Orçamento'],
+  tipos_servico text[] not null default array['Agendamento','Orçamento','Manutenção','Instalação'],
   followup_dias_default int not null default 3,
   -- Controlo operacional: quando ativo, um técnico só vê os detalhes
   -- operacionais (morada, contacto, descrição, notas) do seu próximo
@@ -659,15 +659,21 @@ security definer
 stable
 set search_path = public
 as $$
+  -- 'nova_visita' e 'correcao_necessaria' continuam ativos/agendáveis (o
+  -- técnico ainda os vai fazer), por isso entram na mesma fila de "atual +
+  -- seguinte" que 'agendado'/'em_curso'. Ficarem de fora fazia o primeiro
+  -- disjunto (s.estado not in (...)) devolver true sem olhar à posição real
+  -- na fila — um serviço 3º/4º na fila que tivesse passado por "nova
+  -- visita" ficava com morada/contacto/materiais expostos por engano.
   select
-    s.estado not in ('agendado','em_curso')
+    s.estado not in ('agendado','em_curso','nova_visita','correcao_necessaria')
     or s.data_agendada is null or s.hora_agendada is null
     or (
       select count(*)
       from services s2
       join service_technicians st2 on st2.service_id = s2.id
       where st2.user_id = auth.uid()
-        and s2.estado in ('agendado','em_curso')
+        and s2.estado in ('agendado','em_curso','nova_visita','correcao_necessaria')
         and s2.data_agendada is not null
         and s2.hora_agendada is not null
         and (s2.data_agendada, s2.hora_agendada) < (s.data_agendada, s.hora_agendada)
@@ -1325,6 +1331,50 @@ create trigger sheets_sync_material_planned after insert or update or delete on 
 create trigger sheets_sync_material_used after insert or update or delete on visit_materials_used for each row execute function notify_sheets_sync_via_visit('material_used');
 create trigger sheets_sync_service_technicians after insert or delete on service_technicians for each row execute function notify_sheets_sync_service_technicians();
 create trigger sheets_sync_budget_items after insert or update or delete on budget_items for each row execute function notify_sheets_sync_budget_items();
+
+-- =============================================================================
+-- WEB PUSH — notificações do Técnico (ex: risco de atraso no próximo serviço).
+-- Só guardamos o necessário para enviar a notificação (endpoint + chaves
+-- públicas de subscrição, nunca nada sensível); a assinatura VAPID é feita
+-- sempre no backend com a chave privada (env var), nunca no browser.
+-- =============================================================================
+create table push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  organization_id uuid not null references organizations(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table push_subscriptions enable row level security;
+
+create policy "technician manages own push subscriptions" on push_subscriptions for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid() and organization_id = my_org());
+
+-- Garante uma única notificação de atraso por serviço (nunca repetida em
+-- cada varredura do cron) — nunca apagado, é só um registo de "já avisei".
+create table tech_delay_notifications (
+  service_id uuid primary key references services(id) on delete cascade,
+  notified_at timestamptz not null default now()
+);
+alter table tech_delay_notifications enable row level security;
+
+-- pg_cron (a cada minuto — mais frequente do que o Vercel Cron do Hobby
+-- plan permitiria) chama /api/push/check-delays, que decide quem notificar
+-- e envia o Web Push. A extensão + o agendamento em si não fazem parte de
+-- uma migração normal de tabelas — repor manualmente se a BD for recriada:
+--
+--   create extension if not exists pg_cron;
+--   select cron.schedule('tech-delay-check', '* * * * *', $$
+--     select net.http_post(
+--       url := 'https://fieldservice-app-nine.vercel.app/api/push/check-delays',
+--       headers := jsonb_build_object('Content-Type','application/json','x-sync-secret','<PUSH_CHECK_SECRET>'),
+--       body := '{}'::jsonb
+--     );
+--   $$);
 
 -- =============================================================================
 -- PRÓXIMO PASSO: criar o teu utilizador SUPER_ADMIN
