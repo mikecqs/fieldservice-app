@@ -49,7 +49,12 @@ export const config = {
   // webhook/cron da sincronização do Google Sheets, sem cookies nenhuns) ou
   // rotas que tratam a sua própria autenticação (ex: requireRole() dentro do
   // callback OAuth) — nunca a gate de sessão-por-cookie feita aqui.
+  // sw.js/manifest.json ficam de fora também: são pedidos estáticos feitos
+  // pelo próprio browser (registo do service worker, "adicionar ao ecrã
+  // principal") antes de sequer existir sessão — sem esta exceção o
+  // middleware respondia com um redirect para /login em vez do ficheiro,
+  // partindo silenciosamente as notificações push.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
