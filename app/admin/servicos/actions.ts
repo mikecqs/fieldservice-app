@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getOrgId } from "@/lib/auth";
+import { getOrgId, getOrgIdAndRole } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
+import { podeReagendarServico, podeCancelarServico, podeReativarServico, deveTransicionarParaAgendado } from "@/lib/servico-estado";
 
 // Aviso não-bloqueante de conflito de agenda — chamado pelo formulário antes
 // de gravar. Não impede nada sozinho: só devolve a informação para o Admin
@@ -75,6 +76,11 @@ export async function criarServico(formData: FormData) {
   const valor = Number(formData.get("valor") || 0);
 
   if (!client_id || !tipo || !descricao) return;
+  // Nunca confiar num valor negativo vindo do formulário — o único campo
+  // de preço em todo o fluxo de criação manual de serviço (BLOCO 14).
+  if (!Number.isFinite(valor) || valor < 0) {
+    throw new Error("Valor do serviço tem de ser um número igual ou superior a 0.");
+  }
 
   const { data: service, error } = await supabase
     .from("services")
@@ -113,10 +119,29 @@ export async function atualizarAgendamento(formData: FormData) {
   if (data_agendada && (!hora_agendada || !hora_fim_agendada)) {
     throw new Error("Hora de início e hora de fim são ambas obrigatórias para agendar.");
   }
+  // Mesma regra já aplicada em reativarServico — faltava aqui, o caminho de
+  // agendamento mais usado (ficha do Serviço). Nunca duas versões
+  // divergentes da mesma validação (BLOCO 18).
+  if (hora_agendada && hora_fim_agendada && hora_fim_agendada <= hora_agendada) {
+    throw new Error("A hora de término deve ser depois da hora de início.");
+  }
+
+  const { data: current } = await supabase
+    .from("services")
+    .select("estado, data_agendada, faturacao_estado")
+    .eq("id", id)
+    .single();
+  if (!current) return;
+
+  // Serviço concluído/cancelado/não realizado ou já faturado: agendamento,
+  // horário e técnico ficam bloqueados — nunca só escondido na UI (ver
+  // AgendamentoForm.tsx, que aplica exatamente a mesma regra).
+  if (!podeReagendarServico(current)) {
+    throw new Error("Este serviço já não pode ser reagendado (concluído, cancelado, não realizado ou já faturado).");
+  }
 
   const update: Record<string, unknown> = { data_agendada, hora_agendada, hora_fim_agendada, prioridade, notas };
-  const { data: current } = await supabase.from("services").select("estado, data_agendada").eq("id", id).single();
-  if (data_agendada && current?.estado === "por_agendar") update.estado = "agendado";
+  if (data_agendada && deveTransicionarParaAgendado(current.estado)) update.estado = "agendado";
 
   await supabase.from("services").update(update).eq("id", id);
 
@@ -136,14 +161,118 @@ export async function atualizarAgendamento(formData: FormData) {
   revalidatePath("/admin/agenda");
 }
 
-export async function mudarEstado(formData: FormData) {
+// Substitui o antigo "Forçar estado manualmente" (um <select> que permitia
+// saltar para qualquer estado sem validação nem histórico — auditoria
+// BLOCO 5). Cancelar é a única transição manual que legitimamente não tem
+// nenhum outro caminho no sistema; por isso é uma ação própria, com motivo
+// obrigatório, validação de estado no servidor e evento sempre registado.
+export async function cancelarServico(formData: FormData) {
+  const organizationId = await getOrgId();
   const supabase = createClient();
   const id = String(formData.get("id") || "");
-  const estado = String(formData.get("estado") || "");
-  if (!id || !estado) return;
-  await supabase.from("services").update({ estado }).eq("id", id);
+  const motivo = String(formData.get("motivo") || "").trim();
+  if (!id) return;
+  if (!motivo) throw new Error("O motivo do cancelamento é obrigatório.");
+
+  const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", id).single();
+  if (!servico) return;
+  if (!podeCancelarServico(servico)) {
+    throw new Error("Este serviço já não pode ser cancelado (já concluído ou já faturado).");
+  }
+
+  await supabase.from("services").update({ estado: "cancelado" }).eq("id", id);
+
+  await registarEventoServico(supabase, {
+    organizationId,
+    serviceId: id,
+    tipo: "cancelado",
+    descricao: `Serviço cancelado: ${motivo}`,
+  });
+
   revalidatePath(`/admin/servicos/${id}`);
   revalidatePath("/admin/servicos");
+  revalidatePath("/admin/agenda");
+  revalidatePath("/admin/atencao");
+}
+
+// Único caminho de saída de 'nao_realizado' — não é um "forçar estado"
+// genérico (isso foi removido de propósito na auditoria BLOCO 5): só atua
+// sobre este estado exato, nunca se já estiver faturado, exige sempre nova
+// data/hora, e reutiliza a mesma lógica de conflito/técnico já usada na
+// Agenda (verificarConflitoAgenda é chamado pelo formulário antes disto,
+// tal como acontece em AgendamentoForm/ServicoModal). Explicitamente
+// restrita a ADMIN/SUPER_ADMIN, com validação sempre no servidor — nunca
+// confia no estado nem no id vindos do browser sem revalidar aqui.
+export async function reativarServico(formData: FormData) {
+  const { organizationId, role } = await getOrgIdAndRole();
+  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+    throw new Error("Sem permissão para reativar este serviço.");
+  }
+  const supabase = createClient();
+
+  const id = String(formData.get("id") || "");
+  const data_agendada = String(formData.get("data_agendada") || "");
+  const hora_agendada = String(formData.get("hora_agendada") || "");
+  const hora_fim_agendada = String(formData.get("hora_fim_agendada") || "");
+  const tecnicoId = String(formData.get("tecnico_id") || "") || null;
+
+  if (!id) return;
+  if (!data_agendada || !hora_agendada || !hora_fim_agendada) {
+    throw new Error("Data, hora de início e hora de fim são obrigatórias para reativar o serviço.");
+  }
+  if (hora_fim_agendada <= hora_agendada) {
+    throw new Error("A hora de término deve ser depois da hora de início.");
+  }
+
+  // Revalida sempre a partir da BD — nunca confia no estado que a página
+  // tinha carregada no browser no momento em que o formulário foi aberto.
+  const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", id).single();
+  if (!servico) return;
+  if (!podeReativarServico(servico)) {
+    throw new Error('Só é possível reativar um serviço que esteja "Não foi possível realizar" e ainda não esteja faturado.');
+  }
+
+  await supabase
+    .from("services")
+    .update({
+      estado: "agendado",
+      data_agendada,
+      hora_agendada,
+      hora_fim_agendada,
+    })
+    .eq("id", id);
+
+  // Técnico é opcional aqui, tal como no resto do fluxo de agendamento
+  // (atualizarAgendamento/criarOuAgendarNoPopup): a atribuição de técnico
+  // nunca foi uma condição para um serviço ficar "agendado".
+  let nomeTecnico: string | null = null;
+  if (tecnicoId) {
+    const { data: jaAtribuido } = await supabase
+      .from("service_technicians")
+      .select("user_id")
+      .eq("service_id", id)
+      .eq("user_id", tecnicoId)
+      .maybeSingle();
+    if (!jaAtribuido) {
+      await supabase.from("service_technicians").insert({ service_id: id, user_id: tecnicoId });
+    }
+    const { data: tecnico } = await supabase.from("profiles").select("nome").eq("id", tecnicoId).single();
+    nomeTecnico = tecnico?.nome ?? null;
+  }
+
+  await registarEventoServico(supabase, {
+    organizationId,
+    serviceId: id,
+    tipo: "reativado",
+    descricao: `Serviço reativado (estava "Não foi possível realizar") e reagendado para ${data_agendada} ${hora_agendada}–${hora_fim_agendada}${
+      nomeTecnico ? ` com ${nomeTecnico}` : ""
+    }.`,
+  });
+
+  revalidatePath(`/admin/servicos/${id}`);
+  revalidatePath("/admin/servicos");
+  revalidatePath("/admin/agenda");
+  revalidatePath("/admin/atencao");
 }
 
 // Liga (ou desliga) este serviço a um equipamento do cliente — é isto que
@@ -163,6 +292,12 @@ export async function atribuirTecnico(formData: FormData) {
   const service_id = String(formData.get("service_id") || "");
   const user_id = String(formData.get("user_id") || "");
   if (!service_id || !user_id) return;
+
+  const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
+  if (!servico || !podeReagendarServico(servico)) {
+    throw new Error("Este serviço já não pode ter técnicos alterados (concluído, cancelado, não realizado ou já faturado).");
+  }
+
   await supabase.from("service_technicians").insert({ service_id, user_id });
   revalidatePath(`/admin/servicos/${service_id}`);
 }
@@ -172,16 +307,36 @@ export async function removerTecnico(formData: FormData) {
   const service_id = String(formData.get("service_id") || "");
   const user_id = String(formData.get("user_id") || "");
   if (!service_id || !user_id) return;
+
+  const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
+  if (!servico || !podeReagendarServico(servico)) {
+    throw new Error("Este serviço já não pode ter técnicos alterados (concluído, cancelado, não realizado ou já faturado).");
+  }
+
   await supabase.from("service_technicians").delete().eq("service_id", service_id).eq("user_id", user_id);
   revalidatePath(`/admin/servicos/${service_id}`);
 }
 
+// Mesmo guard de estado já usado para técnicos (atribuirTecnico/
+// removerTecnico, BLOCO 5) — um serviço concluído/cancelado/não realizado
+// ou já faturado não deve ter a lista planeada de materiais alterada depois
+// do facto (BLOCO 16). Nunca um estado/regra novos, reutiliza sempre
+// podeReagendarServico.
 export async function adicionarMaterialPlaneado(formData: FormData) {
   const supabase = createClient();
   const service_id = String(formData.get("service_id") || "");
   const nome = String(formData.get("nome") || "");
   const qtd = Number(formData.get("qtd") || 1);
   if (!service_id || !nome) return;
+  if (!Number.isFinite(qtd) || qtd < 0) {
+    throw new Error("A quantidade tem de ser um número igual ou superior a 0.");
+  }
+
+  const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
+  if (!servico || !podeReagendarServico(servico)) {
+    throw new Error("Este serviço já não pode ter materiais planeados alterados (concluído, cancelado, não realizado ou já faturado).");
+  }
+
   await supabase.from("service_materials_planned").insert({ service_id, nome, qtd });
   revalidatePath(`/admin/servicos/${service_id}`);
 }
@@ -191,6 +346,12 @@ export async function removerMaterialPlaneado(formData: FormData) {
   const id = String(formData.get("id") || "");
   const service_id = String(formData.get("service_id") || "");
   if (!id) return;
+
+  const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
+  if (!servico || !podeReagendarServico(servico)) {
+    throw new Error("Este serviço já não pode ter materiais planeados alterados (concluído, cancelado, não realizado ou já faturado).");
+  }
+
   await supabase.from("service_materials_planned").delete().eq("id", id);
   revalidatePath(`/admin/servicos/${service_id}`);
 }

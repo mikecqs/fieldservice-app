@@ -47,6 +47,15 @@ export async function concluirVisita(input: {
   testesRealizados?: string | null;
 }) {
   const supabase = createClient();
+
+  // Materiais chegam de um formulário do técnico como objeto tipado (não
+  // FormData), mas continuam a ser input do cliente — qtd/precoUnit
+  // negativos alimentariam diretamente visits.valor_calculado e, desde o
+  // BLOCO 14, também services.valor. Mesma regra de sinal de criarServico.
+  if (input.materiais.some((m) => !Number.isFinite(m.qtd) || m.qtd < 0 || (m.precoUnit != null && (!Number.isFinite(m.precoUnit) || m.precoUnit < 0)))) {
+    throw new Error("Quantidade e preço unitário dos materiais têm de ser números iguais ou superiores a 0.");
+  }
+
   const { error } = await supabase.rpc("tech_finish_visit", {
     p_visit_id: input.visitId,
     p_resultado: input.resultado,

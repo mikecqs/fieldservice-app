@@ -1,6 +1,7 @@
 -- =============================================================================
 -- FieldService — schema completo para Supabase (Postgres)
--- Multi-tenant: SUPER_ADMIN (tu) > ADMIN (por empresa) > TECHNICIAN (por empresa)
+-- Multi-tenant: SUPER_ADMIN (todas as empresas) > ADMIN (por empresa) >
+-- TECHNICIAN / FINANCE / ATENDIMENTO (acesso restrito, por empresa)
 --
 -- Como usar:
 -- 1. Supabase Dashboard → SQL Editor → cola este ficheiro inteiro → Run.
@@ -30,7 +31,7 @@ create table organizations (
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   organization_id uuid references organizations(id) on delete cascade,
-  role text not null check (role in ('SUPER_ADMIN','ADMIN','TECHNICIAN','FINANCE')),
+  role text not null check (role in ('SUPER_ADMIN','ADMIN','TECHNICIAN','FINANCE','ATENDIMENTO')),
   nome text not null,
   email text not null,
   created_at timestamptz not null default now(),
@@ -86,9 +87,19 @@ create table org_settings (
 -- -----------------------------------------------------------------------------
 -- CLIENTES
 -- -----------------------------------------------------------------------------
+-- Sequência global (não por empresa) para o "código" humano do cliente —
+-- mesmo padrão já usado em budgets.numero (ver mais abaixo). nextval() é
+-- atómico no Postgres, por isso dois inserts em simultâneo nunca colidem;
+-- o valor nunca é reutilizado mesmo que o cliente seja apagado.
+create sequence if not exists clients_codigo_seq;
+
 create table clients (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
+  -- ID humano permanente (CLI-000001, CLI-000002, ...) — só para UI/pesquisa/
+  -- operação; todas as relações continuam a usar sempre o uuid "id".
+  -- "unique" reforça a nível de constraint o que o nextval() já garante.
+  codigo text not null unique default ('CLI-' || lpad(nextval('clients_codigo_seq')::text, 6, '0')),
   nome text not null,
   empresa text,
   nif text,
@@ -139,13 +150,22 @@ grant select, insert, update, delete on client_equipment to authenticated;
 -- -----------------------------------------------------------------------------
 -- PEDIDOS
 -- -----------------------------------------------------------------------------
+create sequence if not exists requests_codigo_seq;
+
 create table requests (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
+  -- ID humano permanente (PED-000001, PED-000002, ...) — mesmo princípio de
+  -- clients.codigo acima.
+  codigo text not null unique default ('PED-' || lpad(nextval('requests_codigo_seq')::text, 6, '0')),
   client_id uuid not null references clients(id) on delete cascade,
+  -- Morada obrigatória em todos os pedidos, sempre da morada do próprio
+  -- cliente (client_addresses já é filtrada por client_id no formulário e
+  -- validada no servidor) — nunca a de outro cliente.
+  address_id uuid not null references client_addresses(id),
   tipo text not null,
   descricao text not null,
-  origem text,
+  origem text not null check (origem in ('Telefone','Loja','Email','Outro')),
   info_falta boolean not null default false,
   estado text not null default 'novo' check (estado in ('novo','orcamento','convertido','arquivado')),
   created_at timestamptz not null default now(),
@@ -194,9 +214,15 @@ create table budget_events (
 
 alter table budget_events enable row level security;
 
-create policy "admin manages budget_events" on budget_events for all
-  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+-- Histórico aditivo — só SELECT/INSERT, nunca UPDATE/DELETE (nem para
+-- ADMIN/SUPER_ADMIN). Antes era uma única policy "for all", que permitia
+-- UPDATE/DELETE via RLS (o grant já abaixo só dava select/insert, mas a
+-- policy em si estava errada — corrigido aqui para as duas nunca poderem
+-- divergir outra vez).
+create policy "admin reads budget_events" on budget_events for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts budget_events" on budget_events for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 create policy "finance reads budget_events" on budget_events for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
@@ -356,7 +382,8 @@ create table service_events (
   service_id uuid not null references services(id) on delete cascade,
   tipo text not null check (tipo in (
     'criado','agendado','reagendado','iniciado','concluido','nova_visita',
-    'nao_realizado','correcao_pedida','corrigido','validado','faturado'
+    'nao_realizado','correcao_pedida','corrigido','validado','faturado',
+    'cancelado','reativado'
   )),
   descricao text not null,
   utilizador uuid references profiles(id),
@@ -447,13 +474,25 @@ create policy "org members can read colleagues"
   on profiles for select
   using (organization_id = my_org());
 
+-- Nota de segurança: o "with check" restringe explicitamente a role a
+-- ADMIN/TECHNICIAN/FINANCE — um ADMIN nunca pode criar nem promover um
+-- perfil (incluindo o próprio) para SUPER_ADMIN por esta via. Isto é
+-- imposto aqui na RLS, não só na Server Action de app/admin/utilizadores.
 create policy "admin can manage profiles in own org"
-  on profiles for insert with check (my_role() = 'ADMIN' and organization_id = my_org());
+  on profiles for insert
+  with check (
+    my_role() = 'ADMIN'
+    and organization_id = my_org()
+    and role in ('ADMIN','TECHNICIAN','FINANCE')
+  );
 
 create policy "admin can update profiles in own org"
   on profiles for update
   using (my_role() = 'ADMIN' and organization_id = my_org())
-  with check (organization_id = my_org());
+  with check (
+    organization_id = my_org()
+    and role in ('ADMIN','TECHNICIAN','FINANCE')
+  );
 
 -- ---------------------------------------------------------------------------
 -- HELPER genérico: policy "admin gere tudo na própria empresa" para as
@@ -493,6 +532,55 @@ create policy "admin manages requests" on requests for all
 create policy "finance reads requests" on requests for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
 
+-- ---------------------------------------------------------------------------
+-- ATENDIMENTO — role de loja física (substitui os pedidos em papel).
+-- Só pode criar clientes/moradas/pedidos e ler o que existe na própria
+-- empresa; nunca tem UPDATE/DELETE nestas tabelas (decisões como converter
+-- em orçamento ou arquivar continuam exclusivas do ADMIN/SUPER_ADMIN) e não
+-- tem policy nenhuma em budgets/services/purchases/faturação — sem policy
+-- de select numa tabela com RLS ativo, a tabela fica invisível para essa
+-- role, mesmo que a query da app tente lê-la, ou alguém navegue direto para
+-- um URL /admin/*. A área /atendimento/* nem sequer faz essas queries, mas
+-- a barreira real está aqui.
+-- ---------------------------------------------------------------------------
+create policy "atendimento reads clients" on clients for select
+  using (organization_id = my_org() and my_role() = 'ATENDIMENTO');
+create policy "atendimento creates clients" on clients for insert
+  with check (organization_id = my_org() and my_role() = 'ATENDIMENTO');
+
+create policy "atendimento reads client_addresses" on client_addresses for select
+  using (organization_id = my_org() and my_role() = 'ATENDIMENTO');
+create policy "atendimento creates client_addresses" on client_addresses for insert
+  with check (organization_id = my_org() and my_role() = 'ATENDIMENTO');
+
+create policy "atendimento reads requests" on requests for select
+  using (organization_id = my_org() and my_role() = 'ATENDIMENTO');
+create policy "atendimento creates requests" on requests for insert
+  with check (organization_id = my_org() and my_role() = 'ATENDIMENTO');
+
+-- View segura para o ATENDIMENTO acompanhar o estado operacional de um
+-- pedido (ex: "orçamento enviado", "serviço agendado") sem nunca lhe dar
+-- acesso às tabelas budgets/services em si — só os dois campos `estado`,
+-- nunca valor, iva, materiais ou faturação. Mesmo princípio já usado em
+-- services_technician_view: a view corre com os privilégios do dono (não
+-- do chamador), por isso consegue ler budgets/services mesmo o Atendimento
+-- não tendo policy nenhuma nessas tabelas — mas o próprio corpo da view
+-- filtra sempre por organização e por role, nunca expondo dados de outra
+-- empresa. A app do lado do cliente reutiliza sempre a mesma função de
+-- rótulo (estadoOperacionalPedido, em lib/pedido-estado.ts) que já é usada
+-- pelo Admin — nunca um segundo sistema de estado.
+create view requests_status_atendimento_view as
+select
+  r.id as request_id,
+  b.estado as orcamento_estado,
+  s.estado as servico_estado
+from requests r
+left join budgets b on b.request_id = r.id
+left join services s on s.request_id = r.id
+where r.organization_id = my_org() and my_role() = 'ATENDIMENTO';
+
+grant select on requests_status_atendimento_view to authenticated;
+
 -- budgets / budget_items
 create policy "admin manages budgets" on budgets for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
@@ -518,11 +606,19 @@ create policy "admin manages purchase_items" on purchase_items for all
 -- service_validations: só Admin/Super Admin validam ou rejeitam — o técnico
 -- não tem nenhuma policy aqui (nem sequer de leitura); o motivo da rejeição
 -- mais recente chega-lhe só pela coluna motivo_correcao da view segura.
-create policy "admin manages service_validations" on service_validations for all
-  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+-- Histórico aditivo — só SELECT/INSERT, nunca UPDATE/DELETE (nem para
+-- ADMIN/SUPER_ADMIN); as próprias validações/rejeições continuam a ser
+-- escritas sempre pelas RPCs finance_validar_servico/finance_rejeitar_servico
+-- (SECURITY DEFINER), nunca por um insert direto do Admin — a policy de
+-- insert aqui é só para essas RPCs terem grant, não para uso direto na app.
+create policy "admin reads service_validations" on service_validations for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts service_validations" on service_validations for insert
   with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 create policy "finance reads service_validations" on service_validations for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
+
+grant select, insert on service_validations to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- SERVICES — acesso completo (incluindo valor/faturação) só para ADMIN/SUPER_ADMIN.
@@ -586,9 +682,11 @@ create policy "technician inserts visit on own service" on visits for insert
     )
   );
 
-create policy "technician updates own open visit" on visits for update
-  using (created_by = auth.uid())
-  with check (created_by = auth.uid());
+-- Sem policy de UPDATE para o técnico (propositadamente): fechar/alterar
+-- uma visita passa sempre pela RPC tech_finish_visit (SECURITY DEFINER),
+-- nunca por um UPDATE direto do técnico a esta tabela — evita reabrir ou
+-- editar uma visita já fechada, ou mexer em valor_calculado, por fora da
+-- RPC. Só SELECT (acima) e INSERT (abaixo) continuam disponíveis.
 
 -- visit_materials_used / visit_photos: seguem a visita
 create policy "admin manages visit_materials_used" on visit_materials_used for all
@@ -597,8 +695,13 @@ create policy "admin manages visit_materials_used" on visit_materials_used for a
       select 1 from visits v where v.id = visit_id and v.organization_id = my_org()
     ) and my_role() in ('ADMIN','SUPER_ADMIN')
   );
-create policy "technician manages own visit materials" on visit_materials_used for all
-  using (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()))
+-- Sem UPDATE/DELETE para o técnico (mesma correção do BLOCO 5 para
+-- `visits`, aplicada aqui — tinha ficado por fazer): materiais usados só
+-- entram via tech_finish_visit (SECURITY DEFINER), nunca por edição direta
+-- de uma visita já fechada. Só SELECT e INSERT ficam disponíveis.
+create policy "technician selects own visit materials used" on visit_materials_used for select
+  using (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()));
+create policy "technician inserts own visit materials used" on visit_materials_used for insert
   with check (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()));
 
 create policy "admin manages visit_photos" on visit_photos for all
@@ -606,8 +709,10 @@ create policy "admin manages visit_photos" on visit_photos for all
     exists (select 1 from visits v where v.id = visit_id and v.organization_id = my_org())
     and my_role() in ('ADMIN','SUPER_ADMIN')
   );
-create policy "technician manages own visit photos" on visit_photos for all
-  using (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()))
+-- Mesma correção: sem UPDATE/DELETE para o técnico, só SELECT e INSERT.
+create policy "technician selects own visit photos" on visit_photos for select
+  using (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()));
+create policy "technician inserts own visit photos" on visit_photos for insert
   with check (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()));
 
 -- =============================================================================
@@ -841,6 +946,7 @@ declare
   v_service_id uuid;
   v_org_id uuid;
   v_tipo text;
+  v_estado_servico text;
   v_novo_estado text;
   v_valor_hora numeric;
   v_horas numeric;
@@ -861,14 +967,26 @@ begin
     end if;
   end if;
 
+  -- 'hora_fim_real is null' garante que a visita ainda está aberta — uma
+  -- segunda chamada (retry de rede, duplo clique fora do disabled do
+  -- botão, ou uma chamada direta à RPC) já não encontra a visita e aborta
+  -- aqui, antes de duplicar materiais/fotos/eventos ou reabrir um serviço
+  -- já validado/faturado.
   select service_id into v_service_id from visits
-  where id = p_visit_id and created_by = auth.uid();
+  where id = p_visit_id and created_by = auth.uid() and hora_fim_real is null;
 
   if v_service_id is null then
-    raise exception 'Visita não encontrada ou não pertence a este técnico.';
+    raise exception 'Visita não encontrada, já fechada, ou não pertence a este técnico.';
   end if;
 
-  select organization_id, tipo into v_org_id, v_tipo from services where id = v_service_id;
+  select organization_id, tipo, estado into v_org_id, v_tipo, v_estado_servico from services where id = v_service_id;
+
+  -- Reforço adicional: o serviço tem mesmo de estar 'em_curso' (só chega lá
+  -- via tech_start_service). Cobre o caso raro de o serviço ter mudado de
+  -- estado por outra via entre o início e o fecho da visita.
+  if v_estado_servico != 'em_curso' then
+    raise exception 'Este serviço já não está em curso — não é possível fechar esta visita.';
+  end if;
 
   if p_resultado = 'concluido' then
     if p_mao_obra_tipo is null or length(trim(p_mao_obra_tipo)) = 0 then
@@ -920,9 +1038,20 @@ begin
   select p_visit_id, unnest(p_fotos);
 
   -- valor calculado do serviço: materiais (qtd × preço) + mão de obra
-  -- (horas × taxa/hora da empresa) — só informativo para o Admin durante a
-  -- validação; nunca substitui services.valor sozinho, isso continua a ser
-  -- decisão do Admin no fecho de faturação.
+  -- (horas × taxa/hora da empresa) — continua só informativo para o Admin
+  -- durante a validação; nunca substitui um services.valor já definido
+  -- (por orçamento aceite ou introduzido manualmente em "Novo Serviço"),
+  -- isso continua a ser decisão do Admin no fecho de faturação.
+  --
+  -- BLOCO 14 — única exceção, deliberada: quando services.valor ainda está
+  -- no valor por omissão (0). É sempre o caso de um serviço criado
+  -- diretamente a partir de um Pedido tipo "Agendamento" ou do popup
+  -- "criar novo" da Agenda — nenhum dos dois fluxos tem campo de preço,
+  -- por isso nunca há nada para "substituir": é a primeira vez que existe
+  -- um valor real (nunca inventado, é sempre materiais+mão de obra
+  -- efetivamente registados pelo técnico) para gravar. Um serviço vindo de
+  -- orçamento aceite nunca tem valor exatamente 0 (vem de
+  -- calcularOrcamento), por isso nunca é afetado por este update.
   if p_resultado = 'concluido' then
     select coalesce(sum((item->>'qtd')::numeric * (item->>'preco_unit')::numeric), 0)
       into v_valor_materiais
@@ -937,6 +1066,10 @@ begin
     v_valor_mao_obra := v_horas * coalesce(v_valor_hora, 0);
 
     update visits set valor_calculado = v_valor_materiais + v_valor_mao_obra where id = p_visit_id;
+
+    update services
+      set valor = v_valor_materiais + v_valor_mao_obra
+      where id = v_service_id and valor = 0;
   end if;
 
   -- 'concluido' fica a aguardar validação do Admin antes de ir para

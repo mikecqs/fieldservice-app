@@ -5,7 +5,7 @@ import { NovoPedidoForm } from "@/components/pedidos/NovoPedidoForm";
 const TIPOS = ["Agendamento", "Orçamento", "Manutenção", "Instalação"];
 const ORIGENS = ["Telefone", "Loja", "Email", "Outro"];
 
-export default async function NovoPedidoPage({ searchParams }: { searchParams: { clientId?: string } }) {
+export default async function AtendimentoNovoPedidoPage() {
   const supabase = createClient();
 
   const { data: clients } = await supabase
@@ -15,7 +15,7 @@ export default async function NovoPedidoPage({ searchParams }: { searchParams: {
 
   return (
     <div className="mx-auto max-w-lg">
-      <Link href="/admin/pedidos" className="mb-4 inline-block text-sm text-neutral-400 hover:text-neutral-100">
+      <Link href="/atendimento/pedidos" className="mb-4 inline-block text-sm text-neutral-400 hover:text-neutral-100">
         ← Pedidos
       </Link>
       <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
@@ -24,11 +24,8 @@ export default async function NovoPedidoPage({ searchParams }: { searchParams: {
           clientesIniciais={(clients ?? []) as any}
           tipos={TIPOS}
           origens={ORIGENS}
-          showInfoFalta
-          voltarHref="/admin/pedidos"
-          // Vindo de "Novo cliente → Sim, criar pedido" (BLOCO 4): o cliente
-          // já chega selecionado, sem o Admin ter de o procurar outra vez.
-          clientIdInicial={searchParams.clientId}
+          showInfoFalta={false}
+          voltarHref="/atendimento/pedidos"
         />
       </div>
     </div>

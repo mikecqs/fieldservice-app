@@ -43,3 +43,13 @@ export function estadoOperacionalPedido(
   }
   return { label: "Novo", cls: "bg-neutral-800 text-neutral-200" };
 }
+
+// Um pedido só pode ser decidido (arquivado, ou convertido em orçamento/
+// serviço) enquanto ainda estiver 'novo' — depois de já ter seguido para
+// orçamento ou serviço, repetir a ação criaria um orçamento/serviço órfão
+// duplicado (mesma classe de problema já corrigida no BLOCO 6 para
+// orçamentos aceites duas vezes). Mesmo espírito de lib/servico-estado.ts,
+// lib/orcamento-estado.ts e lib/compra-estado.ts.
+export function podeDecidirPedido(pedido: { estado: string }): boolean {
+  return pedido.estado === "novo";
+}

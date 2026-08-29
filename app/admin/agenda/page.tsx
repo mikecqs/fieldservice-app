@@ -4,6 +4,7 @@ import { getOrgId } from "@/lib/auth";
 import { ESTADO_LABEL } from "../servicos/estados";
 import { toISO, parseISO, addDays, mondayOf, monthGridRange, MESES } from "@/lib/agenda-dates";
 import { calcularPreparacao, type NivelPreparacao } from "@/lib/preparacao";
+import { ESTADOS_SERVICO_POR_AGENDAR } from "@/lib/operacional";
 import { AgendaClient } from "./AgendaClient";
 import type { ServicoAgenda } from "./ServicoModal";
 
@@ -40,7 +41,7 @@ export default async function AgendaPage({
     supabase
       .from("services")
       .select(
-        "id, tipo, descricao, estado, prioridade, notas, client_id, data_agendada, hora_agendada, hora_fim_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id, profiles(nome))"
+        "id, tipo, descricao, estado, faturacao_estado, prioridade, notas, client_id, data_agendada, hora_agendada, hora_fim_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id, profiles(nome))"
       )
       .gte("data_agendada", toISO(desde))
       .lte("data_agendada", toISO(ate))
@@ -50,7 +51,7 @@ export default async function AgendaPage({
       .from("services")
       .select("id, tipo, descricao, estado, client_id, clients(nome)")
       .is("data_agendada", null)
-      .in("estado", ["por_agendar", "nova_visita"])
+      .in("estado", ESTADOS_SERVICO_POR_AGENDAR)
       .order("created_at", { ascending: false }),
     supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
     supabase.from("clients").select("id, nome").eq("organization_id", organizationId).order("nome"),

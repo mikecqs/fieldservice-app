@@ -13,6 +13,9 @@ export async function guardarConfiguracoes(formData: FormData) {
     .map((t) => t.trim())
     .filter(Boolean);
   const followup_dias_default = Number(formData.get("followup_dias_default") || 3);
+  if (!Number.isFinite(followup_dias_default) || followup_dias_default < 0) {
+    throw new Error("Os dias de follow-up têm de ser um número igual ou superior a 0.");
+  }
 
   await supabase
     .from("org_settings")

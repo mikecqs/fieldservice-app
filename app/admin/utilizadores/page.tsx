@@ -1,6 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { criarUtilizador } from "./actions";
 
+// ATENDIMENTO pode aparecer aqui em modo só-leitura (a policy "org members
+// can read colleagues" deixa qualquer perfil da empresa ver os colegas) —
+// mas o Admin nunca o consegue criar: o <select> abaixo só oferece
+// TECHNICIAN/ADMIN/FINANCE, e a policy "admin can manage profiles in own
+// org" em schema.sql rejeita qualquer tentativa de insert/update com
+// role='ATENDIMENTO', mesmo por fora desta página.
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Admin",
+  FINANCE: "Financeiro",
+  TECHNICIAN: "Técnico",
+  ATENDIMENTO: "Atendimento",
+};
+
 export default async function UtilizadoresPage() {
   const supabase = createClient();
   const { data: utilizadores } = await supabase
@@ -37,7 +50,7 @@ export default async function UtilizadoresPage() {
         {(utilizadores ?? []).map((u: any) => (
           <div key={u.id} className="flex items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3.5 text-sm">
             <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-200">
-              {u.role === "ADMIN" ? "Admin" : u.role === "FINANCE" ? "Financeiro" : "Técnico"}
+              {ROLE_LABEL[u.role] ?? u.role}
             </span>
             <span className="font-medium text-neutral-100">{u.nome}</span>
             <span className="text-neutral-500">{u.email}</span>

@@ -13,6 +13,11 @@ export async function marcarFaturado(formData: FormData) {
   const faturacao_valor = Number(formData.get("faturacao_valor") || 0);
   const faturacao_referencia = String(formData.get("faturacao_referencia") || "");
   if (!id) return;
+  // Mesma validação de sinal do valor de criarServico (BLOCO 14/15) — a RPC
+  // valida permissão e estado, mas não o sinal do valor recebido.
+  if (!Number.isFinite(faturacao_valor) || faturacao_valor < 0) {
+    throw new Error("O valor de faturação tem de ser um número igual ou superior a 0.");
+  }
 
   const { error } = await supabase.rpc("finance_marcar_faturado", {
     p_service_id: id,

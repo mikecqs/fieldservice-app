@@ -47,6 +47,13 @@ export async function importarCatalogo(formData: FormData) {
 
   if (items.length === 0) throw new Error("Nenhuma linha válida encontrada no ficheiro.");
 
+  // Nunca aceitar preços negativos do ficheiro importado — em vez de
+  // silenciosamente zerar ou ignorar a linha (que esconderia um erro no
+  // ficheiro de origem), rejeita a importação toda com uma mensagem clara.
+  if (items.some((it) => it.preco_venda < 0)) {
+    throw new Error("O ficheiro tem preços negativos — corrige o ficheiro e importa novamente.");
+  }
+
   const { error } = await supabase.from("catalog_items").upsert(items, { onConflict: "organization_id,referencia" });
   if (error) throw new Error(error.message);
 

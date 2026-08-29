@@ -6,8 +6,8 @@ aplicadas na base de dados, não só na interface.
 ## O que já está feito e a funcionar
 
 - **Autenticação real** via Supabase Auth (login por email/password).
-- **3 papéis com acesso separado ao nível do servidor** (`middleware.ts` +
-  RLS): `SUPER_ADMIN`, `ADMIN`, `TECHNICIAN`.
+- **4 papéis com acesso separado ao nível do servidor** (`requireRole()` nos
+  layouts + RLS): `SUPER_ADMIN`, `ADMIN`, `TECHNICIAN`, `FINANCE`.
 - **Super Admin** (`/super-admin`): criar empresas novas e o primeiro Admin
   de cada uma.
 - **Admin** (`/admin/*`): dashboard com números reais, e módulo de
@@ -84,8 +84,12 @@ sai (Sair) → entra com esse login de Admin para testares o fluxo normal.
 ## Sobre a arquitetura de acessos (resumo)
 
 - **Middleware** (`middleware.ts`): corre no servidor antes de qualquer
-  página. Bloqueia `/admin/*` a quem não é ADMIN/SUPER_ADMIN, `/tecnico/*`
-  a quem não é TECHNICIAN, e `/super-admin` a quem não é SUPER_ADMIN.
+  página, mas só verifica se existe sessão (cookie) — redireciona para
+  `/login` quem não tem sessão nenhuma. A validação real da role de cada
+  utilizador é feita por `requireRole()` (`lib/auth.ts`), chamada nos
+  `layout.tsx` de `/admin`, `/tecnico`, `/super-admin` e `/financeiro`, que
+  correm em Node.js normal e confirmam a role em `profiles` antes de
+  deixar passar.
 - **RLS** (dentro do `schema.sql`): mesmo que o middleware falhasse, a
   própria base de dados recusa devolver ou aceitar dados fora do que cada
   papel pode ver. É a barreira que conta a sério.

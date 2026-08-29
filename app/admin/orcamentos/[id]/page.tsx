@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
 import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento, atualizarIva } from "../actions";
 import { AdicionarItemForm } from "./AdicionarItemForm";
+import { ESTADOS_ORCAMENTO_TERMINAIS } from "@/lib/orcamento-estado";
 
 const TIPO_LABEL: Record<string, string> = {
   materiais: "Materiais",
@@ -50,7 +51,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
           </span>
         </div>
         <p className="text-xs text-neutral-500">Criado {orcamento.criado_em}</p>
-        {orcamento.followup_em && orcamento.estado !== "aceite" && orcamento.estado !== "recusado" && orcamento.estado !== "cancelado" && (
+        {orcamento.followup_em && !ESTADOS_ORCAMENTO_TERMINAIS.includes(orcamento.estado) && (
           <p className="mt-1 text-xs text-amber-400">Follow-up agendado para {orcamento.followup_em}</p>
         )}
 
@@ -83,7 +84,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
           )}
         </div>
 
-        {orcamento.estado !== "aceite" && orcamento.estado !== "cancelado" && (
+        {!ESTADOS_ORCAMENTO_TERMINAIS.includes(orcamento.estado) && (
           <div className="mt-4 flex flex-wrap gap-2">
             {orcamento.estado === "rascunho" && (
               <form action={marcarEnviado}>

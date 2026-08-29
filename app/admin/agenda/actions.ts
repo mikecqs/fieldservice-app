@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
+import { podeReagendarServico, deveTransicionarParaAgendado } from "@/lib/servico-estado";
 
 // Ação única usada pelo popup da Agenda — cobre os dois modos do modal
 // (agendar um serviço já existente, ou criar um serviço novo já agendado,
@@ -27,19 +28,35 @@ export async function criarOuAgendarNoPopup(input: {
   if (!input.data || !input.horaInicio || !input.horaFim) {
     throw new Error("Hora de início e hora de fim são ambas obrigatórias para agendar.");
   }
+  // Mesma regra já aplicada em reativarServico/atualizarAgendamento — nunca
+  // duas versões divergentes da mesma validação entre os caminhos de
+  // agendamento (BLOCO 18).
+  if (input.horaFim <= input.horaInicio) {
+    throw new Error("A hora de término deve ser depois da hora de início.");
+  }
 
   let serviceId = input.existingServiceId || null;
 
   if (serviceId) {
-    const { data: current } = await supabase.from("services").select("estado, data_agendada").eq("id", serviceId).single();
+    const { data: current } = await supabase
+      .from("services")
+      .select("estado, data_agendada, faturacao_estado")
+      .eq("id", serviceId)
+      .single();
     if (!current) throw new Error("Serviço não encontrado.");
+
+    // Mesma regra de app/admin/servicos/actions.ts (atualizarAgendamento) —
+    // nunca duas versões diferentes desta validação (auditoria BLOCO 5).
+    if (!podeReagendarServico(current)) {
+      throw new Error("Este serviço já não pode ser reagendado (concluído, cancelado, não realizado ou já faturado).");
+    }
 
     const update: Record<string, unknown> = {
       data_agendada: input.data,
       hora_agendada: input.horaInicio,
       hora_fim_agendada: input.horaFim,
     };
-    if (current.estado === "por_agendar" || current.estado === "nova_visita") update.estado = "agendado";
+    if (deveTransicionarParaAgendado(current.estado)) update.estado = "agendado";
 
     await supabase.from("services").update(update).eq("id", serviceId);
     await registarEventoServico(supabase, {

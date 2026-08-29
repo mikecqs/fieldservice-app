@@ -1,114 +1,373 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { calcularPreparacao, PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
+import { getOrgId } from "@/lib/auth";
+import { getFinanceiroStats, formatEuros } from "@/lib/financeiro";
+import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
+import { toISO, addDays, nowTimeHHMMSS, startOfLocalDayUTC } from "@/lib/agenda-dates";
+import { estaAtrasado, orcamentoPrecisaFollowup, ESTADOS_SERVICO_POR_AGENDAR } from "@/lib/operacional";
 
-// Nenhuma destas queries filtra explicitamente por organization_id — não
-// precisa: a RLS definida em schema.sql já garante que um Admin só consegue
-// ler linhas da sua própria empresa. Isto é o que torna impossível "esquecer"
-// um filtro e vazar dados de outra empresa nalguma página futura.
+// Estados que já não fazem parte do trabalho "por realizar" de hoje — o
+// técnico já não vai voltar a mexer no serviço no âmbito do dia agendado.
+const ESTADOS_TERMINAIS_HOJE = ["concluido", "aguarda_validacao", "nova_visita", "nao_realizado", "cancelado"];
+
+// Dashboard Admin = Central Operacional. Todas as queries reutilizam
+// exatamente os mesmos estados/eventos já usados em Atenção, Agenda e
+// Financeiro — não existe aqui nenhum sistema de alertas novo, só leituras
+// específicas dos mesmos dados para o recorte "hoje + o que precisa de
+// ação". Nenhuma query filtra organization_id explicitamente (exceto onde
+// já era assim no resto do Admin) porque a RLS de cada tabela já garante o
+// isolamento por empresa.
 export default async function DashboardPage() {
   const supabase = createClient();
-  const hoje = new Date().toISOString().slice(0, 10);
-  const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const organizationId = await getOrgId();
 
-  const [{ count: hojeCount }, { data: porFaturar }, { count: pedidosNovos }, { count: orcamentosAbertos }, { data: servicosAmanha }, { data: comprasPendentes }] =
-    await Promise.all([
-      supabase.from("services").select("id", { count: "exact", head: true }).eq("data_agendada", hoje),
-      supabase.from("services").select("valor").eq("estado", "concluido").eq("faturacao_estado", "por_faturar"),
-      supabase.from("requests").select("id", { count: "exact", head: true }).eq("estado", "novo"),
-      supabase.from("budgets").select("id", { count: "exact", head: true }).in("estado", ["enviado", "aguarda_resposta", "followup"]),
-      supabase
-        .from("services")
-        .select(
-          "id, tipo, descricao, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id), hora_agendada"
-        )
-        .eq("data_agendada", amanha)
-        .not("estado", "in", "(cancelado,concluido,nao_realizado)"),
-      supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
-    ]);
+  const agora = new Date();
+  // Data/hora sempre locais (nunca toISOString(), que é UTC) — para o dia
+  // operacional bater sempre certo com a Atenção e a Agenda perto da meia-
+  // noite. Mesmos critérios de sempre, só a base de data/hora é partilhada.
+  const hoje = toISO(agora);
+  const amanha = toISO(addDays(agora, 1));
+  const agoraHora = nowTimeHHMMSS(agora);
 
-  const totalPorFaturar = (porFaturar ?? []).reduce((acc, s) => acc + (s.valor ?? 0), 0);
+  const [
+    { data: servicosHojeRaw },
+    { count: concluidosHojeCount },
+    { count: pedidosNovos },
+    { data: orcamentosAbertos },
+    { data: settings },
+    { data: tecnicos },
+    { data: porAgendar },
+    { data: aguardaValidacao },
+    { data: porFaturarRows },
+    financeiroHoje,
+  ] = await Promise.all([
+    supabase
+      .from("services")
+      .select(
+        "id, tipo, descricao, estado, prioridade, hora_agendada, hora_fim_agendada, clients(nome), service_technicians(user_id, profiles(nome))"
+      )
+      .eq("data_agendada", hoje)
+      .order("hora_agendada"),
+    // "Concluído hoje" vem do histórico de eventos (service_events), não do
+    // estado atual — assim um serviço agendado para outro dia mas fechado
+    // hoje conta corretamente, e um serviço de hoje que entretanto voltou
+    // para "correção necessária" deixa de contar (o evento fica no
+    // histórico, mas o resumo do dia reflete a situação real).
+    supabase
+      .from("service_events")
+      .select("id", { count: "exact", head: true })
+      .eq("tipo", "concluido")
+      // created_at é timestamptz — usar o instante UTC correspondente à
+      // meia-noite LOCAL (startOfLocalDayUTC), não a string "hoje" (que
+      // seria lida como meia-noite UTC e desalinharia perto da virada do
+      // dia local).
+      .gte("created_at", startOfLocalDayUTC(agora))
+      .lt("created_at", startOfLocalDayUTC(addDays(agora, 1))),
+    supabase.from("requests").select("id", { count: "exact", head: true }).eq("estado", "novo"),
+    supabase
+      .from("budgets")
+      .select("id, estado, enviado_em, followup_em, clients(nome)")
+      .in("estado", ["enviado", "aguarda_resposta", "followup"]),
+    supabase.from("org_settings").select("followup_dias_default").eq("organization_id", organizationId).single(),
+    supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
+    // Mesmo critério já usado na Agenda para "Pendentes de agendamento"
+    // (ESTADOS_SERVICO_POR_AGENDAR, em lib/operacional.ts).
+    supabase
+      .from("services")
+      .select("id, tipo, descricao, clients(nome)")
+      .is("data_agendada", null)
+      .in("estado", ESTADOS_SERVICO_POR_AGENDAR)
+      .order("created_at", { ascending: false }),
+    // Mesmo critério já usado em Atenção para "OS concluída — aguarda validação".
+    supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "aguarda_validacao"),
+    // Só para a lista/contagem de "Ação necessária" — o valor total (€) vem
+    // sempre de getFinanceiroStats abaixo, nunca recalculado aqui.
+    supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "concluido").eq("faturacao_estado", "por_faturar"),
+    // Única fonte de verdade para valores financeiros (ver lib/financeiro.ts)
+    // — chamado com desde=ate=hoje: totalFaturado fica filtrado a hoje,
+    // totalPorFaturar é sempre o backlog atual (não depende do intervalo).
+    getFinanceiroStats(supabase, hoje, hoje),
+  ]);
 
-  const stats = [
-    { label: "Agendado para hoje", value: hojeCount ?? 0 },
-    { label: "Por faturar", value: totalPorFaturar.toLocaleString("pt-PT", { style: "currency", currency: "EUR" }) },
-    { label: "Pedidos novos", value: pedidosNovos ?? 0 },
-    { label: "Orçamentos em aberto", value: orcamentosAbertos ?? 0 },
-  ];
+  const servicosHoje = (servicosHojeRaw ?? []) as any[];
 
-  const materialPendentePorServico = new Set((comprasPendentes ?? []).map((c: any) => c.service_id));
-  const amanhaComPreparacao = (servicosAmanha ?? []).map((s: any) => ({
-    ...s,
-    preparacao: calcularPreparacao({
-      temTecnico: (s.service_technicians ?? []).length > 0,
-      morada: s.client_addresses?.endereco,
-      temContacto: !!(s.clients?.telefone || s.clients?.email),
-      descricao: s.descricao,
-      dataAgendada: amanha,
-      horaAgendada: s.hora_agendada,
-      materialBloqueando: materialPendentePorServico.has(s.id),
-    }),
-  }));
-  const preparados = amanhaComPreparacao.filter((s) => s.preparacao.nivel === "preparada");
-  const infoFalta = amanhaComPreparacao.filter((s) => s.preparacao.nivel === "info_falta");
-  const bloqueados = amanhaComPreparacao.filter((s) => s.preparacao.nivel === "bloqueada");
+  // --- Resumo do dia ---------------------------------------------------
+  const agendadosHoje = servicosHoje.length;
+  const pendentesHoje = servicosHoje.filter((s) => !ESTADOS_TERMINAIS_HOJE.includes(s.estado));
+  const concluidosHojeDoAgendamento = servicosHoje.filter((s) => s.estado === "concluido" || s.estado === "aguarda_validacao").length;
+  const naoAgendadosCancelados = servicosHoje.filter((s) => s.estado === "cancelado").length;
+
+  // --- Ação necessária ---------------------------------------------------
+  // Técnico atrasado: mesmo critério de "Técnico atrasado" em Atenção
+  // (estaAtrasado, em lib/operacional.ts) — serviço de hoje ainda
+  // "agendado" (nunca iniciado) cuja hora já passou.
+  const tecnicosAtrasados = servicosHoje.filter((s) => estaAtrasado(s, agoraHora));
+
+  const semTecnicoHoje = servicosHoje.filter(
+    (s) => !ESTADOS_TERMINAIS_HOJE.includes(s.estado) && (s.service_technicians ?? []).length === 0
+  );
+
+  const followupDias = settings?.followup_dias_default ?? 3;
+  const orcamentosComEstado = (orcamentosAbertos ?? []).map((o: any) => {
+    // Mesma lógica de "orçamento parado" já usada em Atenção
+    // (orcamentoPrecisaFollowup, em lib/operacional.ts).
+    const vencido = orcamentoPrecisaFollowup(o, hoje, followupDias);
+    const venceHoje = o.followup_em === hoje;
+    return { ...o, vencido, venceHoje };
+  });
+  const followupsHoje = orcamentosComEstado.filter((o) => o.venceHoje);
+  const followupsAtrasados = orcamentosComEstado.filter((o) => o.vencido && !o.venceHoje);
+
+  type AcaoItem = { id: string; texto: string; href: string };
+  type AcaoGrupo = { titulo: string; itens: AcaoItem[] };
+
+  const grupos: AcaoGrupo[] = [
+    {
+      titulo: "Técnico atrasado",
+      itens: tecnicosAtrasados.map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — previsto para as ${s.hora_agendada?.slice(0, 5)}${
+          (s.service_technicians ?? []).map((t: any) => t.profiles?.nome).filter(Boolean).length
+            ? ` (${(s.service_technicians ?? []).map((t: any) => t.profiles?.nome).filter(Boolean).join(", ")})`
+            : ""
+        }, ainda não iniciado`,
+        href: `/admin/servicos/${s.id}`,
+      })),
+    },
+    {
+      titulo: "Serviços por agendar",
+      itens: (porAgendar ?? []).map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — ${s.tipo}${s.descricao ? `: ${s.descricao}` : ""}`,
+        href: `/admin/servicos/${s.id}`,
+      })),
+    },
+    {
+      titulo: "Serviços de hoje sem técnico atribuído",
+      itens: semTecnicoHoje.map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — ${s.tipo}${s.hora_agendada ? ` às ${s.hora_agendada.slice(0, 5)}` : ""}`,
+        href: `/admin/servicos/${s.id}`,
+      })),
+    },
+    {
+      titulo: "Aguarda validação",
+      itens: (aguardaValidacao ?? []).map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — ${s.descricao}`,
+        href: "/admin/faturacao",
+      })),
+    },
+    {
+      titulo: "Validado — por faturar",
+      itens: (porFaturarRows ?? []).map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — ${s.descricao}`,
+        href: "/admin/faturacao",
+      })),
+    },
+    {
+      titulo: "Follow-up de orçamento — hoje",
+      itens: followupsHoje.map((o: any) => ({
+        id: o.id,
+        texto: `${o.clients?.nome} — enviado ${o.enviado_em ?? "—"}`,
+        href: `/admin/orcamentos/${o.id}`,
+      })),
+    },
+    {
+      titulo: "Follow-up de orçamento — atrasado",
+      itens: followupsAtrasados.map((o: any) => ({
+        id: o.id,
+        texto: `${o.clients?.nome} — enviado ${o.enviado_em ?? "—"}`,
+        href: `/admin/orcamentos/${o.id}`,
+      })),
+    },
+  ].filter((g) => g.itens.length > 0);
+
+  const totalAcoes = grupos.reduce((acc, g) => acc + g.itens.length, 0);
+
+  // --- Estado dos técnicos hoje -------------------------------------------
+  const tecnicosHoje = (tecnicos ?? []).map((t: any) => {
+    const servicosDoTecnico = servicosHoje
+      .filter((s) => (s.service_technicians ?? []).some((st: any) => st.user_id === t.id))
+      .sort((a, b) => (a.hora_agendada ?? "99:99").localeCompare(b.hora_agendada ?? "99:99"));
+
+    const emCurso = servicosDoTecnico.find((s) => s.estado === "em_curso");
+    const atrasado = servicosDoTecnico.find((s) => estaAtrasado(s, agoraHora));
+    const atual = emCurso ?? atrasado ?? servicosDoTecnico.find((s) => s.estado === "agendado") ?? null;
+    const proximo =
+      servicosDoTecnico.find(
+        (s) => s.id !== atual?.id && s.estado === "agendado" && (!atual?.hora_agendada || (s.hora_agendada ?? "") > atual.hora_agendada)
+      ) ?? null;
+
+    return { tecnico: t, atual, proximo, atrasado: Boolean(atrasado), totalHoje: servicosDoTecnico.length };
+  });
+
+  // --- Progresso do dia ----------------------------------------------------
+  const totalParaProgresso = agendadosHoje - naoAgendadosCancelados;
+  const progressoConcluido = concluidosHojeDoAgendamento;
+  const progressoPendente = Math.max(totalParaProgresso - progressoConcluido, 0);
+  const pctConcluido = totalParaProgresso > 0 ? Math.round((progressoConcluido / totalParaProgresso) * 100) : 0;
 
   return (
     <div>
       <h1 className="mb-1 text-xl font-bold text-white">Dashboard</h1>
-      <p className="mb-6 text-sm text-neutral-400">O que precisa da sua atenção agora.</p>
+      <p className="mb-6 text-sm text-neutral-400">Central operacional — o que precisa da sua atenção agora.</p>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <div className="mb-2 text-xs font-medium text-neutral-400">{s.label}</div>
-            <div className="text-2xl font-bold text-white">{s.value}</div>
+      {/* 1 — o que precisa de ação agora */}
+      <section className="mb-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white">Ação necessária</h2>
+          {totalAcoes > 0 && (
+            <Link href="/admin/atencao" className="text-xs text-neutral-400 underline hover:text-white">
+              Ver central de Atenção completa →
+            </Link>
+          )}
+        </div>
+        {totalAcoes === 0 ? (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-400">
+            Tudo em dia — sem situações pendentes.
           </div>
-        ))}
-      </div>
-
-      <div className="mt-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-1 text-sm font-bold text-neutral-100">
-          Amanhã — {amanhaComPreparacao.length} serviço{amanhaComPreparacao.length === 1 ? "" : "s"}
-        </h2>
-        {amanhaComPreparacao.length === 0 ? (
-          <p className="text-sm text-neutral-500">Sem serviços agendados para amanhã.</p>
         ) : (
-          <>
-            <div className="mt-2 flex flex-wrap gap-3 text-sm">
-              <span className="text-emerald-400">🟢 {preparados.length} preparado{preparados.length === 1 ? "" : "s"}</span>
-              {infoFalta.length > 0 && (
-                <span className="text-amber-400">🟠 {infoFalta.length} com informação em falta</span>
-              )}
-              {bloqueados.length > 0 && (
-                <span className="text-red-400">🔴 {bloqueados.length} bloqueado{bloqueados.length === 1 ? "" : "s"}</span>
-              )}
-            </div>
-            {(infoFalta.length > 0 || bloqueados.length > 0) && (
-              <div className="mt-3 space-y-1.5 border-t border-neutral-800 pt-3">
-                {[...bloqueados, ...infoFalta].map((s: any) => (
+          <div className="space-y-4">
+            {grupos.map((g) => (
+              <div key={g.titulo}>
+                <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-amber-400">
+                  {g.titulo} · {g.itens.length}
+                </h3>
+                <div className="space-y-1.5">
+                  {g.itens.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className="block rounded-md border border-amber-500/20 bg-amber-500/10 p-2.5 text-sm text-amber-300 hover:bg-amber-500/15"
+                    >
+                      {item.texto}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 2 — o que está a acontecer hoje */}
+      <section className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+          <h2 className="mb-3 text-sm font-bold text-white">Agenda de hoje</h2>
+          {servicosHoje.length === 0 ? (
+            <p className="text-sm text-neutral-500">Sem serviços agendados para hoje.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {servicosHoje.map((s: any) => {
+                const atrasado = estaAtrasado(s, agoraHora);
+                const tecnicosNomes = (s.service_technicians ?? []).map((t: any) => t.profiles?.nome).filter(Boolean).join(", ");
+                return (
                   <Link
                     key={s.id}
                     href={`/admin/servicos/${s.id}`}
-                    className={`block rounded-md p-2 text-xs ${PREPARACAO_BADGE[s.preparacao.nivel as NivelPreparacao].cls} hover:opacity-80`}
+                    className={`flex items-center gap-3 rounded-md p-2.5 text-sm hover:bg-neutral-800 ${
+                      atrasado ? "border border-red-500/30 bg-red-500/10" : "border border-transparent"
+                    }`}
                   >
-                    {PREPARACAO_BADGE[s.preparacao.nivel as NivelPreparacao].emoji} {s.clients?.nome} — {s.tipo} · {s.preparacao.motivos.join(", ")}
+                    <span className="w-12 shrink-0 font-mono text-xs text-neutral-400">
+                      {s.hora_agendada ? s.hora_agendada.slice(0, 5) : "—"}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-neutral-200">
+                      {s.clients?.nome} <span className="text-neutral-500">· {s.tipo}</span>
+                    </span>
+                    <span className="shrink-0 truncate text-xs text-neutral-500">{tecnicosNomes || "sem técnico"}</span>
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ESTADO_COLOR[s.estado] ?? "bg-neutral-800 text-neutral-300"}`}>
+                      {atrasado ? "Atrasado" : ESTADO_LABEL[s.estado] ?? s.estado}
+                    </span>
                   </Link>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-      <p className="mt-6 text-sm text-neutral-500">
-        Para o panorama completo de alertas (pedidos incompletos, atrasos, material em falta,
-        follow-ups de orçamentos…), vê a{" "}
-        <Link href="/admin/atencao" className="text-neutral-200 underline">
-          Central de Atenção
-        </Link>
-        .
-      </p>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+          <h2 className="mb-3 text-sm font-bold text-white">Técnicos hoje</h2>
+          {tecnicosHoje.length === 0 ? (
+            <p className="text-sm text-neutral-500">Sem técnicos registados.</p>
+          ) : (
+            <div className="space-y-2">
+              {tecnicosHoje.map(({ tecnico, atual, proximo, atrasado, totalHoje }) => (
+                <div key={tecnico.id} className="rounded-md border border-neutral-800 p-2.5 text-sm">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="font-medium text-neutral-100">{tecnico.nome}</span>
+                    {atrasado && (
+                      <span className="shrink-0 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">Atrasado</span>
+                    )}
+                  </div>
+                  {atual ? (
+                    <Link href={`/admin/servicos/${atual.id}`} className="block text-xs text-neutral-400 hover:text-neutral-200">
+                      Atual: {atual.clients?.nome} · {atual.tipo}
+                      {atual.hora_agendada ? ` às ${atual.hora_agendada.slice(0, 5)}` : ""} · {ESTADO_LABEL[atual.estado] ?? atual.estado}
+                    </Link>
+                  ) : (
+                    <p className="text-xs text-neutral-500">{totalHoje === 0 ? "Sem serviços hoje" : "Sem serviço em curso"}</p>
+                  )}
+                  {proximo && (
+                    <Link href={`/admin/servicos/${proximo.id}`} className="mt-0.5 block text-xs text-neutral-500 hover:text-neutral-300">
+                      Próximo: {proximo.clients?.nome} às {proximo.hora_agendada?.slice(0, 5)}
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 3 — progresso do dia */}
+      <section className="mb-8 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white">Progresso do dia</h2>
+          <span className="text-xs text-neutral-400">
+            {progressoConcluido} de {totalParaProgresso} concluído{totalParaProgresso === 1 ? "" : "s"} ({pctConcluido}%)
+          </span>
+        </div>
+        {totalParaProgresso === 0 ? (
+          <p className="text-sm text-neutral-500">Sem serviços planeados para hoje.</p>
+        ) : (
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-neutral-800">
+            <div className="h-full bg-emerald-500" style={{ width: `${pctConcluido}%` }} />
+            <div className="h-full bg-amber-500/70" style={{ width: `${100 - pctConcluido}%` }} />
+          </div>
+        )}
+        <div className="mt-2 flex gap-4 text-xs text-neutral-500">
+          <span>🟢 {progressoConcluido} concluídos</span>
+          <span>🟡 {progressoPendente} por realizar</span>
+          {naoAgendadosCancelados > 0 && <span>⚪ {naoAgendadosCancelados} cancelados (fora da conta)</span>}
+        </div>
+      </section>
+
+      {/* 4 — indicadores gerais (inclui o financeiro operacional) */}
+      <section>
+        <h2 className="mb-3 text-sm font-bold text-white">Indicadores de hoje</h2>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <StatCard label="Agendados hoje" value={agendadosHoje} href="/admin/agenda" />
+          <StatCard label="Concluídos hoje" value={concluidosHojeCount ?? 0} />
+          <StatCard label="Por realizar hoje" value={pendentesHoje.length} />
+          <StatCard label="Pedidos novos" value={pedidosNovos ?? 0} href="/admin/pedidos" />
+          <StatCard label="Orçamentos em aberto" value={orcamentosAbertos?.length ?? 0} href="/admin/orcamentos" />
+          <StatCard label="Faturado hoje" value={formatEuros(financeiroHoje.faturacao.totalFaturado)} href="/admin/faturacao" />
+          <StatCard label="Por faturar" value={formatEuros(financeiroHoje.faturacao.totalPorFaturar)} href="/admin/faturacao" />
+        </div>
+      </section>
     </div>
   );
+}
+
+function StatCard({ label, value, href }: { label: string; value: string | number; href?: string }) {
+  const conteudo = (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 hover:border-neutral-600">
+      <div className="mb-2 text-xs font-medium text-neutral-400">{label}</div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+    </div>
+  );
+  return href ? <Link href={href}>{conteudo}</Link> : conteudo;
 }

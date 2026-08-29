@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import {
-  mudarEstado,
   atribuirTecnico,
   removerTecnico,
   adicionarMaterialPlaneado,
@@ -11,10 +10,13 @@ import {
   validarServico,
   enviarParaCorrecao,
   associarEquipamento,
+  cancelarServico,
 } from "../actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../estados";
 import { AgendamentoForm } from "./AgendamentoForm";
+import { ReativarServicoForm } from "./ReativarServicoForm";
 import { calcularPreparacao, PREPARACAO_BADGE } from "@/lib/preparacao";
+import { podeReagendarServico, podeCancelarServico, podeReativarServico } from "@/lib/servico-estado";
 
 const EVENTO_LABEL: Record<string, string> = {
   criado: "Criado",
@@ -28,12 +30,9 @@ const EVENTO_LABEL: Record<string, string> = {
   corrigido: "Reaberto após correção",
   validado: "Validado",
   faturado: "Faturado",
+  cancelado: "Cancelado",
+  reativado: "Reativado",
 };
-
-// 'aguarda_validacao' e 'correcao_necessaria' não estão aqui de propósito:
-// só se chega lá pelas ações Validar / Mandar para trás (abaixo), nunca por
-// este seletor manual — assim o motivo da rejeição é sempre obrigatório.
-const ESTADOS = ["por_agendar", "agendado", "em_curso", "concluido", "nova_visita", "nao_realizado", "cancelado"];
 
 export default async function ServicoDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -160,26 +159,39 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           </div>
         )}
 
-        <details className="mt-4 border-t border-neutral-800 pt-3">
-          <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300">Forçar estado manualmente</summary>
-          <form action={mudarEstado} className="mt-2 flex items-center gap-1.5">
-            <input type="hidden" name="id" value={servico.id} />
-            <select
-              name="estado"
-              defaultValue={ESTADOS.includes(servico.estado) ? servico.estado : ""}
-              className="rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-200"
-            >
-              {!ESTADOS.includes(servico.estado) && <option value="" disabled>—</option>}
-              {ESTADOS.map((e) => (
-                <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
-              ))}
-            </select>
-            <button className="rounded bg-neutral-700 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-800">
-              Aplicar
-            </button>
-          </form>
-        </details>
+        {podeCancelarServico(servico) && (
+          <details className="mt-4 border-t border-neutral-800 pt-3">
+            <summary className="cursor-pointer text-xs text-red-400 hover:text-red-300">Cancelar serviço</summary>
+            <form action={cancelarServico} className="mt-2 space-y-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+              <input type="hidden" name="id" value={servico.id} />
+              <span className="block text-xs font-medium text-neutral-300">Motivo do cancelamento (obrigatório)</span>
+              <textarea
+                name="motivo"
+                required
+                rows={2}
+                className="w-full rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+                placeholder="Ex: cliente desistiu do serviço."
+              />
+              <p className="text-[11px] text-red-400/80">
+                Esta ação fica registada no histórico do serviço e não pode ser desfeita.
+              </p>
+              <button className="w-full rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
+                Confirmar cancelamento
+              </button>
+            </form>
+          </details>
+        )}
       </div>
+
+      {podeReativarServico(servico) && (
+        <div className="mb-5 rounded-xl border border-emerald-500/30 bg-neutral-900 p-6">
+          <h2 className="mb-1 text-sm font-semibold text-neutral-100">Reativar serviço</h2>
+          <p className="mb-3 text-xs text-neutral-500">
+            Este serviço ficou "Não foi possível realizar". Define uma nova data/hora para o reagendar.
+          </p>
+          <ReativarServicoForm servicoId={servico.id} tecnicosDisponiveis={disponiveis} />
+        </div>
+      )}
 
       <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <h2 className="mb-3 text-sm font-semibold text-neutral-100">Agendamento</h2>
@@ -192,29 +204,37 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           {(servico.service_technicians ?? []).map((t: any) => (
             <div key={t.user_id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2 text-sm">
               {t.profiles?.nome}
-              <form action={removerTecnico}>
-                <input type="hidden" name="service_id" value={servico.id} />
-                <input type="hidden" name="user_id" value={t.user_id} />
-                <button className="text-xs text-red-400 hover:underline">remover</button>
-              </form>
+              {podeReagendarServico(servico) && (
+                <form action={removerTecnico}>
+                  <input type="hidden" name="service_id" value={servico.id} />
+                  <input type="hidden" name="user_id" value={t.user_id} />
+                  <button className="text-xs text-red-400 hover:underline">remover</button>
+                </form>
+              )}
             </div>
           ))}
           {(servico.service_technicians ?? []).length === 0 && (
             <p className="text-sm text-neutral-500">Ainda sem técnicos atribuídos.</p>
           )}
         </div>
-        {disponiveis.length > 0 && (
-          <form action={atribuirTecnico} className="flex gap-2">
-            <input type="hidden" name="service_id" value={servico.id} />
-            <select name="user_id" className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm">
-              {disponiveis.map((t: any) => (
-                <option key={t.id} value={t.id}>{t.nome}</option>
-              ))}
-            </select>
-            <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
-              Atribuir
-            </button>
-          </form>
+        {!podeReagendarServico(servico) ? (
+          <p className="text-xs text-neutral-500">
+            🔒 Técnicos já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
+          </p>
+        ) : (
+          disponiveis.length > 0 && (
+            <form action={atribuirTecnico} className="flex gap-2">
+              <input type="hidden" name="service_id" value={servico.id} />
+              <select name="user_id" className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm">
+                {disponiveis.map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.nome}</option>
+                ))}
+              </select>
+              <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
+                Atribuir
+              </button>
+            </form>
+          )
         )}
       </div>
 
@@ -247,25 +267,33 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           {(servico.service_materials_planned ?? []).map((m: any) => (
             <div key={m.id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2 text-sm">
               {m.nome} · {m.qtd}
-              <form action={removerMaterialPlaneado}>
-                <input type="hidden" name="id" value={m.id} />
-                <input type="hidden" name="service_id" value={servico.id} />
-                <button className="text-xs text-red-400 hover:underline">remover</button>
-              </form>
+              {podeReagendarServico(servico) && (
+                <form action={removerMaterialPlaneado}>
+                  <input type="hidden" name="id" value={m.id} />
+                  <input type="hidden" name="service_id" value={servico.id} />
+                  <button className="text-xs text-red-400 hover:underline">remover</button>
+                </form>
+              )}
             </div>
           ))}
           {(servico.service_materials_planned ?? []).length === 0 && (
             <p className="text-sm text-neutral-500">Sem materiais planeados.</p>
           )}
         </div>
-        <form action={adicionarMaterialPlaneado} className="flex gap-2">
-          <input type="hidden" name="service_id" value={servico.id} />
-          <input name="nome" placeholder="Material" required className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-          <input name="qtd" type="number" step="0.01" defaultValue="1" className="w-20 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-          <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
-            Adicionar
-          </button>
-        </form>
+        {!podeReagendarServico(servico) ? (
+          <p className="text-xs text-neutral-500">
+            🔒 Materiais planeados já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
+          </p>
+        ) : (
+          <form action={adicionarMaterialPlaneado} className="flex gap-2">
+            <input type="hidden" name="service_id" value={servico.id} />
+            <input name="nome" placeholder="Material" required className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+            <input name="qtd" type="number" step="0.01" defaultValue="1" className="w-20 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+            <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
+              Adicionar
+            </button>
+          </form>
+        )}
       </div>
 
       {(eventos ?? []).length > 0 && (

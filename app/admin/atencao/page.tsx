@@ -2,14 +2,20 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { calcularPreparacao, PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
+import { toISO, addDays, nowTimeHHMMSS } from "@/lib/agenda-dates";
+import { estaAtrasado, orcamentoPrecisaFollowup } from "@/lib/operacional";
 
 export default async function AtencaoPage() {
   const supabase = createClient();
   const organizationId = await getOrgId();
   const agora = new Date();
-  const hoje = agora.toISOString().slice(0, 10);
-  const agoraHora = agora.toTimeString().slice(0, 8);
-  const em3Dias = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  // Data/hora sempre locais (nunca toISOString(), que é UTC) — para o dia
+  // operacional bater sempre certo com o Dashboard e a Agenda perto da
+  // meia-noite. Mesmo critério de "hoje"/"atrasado"/"follow-up" de sempre,
+  // só a forma de calcular a data/hora local é que passou a ser partilhada.
+  const hoje = toISO(agora);
+  const agoraHora = nowTimeHHMMSS(agora);
+  const em3Dias = toISO(addDays(agora, 3));
 
   const [
     { data: settings },
@@ -47,12 +53,14 @@ export default async function AtencaoPage() {
       .is("data_agendada", null),
     supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "aguarda_validacao"),
     supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "concluido").eq("faturacao_estado", "por_faturar"),
+    // Critério de atraso (estaAtrasado, em lib/operacional.ts) aplicado
+    // depois de trazer os candidatos de hoje — nunca no `.lt()` do SQL,
+    // para o Dashboard e a Atenção usarem sempre exatamente a mesma regra.
     supabase
       .from("services")
-      .select("id, descricao, hora_agendada, clients(nome), service_technicians(profiles(nome))")
+      .select("id, descricao, hora_agendada, estado, clients(nome), service_technicians(profiles(nome))")
       .eq("data_agendada", hoje)
-      .eq("estado", "agendado")
-      .lt("hora_agendada", agoraHora),
+      .eq("estado", "agendado"),
     supabase
       .from("visits")
       .select("id, data, service_id, services(id, descricao, estado, clients(nome))")
@@ -79,13 +87,9 @@ export default async function AtencaoPage() {
     return data && data <= em3Dias;
   });
 
-  const orcamentosParados = (orcamentos ?? []).filter((o: any) => {
-    if (o.estado === "followup") return true;
-    if (o.followup_em) return o.followup_em <= hoje;
-    if (!o.enviado_em) return false;
-    const diasPassados = (Date.now() - new Date(o.enviado_em).getTime()) / 86400000;
-    return diasPassados >= followupDias;
-  });
+  const orcamentosParados = (orcamentos ?? []).filter((o: any) => orcamentoPrecisaFollowup(o, hoje, followupDias));
+
+  const tecnicoAtrasadoFiltrado = (tecnicoAtrasado ?? []).filter((s: any) => estaAtrasado(s, agoraHora));
 
   const servicosAbertosAntigos = (visitasAbertasAntigas ?? [])
     .filter((v: any) => v.services?.estado === "em_curso")
@@ -116,7 +120,7 @@ export default async function AtencaoPage() {
     },
     {
       titulo: "Técnico atrasado",
-      itens: tecnicoAtrasado ?? [],
+      itens: tecnicoAtrasadoFiltrado,
       render: (s: any) => {
         const tecnicos = (s.service_technicians ?? []).map((t: any) => t.profiles?.nome).filter(Boolean).join(", ");
         return `${s.clients?.nome} — previsto para as ${s.hora_agendada?.slice(0, 5)}${tecnicos ? ` (${tecnicos})` : ""}, ainda não iniciado`;

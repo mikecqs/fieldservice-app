@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { atualizarAgendamento, verificarConflitoAgenda } from "../actions";
+import { podeReagendarServico } from "@/lib/servico-estado";
 
 export function AgendamentoForm({ servico }: { servico: any }) {
   const router = useRouter();
@@ -10,6 +11,20 @@ export function AgendamentoForm({ servico }: { servico: any }) {
   const [aVerificar, setAVerificar] = useState(false);
   const [conflito, setConflito] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Mesma regra do servidor (lib/servico-estado.ts) — nunca uma segunda
+  // regra diferente aqui, só para refletir visualmente o que o servidor já
+  // vai recusar de qualquer forma.
+  if (!podeReagendarServico(servico)) {
+    return (
+      <div className="rounded-md border border-neutral-800 bg-neutral-800/50 p-3 text-sm text-neutral-400">
+        🔒 Este serviço já não pode ser reagendado (
+        {servico.faturacao_estado === "faturado" ? "já faturado" : "concluído, cancelado ou não realizado"}
+        ). Data: {servico.data_agendada ?? "—"} {servico.hora_agendada?.slice(0, 5) ?? ""}
+        {servico.hora_fim_agendada ? `–${servico.hora_fim_agendada.slice(0, 5)}` : ""}
+      </div>
+    );
+  }
 
   async function gravar(formData: FormData) {
     setErro(null);

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { criarEquipamento, removerEquipamento } from "./actions";
+import { ServicosPopup } from "./ServicosPopup";
+import { PedidosCompactos } from "./PedidosCompactos";
 
 export default async function ClienteDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -15,7 +17,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
   if (!cliente) notFound();
 
   const [{ data: requests }, { data: services }, { data: budgets }, { data: equipamentos }] = await Promise.all([
-    supabase.from("requests").select("id, descricao, estado, created_at").eq("client_id", params.id),
+    supabase.from("requests").select("id, codigo, tipo, descricao, estado, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
     supabase.from("services").select("id, descricao, tipo, estado, data_agendada, faturacao_estado, faturacao_valor, equipment_id").eq("client_id", params.id),
     supabase.from("budgets").select("id, estado").eq("client_id", params.id),
     supabase
@@ -54,7 +56,10 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
       <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h1 className="text-lg font-bold text-white">{cliente.nome}</h1>
+            <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono text-neutral-400">
+              {cliente.codigo}
+            </span>
+            <h1 className="mt-1 text-lg font-bold text-white">{cliente.nome}</h1>
             {cliente.empresa && <p className="text-sm text-neutral-400">{cliente.empresa}</p>}
           </div>
           <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">
@@ -76,7 +81,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
       </div>
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-        <StatBox label="Serviços" value={services?.length ?? 0} />
+        <ServicosPopup servicos={(services ?? []) as any} />
         <StatBox label="Orçamentos" value={budgets?.length ?? 0} />
         <StatBox
           label="Faturado (histórico)"
@@ -172,8 +177,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
         </details>
       </div>
 
-      <Bloco titulo="Pedidos" itens={requests} render={(r: any) => r.descricao} />
-      <Bloco titulo="Serviços" itens={services} render={(s: any) => s.descricao} />
+      <PedidosCompactos pedidos={(requests ?? []) as any} />
     </div>
   );
 }
@@ -183,24 +187,6 @@ function StatBox({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
       <div className="mb-2 text-xs font-medium text-neutral-400">{label}</div>
       <div className="text-2xl font-bold text-white">{value}</div>
-    </div>
-  );
-}
-
-function Bloco({ titulo, itens, render }: { titulo: string; itens: any[] | null; render: (x: any) => string }) {
-  if (!itens || itens.length === 0) return null;
-  return (
-    <div className="mb-5">
-      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
-        {titulo} · {itens.length}
-      </h3>
-      <div className="space-y-1.5">
-        {itens.map((item) => (
-          <div key={item.id} className="rounded-md border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-200">
-            {render(item)}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

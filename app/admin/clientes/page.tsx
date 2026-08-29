@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { ClientesLista, type ClienteResumo } from "./ClientesLista";
 
 export default async function ClientesPage() {
   const supabase = createClient();
   const { data: clients } = await supabase
     .from("clients")
-    .select("id, nome, empresa, telefone, client_addresses(id)")
+    .select("id, codigo, nome, empresa, telefone, client_addresses(id)")
     .order("nome");
+
+  const resumo: ClienteResumo[] = (clients ?? []).map((c: any) => ({
+    id: c.id,
+    codigo: c.codigo,
+    nome: c.nome,
+    empresa: c.empresa,
+    telefone: c.telefone,
+    totalMoradas: (c.client_addresses ?? []).length,
+  }));
 
   return (
     <div>
@@ -25,27 +35,7 @@ export default async function ClientesPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {(clients ?? []).map((c: any) => (
-          <Link
-            key={c.id}
-            href={`/admin/clientes/${c.id}`}
-            className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-neutral-600 hover:shadow-sm"
-          >
-            <div className="min-w-0">
-              <div className="truncate font-medium text-neutral-100">{c.nome}</div>
-              <div className="truncate text-xs text-neutral-500">
-                {(c.client_addresses ?? []).length} morada(s) · {c.telefone}
-              </div>
-            </div>
-          </Link>
-        ))}
-        {(clients ?? []).length === 0 && (
-          <p className="col-span-2 py-10 text-center text-sm text-neutral-500">
-            Ainda sem clientes — cria o primeiro.
-          </p>
-        )}
-      </div>
+      <ClientesLista clientes={resumo} />
     </div>
   );
 }

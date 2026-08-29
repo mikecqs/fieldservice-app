@@ -11,7 +11,9 @@ type ServiceEventTipo =
   | "correcao_pedida"
   | "corrigido"
   | "validado"
-  | "faturado";
+  | "faturado"
+  | "cancelado"
+  | "reativado";
 
 // Único ponto de escrita do histórico operacional da OS a partir de ações do
 // Admin — as ações do técnico (iniciar/terminar) já registam o próprio

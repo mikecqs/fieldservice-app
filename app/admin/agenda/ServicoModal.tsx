@@ -5,12 +5,14 @@ import Link from "next/link";
 import { criarOuAgendarNoPopup } from "./actions";
 import { verificarConflitoAgenda, atualizarAgendamento, atribuirTecnico, removerTecnico } from "../servicos/actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
+import { podeReagendarServico } from "@/lib/servico-estado";
 
 export type ServicoAgenda = {
   id: string;
   tipo: string;
   descricao: string;
   estado: string;
+  faturacao_estado?: string | null;
   data_agendada: string | null;
   hora_agendada: string | null;
   hora_fim_agendada: string | null;
@@ -162,6 +164,57 @@ export function ServicoModal({
     await removerTecnico(fd);
     onSaved();
   };
+
+  // Mesma regra do servidor (lib/servico-estado.ts) — um serviço já
+  // concluído/cancelado/não realizado/faturado deixa de ser editável a
+  // partir daqui; só consulta rápida + link para a ficha completa.
+  if (mode === "ver" && servico && !podeReagendarServico(servico)) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>
+        <div
+          className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-xl border border-neutral-800 bg-neutral-900 p-5 shadow-xl sm:rounded-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-4 flex items-start justify-between">
+            <div>
+              <h2 className="text-base font-bold text-white">{servico.clients?.nome}</h2>
+              <span className={`mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[servico.estado] ?? "bg-neutral-800 text-neutral-300"}`}>
+                {ESTADO_LABEL[servico.estado] ?? servico.estado}
+              </span>
+            </div>
+            <button onClick={onClose} className="rounded-md px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800">
+              Fechar ✕
+            </button>
+          </div>
+
+          <div className="space-y-2 text-sm text-neutral-300">
+            <p>{servico.tipo} · {servico.descricao}</p>
+            <p className="text-neutral-400">
+              {servico.data_agendada ?? "sem data"} {servico.hora_agendada?.slice(0, 5) ?? ""}
+              {servico.hora_fim_agendada ? `–${servico.hora_fim_agendada.slice(0, 5)}` : ""}
+            </p>
+            {tecnicosAtuais.length > 0 && (
+              <p className="text-neutral-400">
+                Técnico(s): {tecnicosAtuais.map((t) => t.profiles?.nome).filter(Boolean).join(", ")}
+              </p>
+            )}
+            <div className="rounded-md border border-neutral-800 bg-neutral-800/50 p-3 text-xs text-neutral-400">
+              🔒 Este serviço já não pode ser editado (concluído, cancelado, não realizado ou já faturado).
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <Link href={`/admin/servicos/${servico.id}`} className="text-xs text-neutral-400 underline">
+              Ver ficha completa →
+            </Link>
+            <button onClick={onClose} className="rounded-md border border-neutral-700 px-3 py-2 text-sm text-neutral-200">
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>

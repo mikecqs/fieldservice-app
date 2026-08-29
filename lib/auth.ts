@@ -6,6 +6,7 @@ export function homeForRole(role?: string) {
   if (role === "ADMIN") return "/admin/dashboard";
   if (role === "TECHNICIAN") return "/tecnico";
   if (role === "FINANCE") return "/financeiro";
+  if (role === "ATENDIMENTO") return "/atendimento/pedidos";
   return "/login";
 }
 
@@ -50,4 +51,25 @@ export async function getOrgId() {
     .eq("id", user!.id)
     .single();
   return profile!.organization_id as string;
+}
+
+// Usado quando uma Server Action é partilhada por mais do que uma role (ex:
+// criarPedido, chamada tanto de /admin/pedidos/novo como de
+// /atendimento/pedidos/novo) e precisa de decidir o comportamento consoante
+// quem a chamou — nunca confiar num campo escondido do formulário para isso,
+// a role vem sempre da sessão autenticada.
+export async function getOrgIdAndRole() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id, role")
+    .eq("id", user!.id)
+    .single();
+  return {
+    organizationId: profile!.organization_id as string,
+    role: profile!.role as string,
+  };
 }

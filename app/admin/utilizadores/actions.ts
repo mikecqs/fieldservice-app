@@ -2,9 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { getOrgId } from "@/lib/auth";
+import { getOrgId, requireRole } from "@/lib/auth";
 
+// BLOCO 19 — antes desta verificação, criarAdminClient().auth.admin.createUser()
+// (que cria mesmo uma conta de Auth real, com custo/quota) corria para
+// qualquer utilizador autenticado que chamasse esta Server Action
+// diretamente (o layout de /admin/utilizadores não protege o endpoint da
+// action em si, só a renderização da página) — a única barreira era a RLS
+// do insert em "profiles" a seguir, que reverteria a criação. Mesmo padrão
+// já usado em app/admin/configuracoes/integracoes-actions.ts antes de
+// qualquer uso de createAdminClient().
 export async function criarUtilizador(formData: FormData) {
+  await requireRole(["ADMIN", "SUPER_ADMIN"]);
   const organizationId = await getOrgId();
   const nome = String(formData.get("nome") || "");
   const email = String(formData.get("email") || "");

@@ -1,5 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import { criarEmpresa, criarAdminDaEmpresa } from "./actions";
+import { criarEmpresa, criarAdminDaEmpresa, criarAtendimentoDaEmpresa } from "./actions";
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Admin",
+  TECHNICIAN: "Técnico",
+  FINANCE: "Financeiro",
+  ATENDIMENTO: "Atendimento",
+};
 
 export default async function SuperAdminPage() {
   const supabase = createClient();
@@ -56,7 +63,7 @@ export default async function SuperAdminPage() {
                 {org.profiles.map((p: any) => (
                   <div key={p.id} className="flex items-center gap-2 text-sm text-neutral-300">
                     <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-200">
-                      {p.role === "ADMIN" ? "Admin" : "Técnico"}
+                      {ROLE_LABEL[p.role] ?? p.role}
                     </span>
                     {p.nome} · {p.email}
                   </div>
@@ -77,6 +84,25 @@ export default async function SuperAdminPage() {
                 <input name="password" type="password" placeholder="Palavra-passe inicial" required className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
                 <button type="submit" className="col-span-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
                   Criar Admin
+                </button>
+              </form>
+            </details>
+
+            <details className="mt-2 rounded-md border border-neutral-800 bg-neutral-800 p-3">
+              <summary className="cursor-pointer text-xs font-medium text-neutral-300">
+                Criar acesso de Atendimento para esta empresa
+              </summary>
+              <p className="mt-2 text-xs text-neutral-500">
+                Só o Super Admin cria este acesso — substitui os pedidos em papel na loja, sem acesso a áreas
+                administrativas.
+              </p>
+              <form action={criarAtendimentoDaEmpresa} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input type="hidden" name="organization_id" value={org.id} />
+                <input name="nome" placeholder="Nome" required className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+                <input name="email" type="email" placeholder="Email" required className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+                <input name="password" type="password" placeholder="Palavra-passe inicial" required className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
+                <button type="submit" className="col-span-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+                  Criar Atendimento
                 </button>
               </form>
             </details>
