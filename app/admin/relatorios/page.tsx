@@ -156,7 +156,7 @@ export default async function RelatoriosPage({
       <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-amber-400">⚠️ Pontos de atenção</h2>
-          <Link href="/admin/atencao" className="text-xs text-neutral-400 underline hover:text-neutral-200">Ver Central de Atenção →</Link>
+          <Link href="/admin/dashboard" className="text-xs text-neutral-400 underline hover:text-neutral-200">Ver Dashboard →</Link>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div><div className="text-lg font-bold text-white">{pontosAtencao.atrasados}</div><div className="text-xs text-neutral-400">Serviços atrasados</div></div>

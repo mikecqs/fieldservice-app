@@ -5,6 +5,7 @@ import { getFinanceiroStats, formatEuros } from "@/lib/financeiro";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
 import { toISO, addDays, nowTimeHHMMSS, startOfLocalDayUTC } from "@/lib/agenda-dates";
 import { estaAtrasado, orcamentoPrecisaFollowup, ESTADOS_SERVICO_POR_AGENDAR } from "@/lib/operacional";
+import { calcularPreparacao, PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
 
 // Estados que já não fazem parte do trabalho "por realizar" de hoje — o
 // técnico já não vai voltar a mexer no serviço no âmbito do dia agendado.
@@ -28,6 +29,7 @@ export default async function DashboardPage() {
   const hoje = toISO(agora);
   const amanha = toISO(addDays(agora, 1));
   const agoraHora = nowTimeHHMMSS(agora);
+  const em3Dias = toISO(addDays(agora, 3));
 
   const [
     { data: servicosHojeRaw },
@@ -40,6 +42,15 @@ export default async function DashboardPage() {
     { data: aguardaValidacao },
     { data: porFaturarRows },
     financeiroHoje,
+    // --- grupos que vinham só da antiga Central de Atenção (agora eliminada
+    // — todo o alerta operacional vive só aqui, nunca em duas páginas) ---
+    { data: pedidosIncompletos },
+    { data: servicosAtrasadosPassado },
+    { data: visitasAbertasAntigas },
+    { data: correcoesNecessarias },
+    { data: comprasBloqueando },
+    { data: servicosProximosDias },
+    { data: comprasPendentesTodas },
   ] = await Promise.all([
     supabase
       .from("services")
@@ -87,6 +98,32 @@ export default async function DashboardPage() {
     // — chamado com desde=ate=hoje: totalFaturado fica filtrado a hoje,
     // totalPorFaturar é sempre o backlog atual (não depende do intervalo).
     getFinanceiroStats(supabase, hoje, hoje),
+    supabase.from("requests").select("id, descricao, clients(nome)").eq("info_falta", true).eq("estado", "novo"),
+    supabase
+      .from("services")
+      .select("id, descricao, data_agendada, clients(nome)")
+      .lt("data_agendada", hoje)
+      .not("data_agendada", "is", null)
+      .not("estado", "in", "(concluido,cancelado,nao_realizado)"),
+    supabase
+      .from("visits")
+      .select("id, data, service_id, services(id, descricao, estado, clients(nome))")
+      .is("hora_fim_real", null)
+      .lt("data", hoje),
+    supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "correcao_necessaria"),
+    supabase
+      .from("purchases")
+      .select("id, descricao, estado, service_id, services(data_agendada, clients(nome))")
+      .in("estado", ["por_encomendar", "encomendada", "parcial"]),
+    supabase
+      .from("services")
+      .select(
+        "id, tipo, descricao, data_agendada, hora_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id)"
+      )
+      .gt("data_agendada", hoje)
+      .lte("data_agendada", em3Dias)
+      .not("estado", "in", "(cancelado,concluido,nao_realizado)"),
+    supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
   ]);
 
   const servicosHoje = (servicosHojeRaw ?? []) as any[];
@@ -117,6 +154,31 @@ export default async function DashboardPage() {
   });
   const followupsHoje = orcamentosComEstado.filter((o) => o.venceHoje);
   const followupsAtrasados = orcamentosComEstado.filter((o) => o.vencido && !o.venceHoje);
+
+  // --- Grupos que vinham só da antiga Central de Atenção — mesma lógica,
+  // agora só aqui (a página /admin/atencao foi eliminada). ---
+  const comprasUrgentes = (comprasBloqueando ?? []).filter((c: any) => {
+    const data = c.services?.data_agendada;
+    return data && data <= em3Dias;
+  });
+  const servicosAbertosAntigos = (visitasAbertasAntigas ?? [])
+    .filter((v: any) => v.services?.estado === "em_curso")
+    .map((v: any) => v.services);
+  const materialPendentePorServico = new Set((comprasPendentesTodas ?? []).map((c: any) => c.service_id));
+  const naoPreparados = (servicosProximosDias ?? [])
+    .map((s: any) => ({
+      ...s,
+      preparacao: calcularPreparacao({
+        temTecnico: (s.service_technicians ?? []).length > 0,
+        morada: s.client_addresses?.endereco,
+        temContacto: !!(s.clients?.telefone || s.clients?.email),
+        descricao: s.descricao,
+        dataAgendada: s.data_agendada,
+        horaAgendada: s.hora_agendada,
+        materialBloqueando: materialPendentePorServico.has(s.id),
+      }),
+    }))
+    .filter((s: any) => s.preparacao.nivel !== "preparada");
 
   type AcaoItem = { id: string; texto: string; href: string };
   type AcaoGrupo = { titulo: string; itens: AcaoItem[] };
@@ -182,6 +244,54 @@ export default async function DashboardPage() {
         href: `/admin/orcamentos/${o.id}`,
       })),
     },
+    {
+      titulo: "Pedidos incompletos",
+      itens: (pedidosIncompletos ?? []).map((p: any) => ({
+        id: p.id,
+        texto: `${p.clients?.nome} — ${p.descricao}`,
+        href: "/admin/pedidos",
+      })),
+    },
+    {
+      titulo: "Serviços atrasados (dia já passou)",
+      itens: (servicosAtrasadosPassado ?? []).map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — agendado para ${s.data_agendada}`,
+        href: `/admin/servicos/${s.id}`,
+      })),
+    },
+    {
+      titulo: "Serviço ainda aberto (visita não fechada)",
+      itens: servicosAbertosAntigos.map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — em curso desde antes de hoje, nunca fechado`,
+        href: `/admin/servicos/${s.id}`,
+      })),
+    },
+    {
+      titulo: "OS rejeitada / correção necessária",
+      itens: (correcoesNecessarias ?? []).map((s: any) => ({
+        id: s.id,
+        texto: `${s.clients?.nome} — ${s.descricao}`,
+        href: `/admin/servicos/${s.id}`,
+      })),
+    },
+    {
+      titulo: "Material a bloquear serviço",
+      itens: comprasUrgentes.map((c: any) => ({
+        id: c.id,
+        texto: `${c.descricao} — para ${c.services?.clients?.nome} em ${c.services?.data_agendada}`,
+        href: "/admin/compras",
+      })),
+    },
+    {
+      titulo: `Serviço futuro não preparado (até ${em3Dias})`,
+      itens: naoPreparados.map((s: any) => ({
+        id: s.id,
+        texto: `${PREPARACAO_BADGE[s.preparacao.nivel as NivelPreparacao].emoji} ${s.clients?.nome} — ${s.data_agendada} · ${s.preparacao.motivos.join(", ")}`,
+        href: `/admin/servicos/${s.id}`,
+      })),
+    },
   ].filter((g) => g.itens.length > 0);
 
   const totalAcoes = grupos.reduce((acc, g) => acc + g.itens.length, 0);
@@ -218,11 +328,6 @@ export default async function DashboardPage() {
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-white">Ação necessária</h2>
-          {totalAcoes > 0 && (
-            <Link href="/admin/atencao" className="text-xs text-neutral-400 underline hover:text-white">
-              Ver central de Atenção completa →
-            </Link>
-          )}
         </div>
         {totalAcoes === 0 ? (
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-400">

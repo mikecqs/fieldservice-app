@@ -60,8 +60,32 @@ export function AgendaClient({
   const abrirCriar = (data: string, horaInicio: string, horaFim: string) =>
     setModal({ mode: "criar", slot: { data, horaInicio, horaFim } });
 
+  // Botão sempre visível — não depende de clicar numa slot vazia do
+  // calendário (isso continua a funcionar, mas deixa de ser o único
+  // caminho). Pré-preenche com a próxima hora certa a partir de agora,
+  // só para dar um ponto de partida sensato; o Admin muda à vontade.
+  const abrirCriarAgora = () => {
+    const agora = new Date();
+    const inicio = new Date(agora);
+    inicio.setMinutes(0, 0, 0);
+    if (agora.getMinutes() > 0) inicio.setHours(inicio.getHours() + 1);
+    const fim = new Date(inicio);
+    fim.setHours(fim.getHours() + 1);
+    const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    abrirCriar(toISO(agora), hhmm(inicio), hhmm(fim));
+  };
+
   return (
     <>
+      <div className="mb-3 flex justify-end">
+        <button
+          onClick={abrirCriarAgora}
+          className="rounded-md bg-white px-3.5 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+        >
+          + Novo Agendamento
+        </button>
+      </div>
+
       {view === "mes" ? (
         <CalendarioMes refDate={refDate} servicosPorDia={servicosPorDia} onAbrirServico={(s) => setModal({ mode: "ver", servico: s })} onAbrirSlotVazia={abrirCriar} />
       ) : (

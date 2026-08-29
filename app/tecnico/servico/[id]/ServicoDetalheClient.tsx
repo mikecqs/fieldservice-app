@@ -52,7 +52,7 @@ export function ServicoDetalheClient({
   visitaAbertaId,
 }: {
   servico: any;
-  materiaisPrevistos: { nome: string; qtd: number }[];
+  materiaisPrevistos: { nome: string; qtd: number; preco_venda: number }[];
   catalogo: CatalogItem[];
   valorHoraMaoObra: number;
   visitaAbertaId: string | null;
@@ -65,7 +65,7 @@ export function ServicoDetalheClient({
   const [resultado, setResultado] = useState<"concluido" | "nova_visita" | "nao_realizado">("concluido");
   const [trabalho, setTrabalho] = useState("");
   const [materiaisLinhas, setMateriaisLinhas] = useState<LinhaMaterial[]>(() =>
-    materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: "0" }))
+    materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
   );
   const [maoObraTipo, setMaoObraTipo] = useState("");
   const [maoObraDetalhe, setMaoObraDetalhe] = useState("");
@@ -382,7 +382,7 @@ export function ServicoDetalheClient({
                       onChange={() => {
                         setResultado(val as any);
                         setMateriaisLinhas(
-                          materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: "0" }))
+                          materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
                         );
                         setMaoObraTipo("");
                         setMaoObraDetalhe("");

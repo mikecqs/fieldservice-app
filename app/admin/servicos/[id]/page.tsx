@@ -5,16 +5,17 @@ import { getOrgId } from "@/lib/auth";
 import {
   atribuirTecnico,
   removerTecnico,
-  adicionarMaterialPlaneado,
   removerMaterialPlaneado,
   validarServico,
   enviarParaCorrecao,
   associarEquipamento,
   cancelarServico,
 } from "../actions";
+import { criarCompraRapida } from "../../compras/actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../estados";
 import { AgendamentoForm } from "./AgendamentoForm";
 import { ReativarServicoForm } from "./ReativarServicoForm";
+import { MaterialPlaneadoForm } from "./MaterialPlaneadoForm";
 import { calcularPreparacao, PREPARACAO_BADGE } from "@/lib/preparacao";
 import { podeReagendarServico, podeCancelarServico, podeReativarServico } from "@/lib/servico-estado";
 
@@ -60,10 +61,21 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       .select("tipo, descricao, created_at, profiles(nome)")
       .eq("service_id", params.id)
       .order("created_at", { ascending: false }),
-    supabase.from("purchases").select("id").eq("service_id", params.id).in("estado", ["por_encomendar", "encomendada", "parcial"]),
+    supabase
+      .from("purchases")
+      .select("id, purchase_items(nome)")
+      .eq("service_id", params.id)
+      .in("estado", ["por_encomendar", "encomendada", "parcial"]),
   ]);
 
   if (!servico) notFound();
+
+  // Nomes de materiais planeados que já têm uma compra em aberto — mesmo
+  // critério que existia na página /admin/materiais (agora eliminada, sem
+  // funcionalidade exclusiva: isto é o único uso real que tinha).
+  const materiaisComCompraPendente = new Set(
+    (comprasPendentes ?? []).flatMap((c: any) => (c.purchase_items ?? []).map((i: any) => i.nome))
+  );
 
   const { data: equipamentosCliente } = await supabase
     .from("client_equipment")
@@ -98,7 +110,10 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <div className="mb-1 flex items-start justify-between">
           <div>
-            <h1 className="text-lg font-bold text-white">{servico.clients?.nome}</h1>
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono text-neutral-400">{servico.codigo}</span>
+              <h1 className="text-lg font-bold text-white">{servico.clients?.nome}</h1>
+            </div>
             <p className="text-sm text-neutral-400">{servico.tipo} · {servico.descricao}</p>
             {servico.client_addresses && (
               <p className="mt-1 text-xs text-neutral-500">{servico.client_addresses.label}: {servico.client_addresses.endereco}</p>
@@ -238,6 +253,53 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
         )}
       </div>
 
+      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Materiais planeados</h2>
+        <div className="mb-3 space-y-1.5">
+          {(servico.service_materials_planned ?? []).map((m: any) => (
+            <div key={m.id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2 text-sm">
+              <span>
+                {m.nome} · {m.qtd}
+                {Number(m.preco_venda) > 0 && (
+                  <span className="ml-1 text-neutral-500">
+                    · {Number(m.preco_venda).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                  </span>
+                )}
+              </span>
+              <div className="flex items-center gap-2">
+                {materiaisComCompraPendente.has(m.nome) ? (
+                  <span className="text-xs text-emerald-400">✓ Compra criada</span>
+                ) : (
+                  <form action={criarCompraRapida}>
+                    <input type="hidden" name="nome" value={m.nome} />
+                    <input type="hidden" name="qtd" value={m.qtd} />
+                    <input type="hidden" name="service_id" value={servico.id} />
+                    <button className="text-xs text-neutral-300 underline hover:text-white">criar compra</button>
+                  </form>
+                )}
+                {podeReagendarServico(servico) && (
+                  <form action={removerMaterialPlaneado}>
+                    <input type="hidden" name="id" value={m.id} />
+                    <input type="hidden" name="service_id" value={servico.id} />
+                    <button className="text-xs text-red-400 hover:underline">remover</button>
+                  </form>
+                )}
+              </div>
+            </div>
+          ))}
+          {(servico.service_materials_planned ?? []).length === 0 && (
+            <p className="text-sm text-neutral-500">Sem materiais planeados.</p>
+          )}
+        </div>
+        {!podeReagendarServico(servico) ? (
+          <p className="text-xs text-neutral-500">
+            🔒 Materiais planeados já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
+          </p>
+        ) : (
+          <MaterialPlaneadoForm serviceId={servico.id} />
+        )}
+      </div>
+
       {(equipamentosCliente ?? []).length > 0 && (
         <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
           <h2 className="mb-3 text-sm font-semibold text-neutral-100">Equipamento relacionado</h2>
@@ -260,41 +322,6 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           </Link>
         </div>
       )}
-
-      <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">Materiais planeados</h2>
-        <div className="mb-3 space-y-1.5">
-          {(servico.service_materials_planned ?? []).map((m: any) => (
-            <div key={m.id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2 text-sm">
-              {m.nome} · {m.qtd}
-              {podeReagendarServico(servico) && (
-                <form action={removerMaterialPlaneado}>
-                  <input type="hidden" name="id" value={m.id} />
-                  <input type="hidden" name="service_id" value={servico.id} />
-                  <button className="text-xs text-red-400 hover:underline">remover</button>
-                </form>
-              )}
-            </div>
-          ))}
-          {(servico.service_materials_planned ?? []).length === 0 && (
-            <p className="text-sm text-neutral-500">Sem materiais planeados.</p>
-          )}
-        </div>
-        {!podeReagendarServico(servico) ? (
-          <p className="text-xs text-neutral-500">
-            🔒 Materiais planeados já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
-          </p>
-        ) : (
-          <form action={adicionarMaterialPlaneado} className="flex gap-2">
-            <input type="hidden" name="service_id" value={servico.id} />
-            <input name="nome" placeholder="Material" required className="flex-1 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            <input name="qtd" type="number" step="0.01" defaultValue="1" className="w-20 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            <button className="rounded-md bg-white px-3 py-2 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
-              Adicionar
-            </button>
-          </form>
-        )}
-      </div>
 
       {(eventos ?? []).length > 0 && (
         <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">

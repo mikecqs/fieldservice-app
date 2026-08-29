@@ -74,6 +74,6 @@ export async function concluirVisita(input: {
   if (error) throw new Error(error.message);
   revalidatePath(`/tecnico/servico/${input.serviceId}`);
   revalidatePath("/tecnico");
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
   revalidatePath("/admin/agenda");
 }

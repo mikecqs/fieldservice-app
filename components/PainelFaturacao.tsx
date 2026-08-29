@@ -10,13 +10,15 @@ export async function PainelFaturacao({ q }: { q?: string }) {
 
   const { data: aguardamValidacao } = await supabase
     .from("services")
-    .select("id, tipo, descricao, valor, clients(nome)")
+    .select("id, tipo, descricao, valor, clients(nome, codigo), requests(codigo)")
     .eq("estado", "aguarda_validacao")
     .order("created_at", { ascending: false });
 
   const { data: servicos } = await supabase
     .from("services")
-    .select("id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, clients(nome)")
+    .select(
+      "id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, clients(nome, codigo), requests(codigo)"
+    )
     .eq("estado", "concluido")
     .order("faturacao_estado")
     .order("created_at", { ascending: false });
@@ -25,6 +27,8 @@ export async function PainelFaturacao({ q }: { q?: string }) {
   const bate = (s: any) =>
     !termo ||
     s.clients?.nome?.toLowerCase().includes(termo) ||
+    s.clients?.codigo?.toLowerCase().includes(termo) ||
+    s.requests?.codigo?.toLowerCase().includes(termo) ||
     s.descricao?.toLowerCase().includes(termo) ||
     s.faturacao_referencia?.toLowerCase().includes(termo);
 
@@ -44,7 +48,7 @@ export async function PainelFaturacao({ q }: { q?: string }) {
         <input
           name="q"
           defaultValue={q}
-          placeholder="Pesquisar por cliente, descrição ou nº fatura…"
+          placeholder="Pesquisar por cliente, ID cliente, ID pedido, descrição ou nº fatura…"
           className="w-full max-w-md rounded-md border border-neutral-700 px-3 py-2 text-sm"
         />
       </form>
@@ -147,6 +151,10 @@ export async function PainelFaturacao({ q }: { q?: string }) {
         {faturados.map((s: any) => (
           <div key={s.id} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-800 p-3.5 text-sm">
             <div>
+              <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
+                {s.requests?.codigo && <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono">{s.requests.codigo}</span>}
+                {s.clients?.codigo && <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono">{s.clients.codigo}</span>}
+              </div>
               <span className="font-medium text-neutral-200">{s.clients?.nome}</span>
               <span className="ml-2 text-neutral-500">{s.faturacao_referencia}</span>
             </div>

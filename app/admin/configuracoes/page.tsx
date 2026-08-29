@@ -12,7 +12,7 @@ export default async function ConfiguracoesPage({
   const organizationId = await getOrgId();
   const { data: settings } = await supabase
     .from("org_settings")
-    .select("tipos_servico, followup_dias_default")
+    .select("followup_dias_default")
     .eq("organization_id", organizationId)
     .single();
   const { data: sheets } = await supabase
@@ -30,17 +30,6 @@ export default async function ConfiguracoesPage({
 
       <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <form action={guardarConfiguracoes} className="space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-neutral-300">Tipos de serviço (separados por vírgula)</span>
-            <input
-              name="tipos_servico"
-              defaultValue={(settings?.tipos_servico ?? []).join(", ")}
-              className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
-            />
-            <span className="mt-1 block text-xs text-neutral-500">
-              Usados nos formulários de novo pedido e novo serviço.
-            </span>
-          </label>
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-neutral-300">Dias até follow-up de orçamento</span>
             <input

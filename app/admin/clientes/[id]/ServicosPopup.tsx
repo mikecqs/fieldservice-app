@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ESTADO_LABEL, ESTADO_COLOR } from "@/app/admin/servicos/estados";
 
-type ServicoResumo = { id: string; tipo: string; descricao: string; estado: string; data_agendada: string | null };
+type ServicoResumo = { id: string; codigo: string; tipo: string; descricao: string; estado: string; data_agendada: string | null };
 
 // Substitui a antiga lista de texto corrido "Serviços" na ficha do cliente:
 // o cartão "Serviços" passa a ser um botão que abre este popup (mesmo
@@ -49,7 +49,10 @@ export function ServicosPopup({ servicos }: { servicos: ServicoResumo[] }) {
                   className="flex items-center justify-between gap-3 rounded-md border border-neutral-800 p-2.5 text-sm hover:bg-neutral-800"
                 >
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-neutral-100">{s.tipo}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono text-neutral-400">{s.codigo}</span>
+                      <span className="truncate font-medium text-neutral-100">{s.tipo}</span>
+                    </div>
                     <div className="truncate text-xs text-neutral-500">{s.descricao}</div>
                   </div>
                   <div className="shrink-0 text-right">

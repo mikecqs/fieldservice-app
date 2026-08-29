@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { criarEmpresa, criarAdminDaEmpresa, criarAtendimentoDaEmpresa } from "./actions";
+import { criarEmpresa, criarAdminDaEmpresa, criarAtendimentoDaEmpresa, alterarEstadoEmpresa, alterarEstadoUtilizador } from "./actions";
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: "Admin",
@@ -13,7 +13,7 @@ export default async function SuperAdminPage() {
 
   const { data: organizations } = await supabase
     .from("organizations")
-    .select("id, nome, nif, ativa, created_at, profiles(id, nome, email, role)")
+    .select("id, nome, nif, ativa, created_at, profiles(id, nome, email, role, ativo)")
     .order("created_at", { ascending: false });
 
   return (
@@ -53,19 +53,46 @@ export default async function SuperAdminPage() {
                 <h3 className="font-semibold text-white">{org.nome}</h3>
                 <p className="text-xs text-neutral-500">NIF {org.nif || "—"}</p>
               </div>
-              <span className={`rounded px-2 py-0.5 text-xs font-medium ${org.ativa ? "bg-emerald-500/15 text-emerald-400" : "bg-neutral-800 text-neutral-400"}`}>
-                {org.ativa ? "Ativa" : "Inativa"}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`rounded px-2 py-0.5 text-xs font-medium ${org.ativa ? "bg-emerald-500/15 text-emerald-400" : "bg-neutral-800 text-neutral-400"}`}>
+                  {org.ativa ? "Ativa" : "Inativa (freeze)"}
+                </span>
+                <form action={alterarEstadoEmpresa}>
+                  <input type="hidden" name="id" value={org.id} />
+                  <input type="hidden" name="ativa" value={org.ativa ? "false" : "true"} />
+                  <button
+                    className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                      org.ativa
+                        ? "border-red-500/30 text-red-400 hover:bg-red-500/10"
+                        : "border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+                    }`}
+                  >
+                    {org.ativa ? "Congelar empresa" : "Reativar empresa"}
+                  </button>
+                </form>
+              </div>
             </div>
 
             {org.profiles?.length > 0 ? (
               <div className="mb-3 space-y-1">
                 {org.profiles.map((p: any) => (
-                  <div key={p.id} className="flex items-center gap-2 text-sm text-neutral-300">
+                  <div key={p.id} className="flex flex-wrap items-center gap-2 text-sm text-neutral-300">
                     <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-200">
                       {ROLE_LABEL[p.role] ?? p.role}
                     </span>
-                    {p.nome} · {p.email}
+                    <span>{p.nome} · {p.email}</span>
+                    {p.ativo === false && (
+                      <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">Desativado</span>
+                    )}
+                    {p.role !== "SUPER_ADMIN" && (
+                      <form action={alterarEstadoUtilizador} className="ml-auto">
+                        <input type="hidden" name="id" value={p.id} />
+                        <input type="hidden" name="ativo" value={p.ativo === false ? "true" : "false"} />
+                        <button className="text-xs text-neutral-400 underline hover:text-white">
+                          {p.ativo === false ? "Reativar" : "Desativar"}
+                        </button>
+                      </form>
+                    )}
                   </div>
                 ))}
               </div>

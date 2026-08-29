@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { adicionarItem } from "../actions";
 
 type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
 
 export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; catalogo: CatalogItem[] }) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [tipo, setTipo] = useState("mao_obra");
   const [descricao, setDescricao] = useState("");
   const [valorUnit, setValorUnit] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
 
   function aplicarCatalogo(id: string) {
     const item = catalogo.find((c) => c.id === id);
@@ -18,8 +20,26 @@ export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; ca
     setTipo("materiais");
   }
 
+  // Os campos "descrição" e "€ unit." são controlados (para o catálogo os
+  // poder preencher), por isso um <form action={adicionarItem}> sozinho
+  // nunca os limpava depois de gravar — o Next não desmonta o formulário
+  // (sem redirect) e o state React continua com o que lá estava.
+  async function submeter(formData: FormData) {
+    setErro(null);
+    try {
+      await adicionarItem(formData);
+      setTipo("mao_obra");
+      setDescricao("");
+      setValorUnit("");
+      formRef.current?.reset();
+    } catch (e: any) {
+      setErro(e?.message || "Não foi possível adicionar a linha.");
+    }
+  }
+
   return (
-    <form action={adicionarItem} className="mt-4 space-y-2 border-t border-neutral-800 pt-4">
+    <form ref={formRef} action={submeter} className="mt-4 space-y-2 border-t border-neutral-800 pt-4">
+      {erro && <p className="rounded-md bg-red-500/15 px-2 py-1.5 text-xs text-red-400">{erro}</p>}
       <input type="hidden" name="budget_id" value={budgetId} />
 
       {catalogo.length > 0 && (

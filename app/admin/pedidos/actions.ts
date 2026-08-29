@@ -200,7 +200,7 @@ export async function resolverInfoPedido(formData: FormData) {
 
   await supabase.from("requests").update(update).eq("id", id);
   revalidatePath("/admin/pedidos");
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
 }
 
 export async function arquivarPedido(formData: FormData) {

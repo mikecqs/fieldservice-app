@@ -84,27 +84,6 @@ export async function removerItem(formData: FormData) {
   revalidatePath(`/admin/orcamentos/${budget_id}`);
 }
 
-export async function atualizarIva(formData: FormData) {
-  const supabase = createClient();
-  const id = String(formData.get("id") || "");
-  const iva_percent = Number(formData.get("iva_percent") || 0);
-  if (!id) return;
-  // "iva_percent < 0" sozinho não apanha NaN (NaN < 0 é sempre false) — um
-  // valor não numérico do formulário passava este guard e tentava gravar
-  // NaN, que serializa para null e violava o "not null" da coluna (BLOCO 18).
-  if (!Number.isFinite(iva_percent) || iva_percent < 0) {
-    throw new Error("O IVA tem de ser um número igual ou superior a 0.");
-  }
-
-  const { data: orcamento } = await supabase.from("budgets").select("estado").eq("id", id).single();
-  if (!orcamento || !podeEditarItensOrcamento(orcamento)) {
-    throw new Error("Este orçamento já não pode ser editado (só é possível em rascunho).");
-  }
-
-  await supabase.from("budgets").update({ iva_percent }).eq("id", id);
-  revalidatePath(`/admin/orcamentos/${id}`);
-}
-
 // Marcar como enviado avança logo para "aguarda resposta" (o Admin não tem
 // de fazer esse segundo clique manual) e agenda automaticamente o
 // follow-up para daqui a 7 dias — é isto que a Central de Atenção lê depois
@@ -143,7 +122,7 @@ export async function marcarEnviado(formData: FormData) {
 
   revalidatePath(`/admin/orcamentos/${id}`);
   revalidatePath("/admin/orcamentos");
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
 }
 
 const AVANCAR_ESTADO_EVENTO: Record<string, "followup" | "recusado" | "cancelado"> = {

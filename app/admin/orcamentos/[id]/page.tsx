@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
-import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento, atualizarIva } from "../actions";
+import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento } from "../actions";
 import { AdicionarItemForm } from "./AdicionarItemForm";
 import { ESTADOS_ORCAMENTO_TERMINAIS } from "@/lib/orcamento-estado";
 
@@ -178,26 +178,7 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
             <span>{subtotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>
           </div>
           <div className="flex items-center justify-end gap-2 text-neutral-400">
-            {orcamento.estado === "rascunho" ? (
-              <form action={atualizarIva} className="flex items-center gap-1.5">
-                <input type="hidden" name="id" value={orcamento.id} />
-                <span>IVA</span>
-                <input
-                  name="iva_percent"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  defaultValue={orcamento.iva_percent}
-                  className="w-16 rounded-md border border-neutral-700 px-1.5 py-0.5 text-xs"
-                />
-                <span>%</span>
-                <button className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-200 hover:bg-neutral-800">
-                  Atualizar
-                </button>
-              </form>
-            ) : (
-              <span>IVA ({orcamento.iva_percent}%):</span>
-            )}
+            <span>IVA ({orcamento.iva_percent}%):</span>
             <span>{ivaValor.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>
           </div>
           <div className="flex justify-end gap-2 text-base font-bold text-white">

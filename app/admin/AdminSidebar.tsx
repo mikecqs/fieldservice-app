@@ -8,14 +8,12 @@ import { NexiaMark } from "@/components/NexiaMark";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/atencao", label: "Atenção" },
   { href: "/admin/pedidos", label: "Pedidos" },
   { href: "/admin/agenda", label: "Agenda" },
   { href: "/admin/clientes", label: "Clientes" },
   { href: "/admin/servicos", label: "Serviços" },
   { href: "/admin/orcamentos", label: "Orçamentos" },
   { href: "/admin/catalogo", label: "Catálogo" },
-  { href: "/admin/materiais", label: "Materiais" },
   { href: "/admin/compras", label: "Compras" },
   { href: "/admin/financeiro", label: "Financeiro" },
   { href: "/admin/faturacao", label: "Faturação" },

@@ -140,7 +140,7 @@ export async function criarCompraRapida(formData: FormData) {
       (c.purchase_items ?? []).some((i: any) => i.nome === nome)
     );
     if (jaPedido) {
-      revalidatePath("/admin/materiais");
+      revalidatePath(`/admin/servicos/${service_id}`);
       return;
     }
   }
@@ -154,6 +154,6 @@ export async function criarCompraRapida(formData: FormData) {
 
   await supabase.from("purchase_items").insert({ purchase_id: compra.id, nome, qtd });
 
-  revalidatePath("/admin/materiais");
+  if (service_id) revalidatePath(`/admin/servicos/${service_id}`);
   revalidatePath("/admin/compras");
 }

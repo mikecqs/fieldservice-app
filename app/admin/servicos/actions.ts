@@ -69,18 +69,31 @@ export async function criarServico(formData: FormData) {
   const supabase = createClient();
 
   const client_id = String(formData.get("client_id") || "");
-  const address_id = String(formData.get("address_id") || "") || null;
+  const address_id = String(formData.get("address_id") || "");
   const tipo = String(formData.get("tipo") || "");
   const descricao = String(formData.get("descricao") || "");
   const prioridade = String(formData.get("prioridade") || "normal");
+  // "Novo Serviço" já não tem campo de preço na UI — valor nasce sempre 0 e
+  // só é preenchido depois, no fecho da visita pelo técnico (tech_finish_visit,
+  // BLOCO 14) ou por um orçamento aceite. O guard de sinal fica por defesa
+  // em profundidade (nunca confiar só na UI para não haver um valor
+  // negativo), mesmo já não havendo forma de o submeter com um valor != 0.
   const valor = Number(formData.get("valor") || 0);
 
-  if (!client_id || !tipo || !descricao) return;
-  // Nunca confiar num valor negativo vindo do formulário — o único campo
-  // de preço em todo o fluxo de criação manual de serviço (BLOCO 14).
+  if (!client_id || !address_id || !tipo || !descricao) return;
   if (!Number.isFinite(valor) || valor < 0) {
     throw new Error("Valor do serviço tem de ser um número igual ou superior a 0.");
   }
+
+  // Nunca confiar que o address_id do formulário pertence mesmo ao cliente
+  // selecionado — mesma verificação já usada em criarPedido.
+  const { data: morada } = await supabase
+    .from("client_addresses")
+    .select("id")
+    .eq("id", address_id)
+    .eq("client_id", client_id)
+    .single();
+  if (!morada) throw new Error("A morada selecionada não pertence ao cliente selecionado.");
 
   const { data: service, error } = await supabase
     .from("services")
@@ -192,7 +205,7 @@ export async function cancelarServico(formData: FormData) {
   revalidatePath(`/admin/servicos/${id}`);
   revalidatePath("/admin/servicos");
   revalidatePath("/admin/agenda");
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
 }
 
 // Único caminho de saída de 'nao_realizado' — não é um "forçar estado"
@@ -272,7 +285,7 @@ export async function reativarServico(formData: FormData) {
   revalidatePath(`/admin/servicos/${id}`);
   revalidatePath("/admin/servicos");
   revalidatePath("/admin/agenda");
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
 }
 
 // Liga (ou desliga) este serviço a um equipamento do cliente — é isto que
@@ -327,9 +340,10 @@ export async function adicionarMaterialPlaneado(formData: FormData) {
   const service_id = String(formData.get("service_id") || "");
   const nome = String(formData.get("nome") || "");
   const qtd = Number(formData.get("qtd") || 1);
+  const preco_venda = Number(formData.get("preco_venda") || 0);
   if (!service_id || !nome) return;
-  if (!Number.isFinite(qtd) || qtd < 0) {
-    throw new Error("A quantidade tem de ser um número igual ou superior a 0.");
+  if (!Number.isFinite(qtd) || qtd < 0 || !Number.isFinite(preco_venda) || preco_venda < 0) {
+    throw new Error("Quantidade e preço têm de ser números iguais ou superiores a 0.");
   }
 
   const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
@@ -337,7 +351,7 @@ export async function adicionarMaterialPlaneado(formData: FormData) {
     throw new Error("Este serviço já não pode ter materiais planeados alterados (concluído, cancelado, não realizado ou já faturado).");
   }
 
-  await supabase.from("service_materials_planned").insert({ service_id, nome, qtd });
+  await supabase.from("service_materials_planned").insert({ service_id, nome, qtd, preco_venda });
   revalidatePath(`/admin/servicos/${service_id}`);
 }
 
@@ -372,7 +386,7 @@ export async function validarServico(formData: FormData) {
 
   revalidatePath("/admin/faturacao");
   revalidatePath(`/admin/servicos/${id}`);
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
 }
 
 export async function enviarParaCorrecao(formData: FormData) {
@@ -386,6 +400,6 @@ export async function enviarParaCorrecao(formData: FormData) {
 
   revalidatePath("/admin/faturacao");
   revalidatePath(`/admin/servicos/${id}`);
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
   revalidatePath("/tecnico");
 }

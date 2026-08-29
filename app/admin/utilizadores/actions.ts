@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { getOrgId, requireRole } from "@/lib/auth";
+import { getOrgId, getOrgIdAndRole, requireRole } from "@/lib/auth";
 
 // BLOCO 19 — antes desta verificação, criarAdminClient().auth.admin.createUser()
 // (que cria mesmo uma conta de Auth real, com custo/quota) corria para
@@ -48,4 +49,77 @@ export async function criarUtilizador(formData: FormData) {
   }
 
   revalidatePath("/admin/utilizadores");
+}
+
+// Soft delete — nunca apaga a conta nem o histórico associado (ex:
+// service_events.utilizador continua a apontar para este perfil). Só
+// bloqueia o acesso: getOrgId/getOrgIdAndRole/requireRole (lib/auth.ts)
+// verificam "ativo" e redirecionam para /login em qualquer tentativa de
+// uso, mesmo direta a uma Server Action.
+export async function desativarUtilizador(formData: FormData) {
+  const { organizationId, role: chamadorRole } = await getOrgIdAndRole();
+  if (chamadorRole !== "ADMIN" && chamadorRole !== "SUPER_ADMIN") {
+    throw new Error("Sem permissão para desativar utilizadores.");
+  }
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  if (id === user?.id) {
+    throw new Error("Não podes desativar a tua própria conta.");
+  }
+
+  const { data: alvo } = await supabase.from("profiles").select("role, organization_id").eq("id", id).single();
+  if (!alvo || alvo.organization_id !== organizationId) return;
+  if (alvo.role === "SUPER_ADMIN") {
+    throw new Error("Não é possível desativar um Super Admin por aqui.");
+  }
+
+  await supabase.from("profiles").update({ ativo: false }).eq("id", id);
+  revalidatePath("/admin/utilizadores");
+}
+
+export async function reativarUtilizador(formData: FormData) {
+  const { organizationId, role: chamadorRole } = await getOrgIdAndRole();
+  if (chamadorRole !== "ADMIN" && chamadorRole !== "SUPER_ADMIN") {
+    throw new Error("Sem permissão para reativar utilizadores.");
+  }
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  const { data: alvo } = await supabase.from("profiles").select("organization_id").eq("id", id).single();
+  if (!alvo || alvo.organization_id !== organizationId) return;
+
+  await supabase.from("profiles").update({ ativo: true }).eq("id", id);
+  revalidatePath("/admin/utilizadores");
+}
+
+// Reaproveita exatamente o mesmo mecanismo de "Esqueci-me da password"
+// (app/esqueci-password/page.tsx) — envia um email de reset real, o Admin
+// nunca vê nem define a password do outro utilizador diretamente.
+export async function resetPasswordUtilizador(formData: FormData) {
+  const { organizationId, role: chamadorRole } = await getOrgIdAndRole();
+  if (chamadorRole !== "ADMIN" && chamadorRole !== "SUPER_ADMIN") {
+    throw new Error("Sem permissão para repor password de outro utilizador.");
+  }
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  const { data: alvo } = await supabase.from("profiles").select("email, organization_id, role").eq("id", id).single();
+  if (!alvo || alvo.organization_id !== organizationId) return;
+  if (alvo.role === "SUPER_ADMIN") {
+    throw new Error("Não é possível repor a password de um Super Admin por aqui.");
+  }
+
+  const host = headers().get("host");
+  const origin = host ? `https://${host}` : `https://${process.env.VERCEL_URL ?? "localhost:3000"}`;
+
+  const { error } = await supabase.auth.resetPasswordForEmail(alvo.email, {
+    redirectTo: `${origin}/redefinir-password`,
+  });
+  if (error) throw new Error(error.message);
 }

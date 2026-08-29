@@ -117,7 +117,7 @@ export async function criarOuAgendarNoPopup(input: {
   revalidatePath("/admin/servicos");
   revalidatePath(`/admin/servicos/${serviceId}`);
   revalidatePath("/admin/pedidos");
-  revalidatePath("/admin/atencao");
+  revalidatePath("/admin/dashboard");
 
   return serviceId as string;
 }

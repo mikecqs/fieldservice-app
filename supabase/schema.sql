@@ -34,6 +34,10 @@ create table profiles (
   role text not null check (role in ('SUPER_ADMIN','ADMIN','TECHNICIAN','FINANCE','ATENDIMENTO')),
   nome text not null,
   email text not null,
+  -- Soft delete: desativar um utilizador nunca apaga a conta nem o
+  -- histórico associado (service_events.utilizador, etc.) — só bloqueia
+  -- acesso (verificado em getOrgId/getOrgIdAndRole/requireRole).
+  ativo boolean not null default true,
   created_at timestamptz not null default now(),
   constraint org_required_unless_super_admin
     check (role = 'SUPER_ADMIN' or organization_id is not null)
@@ -268,9 +272,15 @@ grant select, insert, update, delete on catalog_items to authenticated;
 -- -----------------------------------------------------------------------------
 -- SERVIÇOS (ordens de serviço)
 -- -----------------------------------------------------------------------------
+-- ID humano permanente (OS-000001, OS-000002, ...) — mesmo princípio de
+-- clients.codigo/requests.codigo. Só para UI/pesquisa; uuid continua a
+-- ser a única chave usada em relações, queries e URLs.
+create sequence if not exists services_codigo_seq;
+
 create table services (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete cascade,
+  codigo text not null unique default ('OS-' || lpad(nextval('services_codigo_seq')::text, 6, '0')),
   client_id uuid not null references clients(id) on delete cascade,
   address_id uuid references client_addresses(id),
   request_id uuid references requests(id),
@@ -305,7 +315,8 @@ create table service_materials_planned (
   id uuid primary key default gen_random_uuid(),
   service_id uuid not null references services(id) on delete cascade,
   nome text not null,
-  qtd numeric not null default 1
+  qtd numeric not null default 1,
+  preco_venda numeric not null default 0
 );
 
 -- -----------------------------------------------------------------------------

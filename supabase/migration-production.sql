@@ -2,8 +2,9 @@
 -- MIGRATION — produção (BD já tem dados: empresas, clientes, pedidos, etc.)
 --
 -- Cobre TODAS as alterações de schema/RLS/RPC ainda não aplicadas à BD de
--- produção, desde o commit atualmente em produção até ao HEAD local (após
--- o merge de origin/master):
+-- produção, desde o commit atualmente em produção até ao estado local atual
+-- (HEAD 4c50b42 + alterações locais ainda por commitar da auditoria
+-- "AUDITORIA FINAL + IMPLEMENTAÇÃO — APP"):
 --   6306c79 → estado original de produção (baseline desta migração)
 --   50de8bb → BLOCOS 1, 5 e 9 desta sessão (única parte do schema alterada
 --             pelos BLOCOS 1–19; 6, 7, 8, 10–19 foram só validação em
@@ -12,9 +13,16 @@
 --             tech_service_detalhes_visiveis, default de
 --             org_settings.tipos_servico) + Relatórios (sem alterações à BD)
 --   6b55b9c → só middleware.ts, sem alterações à BD
+--   (local, por commitar) → auditoria "APP": profiles.ativo,
+--             services.codigo, service_materials_planned.preco_venda —
+--             confirmado via `git diff HEAD -- supabase/schema.sql` que é
+--             exatamente isto e mais nada (sem novas tabelas/policies/
+--             funções; RLS já cobre as colunas novas automaticamente, é
+--             row-level, não column-level).
 -- Confirmado via `git diff 6306c79 HEAD -- supabase/schema.sql` (HEAD =
--- a546776, o merge commit) — este ficheiro é exatamente esse diff, dividido
--- em statements seguros para uma BD com dados reais.
+-- a546776, o merge commit) — este ficheiro cobre exatamente esse diff mais
+-- o diff local acima, dividido em statements seguros para uma BD com dados
+-- reais.
 --
 -- NÃO EXECUTADO. Este ficheiro é só para revisão — corre-o tu próprio no
 -- SQL Editor do Supabase depois de leres as notas de cada secção,
@@ -498,13 +506,48 @@ alter table tech_delay_notifications enable row level security;
 --     );
 --   $$);
 
+-- =============================================================================
+-- Auditoria "APP" (local, ainda por commitar) — 3 alterações de schema,
+-- todas aditivas, com default constante (nunca volátil como nextval() em
+-- profiles.ativo/preco_venda — não força reescrita nem risco de conflito;
+-- services.codigo usa nextval() tal como clients.codigo/requests.codigo
+-- acima, backfill automático no próprio ADD COLUMN). Sem alterações a
+-- RLS/policies/funções: nenhuma tabela nova precisa de policy nova (RLS é
+-- por linha, não por coluna — as policies existentes de services e
+-- service_materials_planned já cobrem as colunas novas automaticamente) e
+-- nenhuma função foi tocada nesta parte.
+-- =============================================================================
+
+-- profiles.ativo — soft delete de utilizador (nunca DELETE): desativar só
+-- bloqueia acesso (getOrgId/getOrgIdAndRole/requireRole em lib/auth.ts).
+-- Default true preserva o acesso de todos os utilizadores já existentes —
+-- ninguém fica bloqueado por engano ao aplicar esta migração.
+alter table profiles add column if not exists ativo boolean not null default true;
+
+-- services.codigo — ID humano (OS-000001, ...), mesmo princípio de
+-- clients.codigo/requests.codigo (ver BLOCO 1 acima): nextval() é volátil,
+-- por isso o ADD COLUMN já atribui um código sequencial a cada serviço
+-- existente automaticamente, sem UPDATE de backfill à parte.
+create sequence if not exists services_codigo_seq;
+alter table services
+  add column if not exists codigo text unique not null
+  default ('OS-' || lpad(nextval('services_codigo_seq')::text, 6, '0'));
+
+-- service_materials_planned.preco_venda — preço de venda do material
+-- planeado (antes só tinha nome+quantidade). Default 0 para linhas
+-- existentes — nunca inventa um preço, fica simplesmente por preencher
+-- para materiais já planeados antes desta alteração.
+alter table service_materials_planned add column if not exists preco_venda numeric not null default 0;
+
 commit;
 
 -- =============================================================================
 -- FIM. Depois de aplicar isto em produção:
---   - Os BLOCOS 6, 7, 8, 10–19 desta sessão e a página de Relatórios do
---     f3b2177 não precisam de nenhuma alteração adicional à BD — já eram
---     só código (Server Actions / lib/*-estado.ts / lib/relatorios.ts),
+--   - Os BLOCOS 6, 7, 8, 10–19 desta sessão, a página de Relatórios do
+--     f3b2177, e toda a auditoria "APP" (Dashboard/Atenção, Agenda,
+--     Serviços, Orçamentos, Faturação, Utilizadores, Configurações, Super
+--     Admin) não precisam de nenhuma alteração adicional à BD além das 3
+--     colunas acima — o resto foi só código (Server Actions/páginas),
 --     publicado com o deploy normal da app (git push + vercel --prod).
 --   - Falta ainda, fora deste ficheiro: configurar as 4 env vars de Web
 --     Push no Vercel e agendar manualmente o job pg_cron acima — sem isso,

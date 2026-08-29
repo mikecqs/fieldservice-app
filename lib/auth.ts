@@ -24,9 +24,16 @@ export async function requireRole(allowed: string[]) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("nome, role, organization_id, organizations(nome)")
+    .select("nome, role, organization_id, ativo, organizations(nome, ativa)")
     .eq("id", user.id)
     .single();
+
+  // Utilizador ou empresa desativados (soft delete/freeze) — nunca
+  // apagados, só bloqueados. Sessão continua válida mas fica sempre presa
+  // no login (nunca um loop nem um erro, só nunca passa daqui).
+  if (profile?.ativo === false || (profile?.organizations as any)?.ativa === false) {
+    redirect("/login");
+  }
 
   const role = profile?.role as string | undefined;
   if (!role || !allowed.includes(role)) {
@@ -47,9 +54,16 @@ export async function getOrgId() {
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("organization_id")
+    .select("organization_id, ativo, organizations(ativa)")
     .eq("id", user!.id)
     .single();
+  // Chamado por quase todas as Server Actions — é aqui, não só em
+  // requireRole (que só corre em Server Components), que um utilizador ou
+  // empresa desativados ficam mesmo bloqueados de escrever, não só de ver
+  // páginas.
+  if (profile?.ativo === false || (profile?.organizations as any)?.ativa === false) {
+    redirect("/login");
+  }
   return profile!.organization_id as string;
 }
 
@@ -65,9 +79,12 @@ export async function getOrgIdAndRole() {
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("organization_id, role")
+    .select("organization_id, role, ativo, organizations(ativa)")
     .eq("id", user!.id)
     .single();
+  if (profile?.ativo === false || (profile?.organizations as any)?.ativa === false) {
+    redirect("/login");
+  }
   return {
     organizationId: profile!.organization_id as string,
     role: profile!.role as string,

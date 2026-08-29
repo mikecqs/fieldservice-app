@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { criarEquipamento, removerEquipamento } from "./actions";
+import { removerEquipamento } from "./actions";
 import { ServicosPopup } from "./ServicosPopup";
 import { PedidosCompactos } from "./PedidosCompactos";
+import { RegistarEquipamentoForm } from "./RegistarEquipamentoForm";
 
 export default async function ClienteDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -18,7 +19,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
 
   const [{ data: requests }, { data: services }, { data: budgets }, { data: equipamentos }] = await Promise.all([
     supabase.from("requests").select("id, codigo, tipo, descricao, estado, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
-    supabase.from("services").select("id, descricao, tipo, estado, data_agendada, faturacao_estado, faturacao_valor, equipment_id").eq("client_id", params.id),
+    supabase.from("services").select("id, codigo, descricao, tipo, estado, data_agendada, faturacao_estado, faturacao_valor, equipment_id").eq("client_id", params.id),
     supabase.from("budgets").select("id, estado").eq("client_id", params.id),
     supabase
       .from("client_equipment")
@@ -147,33 +148,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
 
         <details>
           <summary className="cursor-pointer text-sm font-medium text-neutral-200">+ Registar equipamento</summary>
-          <form action={criarEquipamento} encType="multipart/form-data" className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <input type="hidden" name="client_id" value={params.id} />
-            <input name="equipamento" placeholder="Equipamento (ex: Câmara IP, Central de alarme)" required className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            {(cliente.client_addresses ?? []).length > 0 && (
-              <select name="address_id" className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm">
-                <option value="">Localização — sem especificar</option>
-                {(cliente.client_addresses ?? []).map((a: any) => (
-                  <option key={a.id} value={a.id}>{a.label}: {a.endereco}</option>
-                ))}
-              </select>
-            )}
-            <input name="marca" placeholder="Marca" className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            <input name="modelo" placeholder="Modelo" className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            <input name="numero_serie" placeholder="Número de série / referência" className="rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-neutral-300">Data de instalação</span>
-              <input name="data_instalacao" type="date" className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            </label>
-            <textarea name="notas" placeholder="Notas (opcional)" rows={2} className="col-span-2 rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-            <label className="col-span-2 block">
-              <span className="mb-1 block text-xs font-medium text-neutral-300">Fotografia (opcional)</span>
-              <input name="foto" type="file" accept="image/*" className="w-full text-sm" />
-            </label>
-            <button className="col-span-2 mt-1 rounded-md bg-white px-3 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
-              Registar equipamento
-            </button>
-          </form>
+          <RegistarEquipamentoForm clientId={params.id} moradas={(cliente.client_addresses ?? []) as any} />
         </details>
       </div>
 

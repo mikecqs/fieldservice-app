@@ -108,3 +108,38 @@ export async function criarAtendimentoDaEmpresa(formData: FormData) {
 
   revalidatePath("/super-admin");
 }
+
+// Freeze/reativação de empresa — soft, nunca apaga nada. organizations.ativa
+// já existia no schema mas nunca tinha sido ligado a nenhuma ação nem
+// enforcement; agora getOrgId/getOrgIdAndRole/requireRole (lib/auth.ts)
+// bloqueiam qualquer acesso de utilizadores dessa empresa enquanto ativa
+// for false — nunca apaga a empresa nem os dados, só bloqueia o acesso.
+export async function alterarEstadoEmpresa(formData: FormData) {
+  await requireRole(["SUPER_ADMIN"]);
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  const ativa = formData.get("ativa") === "true";
+  if (!id) return;
+
+  await supabase.from("organizations").update({ ativa }).eq("id", id);
+  revalidatePath("/super-admin");
+}
+
+// Soft delete de utilizador ao nível do Super Admin — mesmo princípio de
+// desativarUtilizador em app/admin/utilizadores/actions.ts, mas sem estar
+// limitado à própria empresa do chamador (o Super Admin gere todas).
+export async function alterarEstadoUtilizador(formData: FormData) {
+  await requireRole(["SUPER_ADMIN"]);
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  const ativo = formData.get("ativo") === "true";
+  if (!id) return;
+
+  const { data: alvo } = await supabase.from("profiles").select("role").eq("id", id).single();
+  if (alvo?.role === "SUPER_ADMIN") {
+    throw new Error("Não é possível desativar outro Super Admin por aqui.");
+  }
+
+  await supabase.from("profiles").update({ ativo }).eq("id", id);
+  revalidatePath("/super-admin");
+}
