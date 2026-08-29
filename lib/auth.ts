@@ -52,10 +52,14 @@ export async function getOrgId() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Mesma proteção de requireRole() — sem isto, uma sessão inválida/expirada
+  // fazia user!.id rebentar com TypeError em vez de redirecionar, porque
+  // esta função (ao contrário de requireRole) não tinha nenhum guard prévio.
+  if (!user) redirect("/login");
   const { data: profile } = await supabase
     .from("profiles")
     .select("organization_id, ativo, organizations(ativa)")
-    .eq("id", user!.id)
+    .eq("id", user.id)
     .single();
   // Chamado por quase todas as Server Actions — é aqui, não só em
   // requireRole (que só corre em Server Components), que um utilizador ou
@@ -77,10 +81,11 @@ export async function getOrgIdAndRole() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
   const { data: profile } = await supabase
     .from("profiles")
     .select("organization_id, role, ativo, organizations(ativa)")
-    .eq("id", user!.id)
+    .eq("id", user.id)
     .single();
   if (profile?.ativo === false || (profile?.organizations as any)?.ativa === false) {
     redirect("/login");
