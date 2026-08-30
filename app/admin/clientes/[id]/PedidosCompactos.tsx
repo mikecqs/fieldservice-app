@@ -2,13 +2,7 @@
 
 import { useState } from "react";
 import { PedidoModal } from "@/components/pedidos/PedidoModal";
-
-const ESTADO_PEDIDO_LABEL: Record<string, string> = {
-  novo: "Novo",
-  orcamento: "Em orçamento",
-  convertido: "Convertido",
-  arquivado: "Arquivado",
-};
+import { ESTADO_PEDIDO_LABEL } from "@/lib/pedido-estado";
 
 type PedidoResumo = { id: string; codigo: string; tipo: string; descricao: string; estado: string; created_at: string };
 

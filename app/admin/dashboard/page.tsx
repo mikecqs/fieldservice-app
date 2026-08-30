@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { Circle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { getFinanceiroStats, formatEuros } from "@/lib/financeiro";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
 import { toISO, addDays, nowTimeHHMMSS, startOfLocalDayUTC } from "@/lib/agenda-dates";
 import { estaAtrasado, orcamentoPrecisaFollowup, ESTADOS_SERVICO_POR_AGENDAR } from "@/lib/operacional";
-import { calcularPreparacao, PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
+import { calcularPreparacao } from "@/lib/preparacao";
 
 // Estados que já não fazem parte do trabalho "por realizar" de hoje — o
 // técnico já não vai voltar a mexer no serviço no âmbito do dia agendado.
@@ -288,7 +289,7 @@ export default async function DashboardPage() {
       titulo: `Serviço futuro não preparado (até ${em3Dias})`,
       itens: naoPreparados.map((s: any) => ({
         id: s.id,
-        texto: `${PREPARACAO_BADGE[s.preparacao.nivel as NivelPreparacao].emoji} ${s.clients?.nome} — ${s.data_agendada} · ${s.preparacao.motivos.join(", ")}`,
+        texto: `${s.clients?.nome} — ${s.data_agendada} · ${s.preparacao.motivos.join(", ")}`,
         href: `/admin/servicos/${s.id}`,
       })),
     },
@@ -444,9 +445,17 @@ export default async function DashboardPage() {
           </div>
         )}
         <div className="mt-2 flex gap-4 text-xs text-neutral-500">
-          <span>🟢 {progressoConcluido} concluídos</span>
-          <span>🟡 {progressoPendente} por realizar</span>
-          {naoAgendadosCancelados > 0 && <span>⚪ {naoAgendadosCancelados} cancelados (fora da conta)</span>}
+          <span className="flex items-center gap-1">
+            <Circle className="h-2.5 w-2.5 fill-current text-emerald-500" aria-hidden="true" /> {progressoConcluido} concluídos
+          </span>
+          <span className="flex items-center gap-1">
+            <Circle className="h-2.5 w-2.5 fill-current text-amber-500" aria-hidden="true" /> {progressoPendente} por realizar
+          </span>
+          {naoAgendadosCancelados > 0 && (
+            <span className="flex items-center gap-1">
+              <Circle className="h-2.5 w-2.5 fill-current text-neutral-600" aria-hidden="true" /> {naoAgendadosCancelados} cancelados (fora da conta)
+            </span>
+          )}
         </div>
       </section>
 

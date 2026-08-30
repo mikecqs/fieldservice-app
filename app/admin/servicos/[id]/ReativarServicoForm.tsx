@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 import { reativarServico, verificarConflitoAgenda } from "../actions";
 
 type Tecnico = { id: string; nome: string };
@@ -131,7 +132,9 @@ export function ReativarServicoForm({ servicoId, tecnicosDisponiveis }: { servic
 
       {conflito && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-300">
-          <p>⚠️ Conflito de agenda: {conflito}</p>
+          <p className="flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> Conflito de agenda: {conflito}
+          </p>
           <div className="mt-2 flex gap-2">
             <button type="button" onClick={() => setConflito(null)} className="flex-1 rounded-md border border-neutral-700 px-2 py-1 text-neutral-200">
               Cancelar

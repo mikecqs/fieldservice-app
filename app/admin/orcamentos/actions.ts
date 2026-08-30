@@ -32,6 +32,105 @@ export async function criarOrcamento(formData: FormData) {
   redirect(`/admin/orcamentos/${budget.id}`);
 }
 
+// Onda 3 (Etapa 2) — duplica um orçamento existente como novo rascunho
+// independente, para poupar reescrever as mesmas linhas num orçamento
+// parecido. O original nunca é alterado (só lido); o novo nasce sempre em
+// 'rascunho', sem request_id/service_id/enviado_em/followup_em (nunca
+// copiados — um duplicado não é o mesmo orçamento, não pertence ao pedido
+// do original, e copiar request_id criaria dois orçamentos para o mesmo
+// pedido, que obterDetalhePedido() não espera — usa .maybeSingle() a
+// assumir sempre no máximo um por pedido) nem `numero` (sequência própria,
+// como qualquer orçamento novo). `client_id` e `iva_percent` são
+// referenciados tal como no orçamento original — nunca um novo cliente.
+// Mesmo padrão de autorização de criarOrcamento: cliente normal sujeito a
+// RLS (policy "admin manages budgets"/"admin manages budget_items"), nunca
+// createAdminClient().
+export async function duplicarOrcamento(formData: FormData) {
+  const organizationId = await getOrgId();
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  const { data: original } = await supabase
+    .from("budgets")
+    .select("numero, client_id, iva_percent, budget_items(tipo, descricao, qtd, valor_unit)")
+    .eq("id", id)
+    .single();
+  if (!original) throw new Error("Orçamento original não encontrado.");
+
+  const { data: novo, error } = await supabase
+    .from("budgets")
+    .insert({
+      organization_id: organizationId,
+      client_id: original.client_id,
+      iva_percent: original.iva_percent,
+    })
+    .select()
+    .single();
+  if (error || !novo) throw new Error(error?.message || "Não foi possível duplicar o orçamento.");
+
+  const itens = original.budget_items ?? [];
+  if (itens.length > 0) {
+    const { error: itensError } = await supabase.from("budget_items").insert(
+      itens.map((item) => ({
+        organization_id: organizationId,
+        budget_id: novo.id,
+        tipo: item.tipo,
+        descricao: item.descricao,
+        qtd: item.qtd,
+        valor_unit: item.valor_unit,
+      }))
+    );
+    if (itensError) throw new Error(itensError.message);
+  }
+
+  await registarEventoOrcamento(supabase, {
+    organizationId,
+    budgetId: novo.id,
+    tipo: "criado",
+    descricao: `Duplicado a partir do orçamento #${original.numero}.`,
+  });
+
+  revalidatePath("/admin/orcamentos");
+  redirect(`/admin/orcamentos/${novo.id}`);
+}
+
+type NovoItemOrcamento = { tipo: string; descricao: string; qtd: number; valor_unit: number };
+
+// Onda 3 (Etapa 3) — guard partilhado entre adicionarItem (uma linha) e
+// adicionarItensCatalogo (várias de uma vez), para as duas nunca terem
+// versões diferentes da mesma regra: quantidade/valor têm de ser >= 0 (BLOCO
+// 14/15) e o orçamento só pode ser editado em 'rascunho' (podeEditarItensOrcamento).
+async function inserirItensOrcamento(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  budgetId: string,
+  itens: NovoItemOrcamento[]
+) {
+  for (const item of itens) {
+    if (!Number.isFinite(item.qtd) || item.qtd < 0 || !Number.isFinite(item.valor_unit) || item.valor_unit < 0) {
+      throw new Error("Quantidade e valor unitário têm de ser números iguais ou superiores a 0.");
+    }
+  }
+
+  const { data: orcamento } = await supabase.from("budgets").select("estado").eq("id", budgetId).single();
+  if (!orcamento || !podeEditarItensOrcamento(orcamento)) {
+    throw new Error("Este orçamento já não pode ser editado (só é possível em rascunho).");
+  }
+
+  const { error } = await supabase.from("budget_items").insert(
+    itens.map((item) => ({
+      organization_id: organizationId,
+      budget_id: budgetId,
+      tipo: item.tipo,
+      descricao: item.descricao,
+      qtd: item.qtd,
+      valor_unit: item.valor_unit,
+    }))
+  );
+  if (error) throw new Error(error.message);
+}
+
 export async function adicionarItem(formData: FormData) {
   const organizationId = await getOrgId();
   const supabase = createClient();
@@ -41,31 +140,39 @@ export async function adicionarItem(formData: FormData) {
   const qtd = Number(formData.get("qtd") || 1);
   const valor_unit = Number(formData.get("valor_unit") || 0);
   if (!budget_id || !descricao) return;
-  // Quantidade e valor unitário negativos produziriam um total de orçamento
-  // negativo sem passar por nenhuma transição de estado — validado aqui tal
-  // como o valor de criarServico (BLOCO 14/15).
-  if (!Number.isFinite(qtd) || qtd < 0 || !Number.isFinite(valor_unit) || valor_unit < 0) {
-    throw new Error("Quantidade e valor unitário têm de ser números iguais ou superiores a 0.");
-  }
 
-  // Itens só podem ser adicionados/removidos/reprecificados enquanto o
-  // orçamento está em rascunho — depois de enviado/aceite, o valor já foi
-  // (ou vai ser) congelado, e editar às escondidas desalinharia do que o
-  // cliente recebeu ou do serviço já criado.
-  const { data: orcamento } = await supabase.from("budgets").select("estado").eq("id", budget_id).single();
-  if (!orcamento || !podeEditarItensOrcamento(orcamento)) {
-    throw new Error("Este orçamento já não pode ser editado (só é possível em rascunho).");
-  }
+  await inserirItensOrcamento(supabase, organizationId, budget_id, [{ tipo, descricao, qtd, valor_unit }]);
+  revalidatePath(`/admin/orcamentos/${budget_id}`);
+}
 
-  await supabase.from("budget_items").insert({
-    organization_id: organizationId,
-    budget_id,
-    tipo,
-    descricao,
-    qtd,
-    valor_unit,
-  });
+// Onda 3 (Etapa 3) — adiciona várias linhas do catálogo de uma só vez, para
+// não obrigar a repetir "escolher → Adicionar linha" item a item. Cada linha
+// nasce com o mesmo formato já usado ao escolher um único item do catálogo
+// no formulário de linha única (tipo 'materiais', qtd 1, valor = preço de
+// venda do catálogo) — nunca uma regra de cálculo nova; o utilizador
+// continua livre para editar ou remover qualquer uma destas linhas depois,
+// exatamente como qualquer outra (removerItem já cobre isso, sem alteração).
+export async function adicionarItensCatalogo(formData: FormData) {
+  const organizationId = await getOrgId();
+  const supabase = createClient();
+  const budget_id = String(formData.get("budget_id") || "");
+  const catalogIds = formData.getAll("catalog_item_id").map(String).filter(Boolean);
+  if (!budget_id || catalogIds.length === 0) return;
 
+  const { data: catalogo } = await supabase
+    .from("catalog_items")
+    .select("id, referencia, descricao, preco_venda")
+    .in("id", catalogIds);
+  if (!catalogo || catalogo.length === 0) return;
+
+  const itens: NovoItemOrcamento[] = catalogo.map((c) => ({
+    tipo: "materiais",
+    descricao: `${c.referencia} — ${c.descricao}`,
+    qtd: 1,
+    valor_unit: Number(c.preco_venda),
+  }));
+
+  await inserirItensOrcamento(supabase, organizationId, budget_id, itens);
   revalidatePath(`/admin/orcamentos/${budget_id}`);
 }
 

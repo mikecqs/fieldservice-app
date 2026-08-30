@@ -1,4 +1,24 @@
 import { ESTADO_LABEL as SERVICO_LABEL, ESTADO_COLOR as SERVICO_COLOR } from "@/app/admin/servicos/estados";
+// Onda 4 (Etapa 12) — só a COR do estado do Orçamento vem agora de uma
+// fonte partilhada com app/admin/orcamentos/page.tsx e
+// app/admin/orcamentos/[id]/page.tsx (nunca divergem entre si). O LABEL
+// abaixo (ORCAMENTO_LABEL) fica deliberadamente à parte: é o texto
+// contextual mostrado dentro do percurso do Pedido (ex: "Em orçamento
+// (rascunho)"), diferente do label "neutro" usado no resto da app — nunca
+// fundir os dois.
+import { ESTADO_COLOR as ORCAMENTO_COLOR, ESTADO_COLOR_FALLBACK } from "@/lib/orcamento-visual";
+
+// Onda 4 (Etapa 14) — fonte única do label do estado bruto do Pedido
+// (requests.estado), antes duplicado em PedidoDetalheConteudo.tsx e
+// PedidosCompactos.tsx. Diferente de estadoOperacionalPedido() abaixo, que
+// deriva um estado operacional a partir do orçamento/serviço associado —
+// este é só a tradução direta do valor de requests.estado.
+export const ESTADO_PEDIDO_LABEL: Record<string, string> = {
+  novo: "Novo",
+  orcamento: "Em orçamento",
+  convertido: "Convertido em serviço",
+  arquivado: "Arquivado",
+};
 
 const ORCAMENTO_LABEL: Record<string, string> = {
   rascunho: "Em orçamento (rascunho)",
@@ -8,16 +28,6 @@ const ORCAMENTO_LABEL: Record<string, string> = {
   aceite: "Orçamento aceite",
   recusado: "Orçamento recusado",
   cancelado: "Orçamento cancelado",
-};
-
-const ORCAMENTO_COLOR: Record<string, string> = {
-  rascunho: "bg-neutral-800 text-neutral-300",
-  enviado: "bg-sky-500/15 text-sky-400",
-  aguarda_resposta: "bg-amber-500/15 text-amber-400",
-  followup: "bg-orange-500/15 text-orange-400",
-  aceite: "bg-emerald-500/15 text-emerald-400",
-  recusado: "bg-red-500/15 text-red-400",
-  cancelado: "bg-neutral-800 text-neutral-400",
 };
 
 // Estado operacional REAL de um pedido — nunca um valor novo gravado na BD,

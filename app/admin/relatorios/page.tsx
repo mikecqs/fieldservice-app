@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AlertTriangle, Timer, TrendingUp, Users, Wrench, ClipboardList, Euro, Package } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { computeRange, getFinanceiroStats, formatDuracao, formatEuros } from "@/lib/financeiro";
 import { getPontosAtencao, getEvolucao, getTecnicos, getTiposServico, getOrcamentosFunil, getMateriais, getAgenda } from "@/lib/relatorios";
@@ -155,7 +156,9 @@ export default async function RelatoriosPage({
       {/* Pontos de atenção */}
       <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-amber-400">⚠️ Pontos de atenção</h2>
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-amber-400">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Pontos de atenção
+          </h2>
           <Link href="/admin/dashboard" className="text-xs text-neutral-400 underline hover:text-neutral-200">Ver Dashboard →</Link>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -168,7 +171,9 @@ export default async function RelatoriosPage({
 
       {/* Onde estamos a perder tempo */}
       <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">⏱️ Onde estamos a perder tempo?</h2>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
+          <Timer className="h-4 w-4" aria-hidden="true" /> Onde estamos a perder tempo?
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div><div className="text-base font-bold text-white">{formatDuracao(stats.tempos.pedidoAgendamentoHoras)}</div><div className="text-xs text-neutral-400">Pedido → Agendamento</div></div>
           <div><div className="text-base font-bold text-white">{formatDuracao(stats.tempos.agendamentoInicioHoras)}</div><div className="text-xs text-neutral-400">Agendamento → Início</div></div>
@@ -180,13 +185,17 @@ export default async function RelatoriosPage({
 
       {/* Evolução */}
       <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">📈 Evolução</h2>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
+          <TrendingUp className="h-4 w-4" aria-hidden="true" /> Evolução
+        </h2>
         <EvolucaoChart dados={evolucao} />
       </div>
 
       {/* Técnicos */}
       <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">👨‍🔧 Técnicos</h2>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
+          <Users className="h-4 w-4" aria-hidden="true" /> Técnicos
+        </h2>
         {tecnicos.length === 0 ? (
           <p className="text-sm text-neutral-500">Sem dados no período.</p>
         ) : (
@@ -219,7 +228,9 @@ export default async function RelatoriosPage({
 
       {/* Tipos de serviço */}
       <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">🛠️ Tipos de serviço</h2>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
+          <Wrench className="h-4 w-4" aria-hidden="true" /> Tipos de serviço
+        </h2>
         {tiposServico.length === 0 ? (
           <p className="text-sm text-neutral-500">Sem dados no período.</p>
         ) : (
@@ -241,7 +252,9 @@ export default async function RelatoriosPage({
 
       {/* Orçamentos */}
       <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">📋 Orçamentos</h2>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
+          <ClipboardList className="h-4 w-4" aria-hidden="true" /> Orçamentos
+        </h2>
         <div className="grid gap-4 lg:grid-cols-2">
           <OrcamentosDonut aceites={orcamentos.aceites} recusados={orcamentos.recusados} pendentes={orcamentos.pendentes} />
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -257,7 +270,9 @@ export default async function RelatoriosPage({
 
       {/* Financeiro */}
       <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">💰 Financeiro</h2>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
+          <Euro className="h-4 w-4" aria-hidden="true" /> Financeiro
+        </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div><div className="font-bold text-white">{formatEuros(stats.faturacao.totalFaturado)}</div><div className="text-xs text-neutral-400">Faturado</div></div>
           <div><div className="font-bold text-white">{formatEuros(stats.faturacao.totalPorFaturar)}</div><div className="text-xs text-neutral-400">Por faturar</div></div>
@@ -268,7 +283,9 @@ export default async function RelatoriosPage({
 
       {/* Materiais */}
       <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-100">📦 Materiais</h2>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
+          <Package className="h-4 w-4" aria-hidden="true" /> Materiais
+        </h2>
         {materiais.length === 0 ? (
           <p className="text-sm text-neutral-500">Sem materiais utilizados no período.</p>
         ) : (

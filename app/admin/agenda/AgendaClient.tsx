@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Circle } from "lucide-react";
 import { ESTADO_COLOR } from "../servicos/estados";
 import { toISO, addDays, monthGridRange, DIAS_SEMANA } from "@/lib/agenda-dates";
 import { PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
@@ -113,14 +114,14 @@ export function AgendaClient({
 
 function EventoResumo({ s, onClick }: { s: Servico; onClick: () => void }) {
   const tecnicos = s.service_technicians.map((t) => t.profiles?.nome).filter(Boolean).join(", ");
-  const emoji = s.preparacaoNivel ? PREPARACAO_BADGE[s.preparacaoNivel].emoji : null;
+  const dotColor = s.preparacaoNivel ? PREPARACAO_BADGE[s.preparacaoNivel].dotColor : null;
   return (
     <button
       onClick={onClick}
       className={`block w-full rounded border-l-4 border-current px-1.5 py-1 text-left text-[11px] leading-tight ${ESTADO_COLOR[s.estado] ?? "bg-neutral-800 text-neutral-300"}`}
     >
       <div className="font-semibold">
-        {emoji && <span className="mr-0.5">{emoji}</span>}
+        {dotColor && <Circle className={`mr-0.5 inline-block h-2 w-2 align-middle fill-current ${dotColor}`} aria-hidden="true" />}
         {s.hora_agendada?.slice(0, 5)}
         {s.hora_fim_agendada ? `–${s.hora_fim_agendada.slice(0, 5)}` : ""} · {s.clients?.nome}
       </div>

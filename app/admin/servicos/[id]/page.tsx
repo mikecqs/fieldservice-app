@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Lock, CheckCircle2, Circle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import {
@@ -128,7 +129,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
         </p>
         {mostrarPreparacao && (
           <div className={`mt-3 flex items-start gap-2 rounded-md p-2.5 text-xs ${badgePreparacao.cls}`}>
-            <span>{badgePreparacao.emoji}</span>
+            <Circle className={`mt-0.5 h-2.5 w-2.5 shrink-0 fill-current ${badgePreparacao.dotColor}`} aria-hidden="true" />
             <div>
               <span className="font-semibold">{badgePreparacao.label}</span>
               {preparacao.motivos.length > 0 && <span> — {preparacao.motivos.join(", ")}</span>}
@@ -233,8 +234,9 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           )}
         </div>
         {!podeReagendarServico(servico) ? (
-          <p className="text-xs text-neutral-500">
-            🔒 Técnicos já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
+          <p className="flex items-start gap-1.5 text-xs text-neutral-500">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Técnicos já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
           </p>
         ) : (
           disponiveis.length > 0 && (
@@ -268,7 +270,9 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
               </span>
               <div className="flex items-center gap-2">
                 {materiaisComCompraPendente.has(m.nome) ? (
-                  <span className="text-xs text-emerald-400">✓ Compra criada</span>
+                  <span className="flex items-center gap-1 text-xs text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Compra criada
+                  </span>
                 ) : (
                   <form action={criarCompraRapida}>
                     <input type="hidden" name="nome" value={m.nome} />
@@ -292,8 +296,9 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           )}
         </div>
         {!podeReagendarServico(servico) ? (
-          <p className="text-xs text-neutral-500">
-            🔒 Materiais planeados já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
+          <p className="flex items-start gap-1.5 text-xs text-neutral-500">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Materiais planeados já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
           </p>
         ) : (
           <MaterialPlaneadoForm serviceId={servico.id} />

@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId, getOrgIdAndRole } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
-import { podeReagendarServico, podeCancelarServico, podeReativarServico, deveTransicionarParaAgendado } from "@/lib/servico-estado";
+import { podeReagendarServico, podeCancelarServico, podeReativarServico } from "@/lib/servico-estado";
+import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
 
 // Aviso não-bloqueante de conflito de agenda — chamado pelo formulário antes
 // de gravar. Não impede nada sozinho: só devolve a informação para o Admin
@@ -64,54 +64,12 @@ export async function verificarConflitoAgenda(input: {
   };
 }
 
-export async function criarServico(formData: FormData) {
-  const organizationId = await getOrgId();
-  const supabase = createClient();
-
-  const client_id = String(formData.get("client_id") || "");
-  const address_id = String(formData.get("address_id") || "");
-  const tipo = String(formData.get("tipo") || "");
-  const descricao = String(formData.get("descricao") || "");
-  const prioridade = String(formData.get("prioridade") || "normal");
-  // "Novo Serviço" já não tem campo de preço na UI — valor nasce sempre 0 e
-  // só é preenchido depois, no fecho da visita pelo técnico (tech_finish_visit,
-  // BLOCO 14) ou por um orçamento aceite. O guard de sinal fica por defesa
-  // em profundidade (nunca confiar só na UI para não haver um valor
-  // negativo), mesmo já não havendo forma de o submeter com um valor != 0.
-  const valor = Number(formData.get("valor") || 0);
-
-  if (!client_id || !address_id || !tipo || !descricao) return;
-  if (!Number.isFinite(valor) || valor < 0) {
-    throw new Error("Valor do serviço tem de ser um número igual ou superior a 0.");
-  }
-
-  // Nunca confiar que o address_id do formulário pertence mesmo ao cliente
-  // selecionado — mesma verificação já usada em criarPedido.
-  const { data: morada } = await supabase
-    .from("client_addresses")
-    .select("id")
-    .eq("id", address_id)
-    .eq("client_id", client_id)
-    .single();
-  if (!morada) throw new Error("A morada selecionada não pertence ao cliente selecionado.");
-
-  const { data: service, error } = await supabase
-    .from("services")
-    .insert({ organization_id: organizationId, client_id, address_id, tipo, descricao, prioridade, valor })
-    .select()
-    .single();
-  if (error || !service) throw new Error(error?.message || "Não foi possível criar o serviço.");
-
-  await registarEventoServico(supabase, {
-    organizationId,
-    serviceId: service.id,
-    tipo: "criado",
-    descricao: `Serviço criado (${tipo}).`,
-  });
-
-  revalidatePath("/admin/servicos");
-  redirect(`/admin/servicos/${service.id}`);
-}
+// Onda 3 (Etapa 9) — criarServico() (criação independente de Serviço, usada
+// só por /admin/servicos/novo) foi removida: essa rota deixou de existir
+// (decisão C da auditoria) — criar um Serviço passa sempre pelo fluxo de
+// Pedido (criarPedido/criarServicoDePedido, em app/admin/pedidos/actions.ts)
+// ou pela Agenda (criarOuAgendarNoPopup, em app/admin/agenda/actions.ts),
+// nenhum dos quais foi tocado por esta remoção.
 
 export async function atualizarAgendamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -139,27 +97,23 @@ export async function atualizarAgendamento(formData: FormData) {
     throw new Error("A hora de término deve ser depois da hora de início.");
   }
 
-  const { data: current } = await supabase
-    .from("services")
-    .select("estado, data_agendada, faturacao_estado")
-    .eq("id", id)
-    .single();
-  if (!current) return;
-
-  // Serviço concluído/cancelado/não realizado ou já faturado: agendamento,
-  // horário e técnico ficam bloqueados — nunca só escondido na UI (ver
-  // AgendamentoForm.tsx, que aplica exatamente a mesma regra).
-  if (!podeReagendarServico(current)) {
-    throw new Error("Este serviço já não pode ser reagendado (concluído, cancelado, não realizado ou já faturado).");
-  }
-
-  const update: Record<string, unknown> = { data_agendada, hora_agendada, hora_fim_agendada, prioridade, notas };
-  if (data_agendada && deveTransicionarParaAgendado(current.estado)) update.estado = "agendado";
-
-  await supabase.from("services").update(update).eq("id", id);
+  // Onda 3 (Etapa 5) — a leitura do estado atual, o guard
+  // podeReagendarServico e o próprio .update() em `services` ficaram numa
+  // única função partilhada com criarOuAgendarNoPopup (lib/agendamento-servico.ts).
+  // "Serviço não encontrado" continua a resolver-se em silêncio aqui —
+  // exatamente como antes, nunca lançado — porque é esse o comportamento
+  // já existente deste fluxo (diferente do da Agenda, que lança erro).
+  const anterior = await escreverAgendamentoServico(supabase, {
+    serviceId: id,
+    dataAgendada: data_agendada,
+    horaAgendada: hora_agendada,
+    horaFimAgendada: hora_fim_agendada,
+    camposExtra: { prioridade, notas },
+  });
+  if (!anterior) return;
 
   if (data_agendada) {
-    const jaTinhaData = !!current?.data_agendada;
+    const jaTinhaData = !!anterior.data_agendada;
     await registarEventoServico(supabase, {
       organizationId,
       serviceId: id,

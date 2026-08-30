@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Lock, AlertTriangle } from "lucide-react";
 import { atualizarAgendamento, verificarConflitoAgenda } from "../actions";
 import { podeReagendarServico } from "@/lib/servico-estado";
 
@@ -17,11 +18,14 @@ export function AgendamentoForm({ servico }: { servico: any }) {
   // vai recusar de qualquer forma.
   if (!podeReagendarServico(servico)) {
     return (
-      <div className="rounded-md border border-neutral-800 bg-neutral-800/50 p-3 text-sm text-neutral-400">
-        🔒 Este serviço já não pode ser reagendado (
-        {servico.faturacao_estado === "faturado" ? "já faturado" : "concluído, cancelado ou não realizado"}
-        ). Data: {servico.data_agendada ?? "—"} {servico.hora_agendada?.slice(0, 5) ?? ""}
-        {servico.hora_fim_agendada ? `–${servico.hora_fim_agendada.slice(0, 5)}` : ""}
+      <div className="flex items-start gap-1.5 rounded-md border border-neutral-800 bg-neutral-800/50 p-3 text-sm text-neutral-400">
+        <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>
+          Este serviço já não pode ser reagendado (
+          {servico.faturacao_estado === "faturado" ? "já faturado" : "concluído, cancelado ou não realizado"}
+          ). Data: {servico.data_agendada ?? "—"} {servico.hora_agendada?.slice(0, 5) ?? ""}
+          {servico.hora_fim_agendada ? `–${servico.hora_fim_agendada.slice(0, 5)}` : ""}
+        </span>
       </div>
     );
   }
@@ -94,7 +98,9 @@ export function AgendamentoForm({ servico }: { servico: any }) {
 
       {conflito && (
         <div className="col-span-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
-          <p className="mb-2">⚠️ Conflito de agenda: {conflito}</p>
+          <p className="mb-2 flex items-center gap-1.5">
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> Conflito de agenda: {conflito}
+          </p>
           <div className="flex gap-2">
             <button
               type="button"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { adicionarItem } from "../actions";
+import { adicionarItem, adicionarItensCatalogo } from "../actions";
 
 type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
 
@@ -12,12 +12,36 @@ export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; ca
   const [valorUnit, setValorUnit] = useState("");
   const [erro, setErro] = useState<string | null>(null);
 
+  // Onda 3 (Etapa 3) — seleção múltipla do catálogo: estado próprio,
+  // independente do formulário de linha única acima, para os dois nunca
+  // interferirem entre si.
+  const [selecaoMultipla, setSelecaoMultipla] = useState<string[]>([]);
+  const [aAdicionarVarios, setAAdicionarVarios] = useState(false);
+  const [erroMultiplo, setErroMultiplo] = useState<string | null>(null);
+
   function aplicarCatalogo(id: string) {
     const item = catalogo.find((c) => c.id === id);
     if (!item) return;
     setDescricao(`${item.referencia} — ${item.descricao}`);
     setValorUnit(String(item.preco_venda));
     setTipo("materiais");
+  }
+
+  async function adicionarSelecionados() {
+    if (selecaoMultipla.length === 0) return;
+    setErroMultiplo(null);
+    setAAdicionarVarios(true);
+    try {
+      const fd = new FormData();
+      fd.set("budget_id", budgetId);
+      selecaoMultipla.forEach((id) => fd.append("catalog_item_id", id));
+      await adicionarItensCatalogo(fd);
+      setSelecaoMultipla([]);
+    } catch (e: any) {
+      setErroMultiplo(e?.message || "Não foi possível adicionar as linhas selecionadas.");
+    } finally {
+      setAAdicionarVarios(false);
+    }
   }
 
   // Os campos "descrição" e "€ unit." são controlados (para o catálogo os
@@ -55,6 +79,39 @@ export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; ca
             </option>
           ))}
         </select>
+      )}
+
+      {catalogo.length > 0 && (
+        <div className="space-y-1.5 rounded-md border border-neutral-800 p-2">
+          <span className="block text-xs font-medium text-neutral-300">
+            Ou adicionar várias do catálogo de uma vez (Ctrl/Cmd + clique para selecionar mais do que uma)
+          </span>
+          <select
+            multiple
+            value={selecaoMultipla}
+            onChange={(e) => setSelecaoMultipla(Array.from(e.target.selectedOptions, (o) => o.value))}
+            className="h-28 w-full rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs"
+          >
+            {catalogo.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.referencia} — {c.descricao} · {c.preco_venda.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+              </option>
+            ))}
+          </select>
+          {erroMultiplo && <p className="text-xs text-red-400">{erroMultiplo}</p>}
+          <button
+            type="button"
+            disabled={selecaoMultipla.length === 0 || aAdicionarVarios}
+            onClick={adicionarSelecionados}
+            className="w-full rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {aAdicionarVarios
+              ? "A adicionar…"
+              : selecaoMultipla.length > 0
+              ? `Adicionar ${selecaoMultipla.length} linha${selecaoMultipla.length > 1 ? "s" : ""} selecionada${selecaoMultipla.length > 1 ? "s" : ""}`
+              : "Adicionar selecionadas"}
+          </button>
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">

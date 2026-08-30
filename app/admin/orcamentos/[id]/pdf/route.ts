@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
-
-const TIPO_LABEL: Record<string, string> = {
-  materiais: "Materiais",
-  mao_obra: "Mão de obra",
-  deslocacao: "Deslocação",
-  outros: "Outros",
-};
+import { TIPO_LABEL } from "@/lib/orcamento-item-tipo";
 
 // Gera o PDF profissional do orçamento a pedido (não fica gravado nenhum
 // ficheiro — cada download é construído na hora a partir dos dados atuais).

@@ -1,3 +1,4 @@
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { guardarConfiguracoes } from "./actions";
@@ -86,8 +87,8 @@ export default async function ConfiguracoesPage({
 
           {sheets?.status === "erro" && (
             <>
-              <p className="mb-3 text-xs text-amber-400">
-                ⚠️ A sincronização está temporariamente indisponível. Será tentada novamente automaticamente.
+              <p className="mb-3 flex items-center gap-1.5 text-xs text-amber-400">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> A sincronização está temporariamente indisponível. Será tentada novamente automaticamente.
               </p>
               <a
                 href="/api/integrations/google-sheets/connect"
@@ -100,7 +101,9 @@ export default async function ConfiguracoesPage({
 
           {sheets?.status === "ativo" && (
             <>
-              <p className="mb-1 text-xs font-medium text-emerald-400">✅ Google Sheets ligado</p>
+              <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> Google Sheets ligado
+              </p>
               <p className="mb-0.5 text-xs text-neutral-400">Conta: {sheets.google_email ?? "—"}</p>
               <p className="mb-3 text-xs text-neutral-400">
                 Última sincronização: {sheets.last_synced_at ? new Date(sheets.last_synced_at).toLocaleString("pt-PT") : "ainda sem alterações"}

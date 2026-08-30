@@ -1,26 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
-
-const ESTADO_LABEL: Record<string, string> = {
-  rascunho: "Rascunho",
-  enviado: "Enviado",
-  aguarda_resposta: "Aguarda resposta",
-  followup: "Follow-up",
-  aceite: "Aceite",
-  recusado: "Recusado",
-  cancelado: "Cancelado",
-};
-
-const ESTADO_COLOR: Record<string, string> = {
-  rascunho: "bg-neutral-800 text-neutral-300",
-  enviado: "bg-sky-500/15 text-sky-400",
-  aguarda_resposta: "bg-amber-500/15 text-amber-400",
-  followup: "bg-orange-500/15 text-orange-400",
-  aceite: "bg-emerald-500/15 text-emerald-400",
-  recusado: "bg-red-500/15 text-red-400",
-  cancelado: "bg-neutral-800 text-neutral-400",
-};
+import { ESTADO_LABEL, ESTADO_COLOR } from "@/lib/orcamento-visual";
 
 export default async function OrcamentosPage() {
   const supabase = createClient();

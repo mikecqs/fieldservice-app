@@ -27,4 +27,22 @@
   select:disabled {
     opacity: 0.6;
   }
+
+  /* Onda 1 — Fundação Premium: focus visível global e consistente, só para
+     navegação por teclado (:focus-visible, não :focus — não reage a cliques
+     de rato/touch). Fica na @layer base, por isso as classes de focus já
+     definidas manualmente em login, esqueci-password e redefinir-password
+     (na camada de utilities, que no Tailwind vem sempre depois de base)
+     continuam a ganhar nesses 3 sítios exatamente como antes — isto só
+     preenche o focus em todo o resto da app, que nunca o tinha definido. */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid theme("colors.white");
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }

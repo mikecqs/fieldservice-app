@@ -6,8 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrgId, getOrgIdAndRole } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
 import { podeDecidirPedido } from "@/lib/pedido-estado";
-
-const ORIGENS_VALIDAS = ["Telefone", "Loja", "Email", "Outro"];
+import { ORIGENS_PEDIDO as ORIGENS_VALIDAS } from "@/lib/pedido-opcoes";
 
 // Única lógica que cria um orçamento a partir de um pedido — usada tanto
 // quando o tipo já é "Orçamento" (automático, sem perguntar nada) como
@@ -40,7 +39,14 @@ async function criarOrcamentoDePedido(
 async function criarServicoDePedido(
   supabase: ReturnType<typeof createClient>,
   organizationId: string,
-  pedido: { id: string; client_id: string; address_id: string; tipo: string; descricao: string }
+  pedido: { id: string; client_id: string; address_id: string; tipo: string; descricao: string },
+  // Onda 3 (Etapa 9) — só o caminho "Agendamento" (dentro de criarPedido,
+  // no mesmo pedido de formulário) tem este valor disponível para
+  // transportar; decidirSemOrcamento chama esta função mais tarde, sem
+  // acesso ao formulário original, por isso nunca o passa — cai sempre no
+  // "normal" por omissão, exatamente como já acontecia antes desta etapa
+  // para todos os serviços criados a partir de um Pedido.
+  prioridade?: string
 ) {
   const { data: morada } = await supabase
     .from("client_addresses")
@@ -59,6 +65,7 @@ async function criarServicoDePedido(
       request_id: pedido.id,
       tipo: pedido.tipo,
       descricao: pedido.descricao,
+      prioridade: prioridade || "normal",
     })
     .select()
     .single();
@@ -90,6 +97,16 @@ export async function criarPedido(formData: FormData) {
   const descricao = String(formData.get("descricao") || "").trim();
   const origem = String(formData.get("origem") || "");
   const info_falta = formData.get("info_falta") === "on";
+  // Onda 3 (Etapa 9) — só usada no ramo "Agendamento" abaixo (o único que
+  // cria o Serviço já dentro desta mesma submissão); "requests" não tem
+  // coluna de prioridade, por isso não é gravada no Pedido em si.
+  const prioridade = String(formData.get("prioridade") || "normal");
+  // Onda 3 (Etapa 10) — resposta à pergunta "É necessário orçamento?",
+  // agora dentro do próprio formulário (NovoPedidoForm, quando
+  // permitirDecisaoOrcamento). Só chega preenchida quando o tipo não é
+  // "Orçamento" nem "Agendamento" — nos outros dois casos vem sempre vazia
+  // e é ignorada, porque esses ramos nem chegam a olhar para ela.
+  const necessita_orcamento = String(formData.get("necessita_orcamento") || "");
 
   if (!client_id || !address_id || !tipo || !descricao) return;
   if (!ORIGENS_VALIDAS.includes(origem)) return;
@@ -131,9 +148,27 @@ export async function criarPedido(formData: FormData) {
     redirect(`/admin/orcamentos/${budget.id}`);
   }
   if (tipo === "Agendamento") {
-    const service = await criarServicoDePedido(supabase, organizationId, pedido);
+    const service = await criarServicoDePedido(supabase, organizationId, pedido, prioridade);
     redirect(`/admin/servicos/${service.id}`);
   }
+
+  // Onda 3 (Etapa 10) — resposta já veio no mesmo formulário (ver
+  // NovoPedidoForm): decide já, em vez de mandar para /decisao. Reutiliza
+  // exatamente as mesmas duas funções que decidirComOrcamento/
+  // decidirSemOrcamento já usavam — nunca uma segunda versão desta lógica.
+  if (necessita_orcamento === "sim") {
+    const budget = await criarOrcamentoDePedido(supabase, organizationId, pedido.id, client_id);
+    redirect(`/admin/orcamentos/${budget.id}`);
+  }
+  if (necessita_orcamento === "nao") {
+    const service = await criarServicoDePedido(supabase, organizationId, pedido, prioridade);
+    redirect(`/admin/servicos/${service.id}`);
+  }
+
+  // Rede de segurança (mantida) — só chega aqui se necessita_orcamento vier
+  // vazio ou inesperado (ex: JavaScript desativado no toggle do
+  // formulário). /decisao e decidirComOrcamento/decidirSemOrcamento
+  // continuam exatamente como estavam.
   redirect(`/admin/pedidos/${pedido.id}/decisao`);
 }
 

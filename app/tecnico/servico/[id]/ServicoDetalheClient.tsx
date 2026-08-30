@@ -3,29 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { iniciarServico, concluirVisita, obterVisitaAberta } from "../../actions";
-
-const MAO_OBRA_OPCOES: [string, string][] = [
-  ["1h", "1 hora"],
-  ["2h", "2 horas"],
-  ["3h", "3 horas"],
-  ["4h", "4 horas"],
-  ["5h", "5 horas"],
-  ["6h", "6 horas"],
-  ["7h", "7 horas"],
-  ["8h", "8 horas"],
-  ["dia_completo", "Dia completo"],
-  ["2dias", "2 dias completos"],
-  ["outro", "Outro"],
-];
-
-// Tem de espelhar exatamente o CASE de tech_finish_visit — é só para a
-// pré-visualização do total no telemóvel, o valor que realmente fica
-// gravado é sempre calculado outra vez no servidor.
-const HORAS_MAO_OBRA: Record<string, number> = {
-  "1h": 1, "2h": 2, "3h": 3, "4h": 4, "5h": 5, "6h": 6, "7h": 7, "8h": 8,
-  dia_completo: 8, "2dias": 16, outro: 0,
-};
+import { AlertTriangle, MapPin, Phone, Lock, CheckCircle2, X } from "lucide-react";
+import { iniciarServico, concluirVisita, obterVisitaAberta, sugerirMaoObraDaVisita } from "../../actions";
+import { Badge } from "@/components/ui/Badge";
+import { MAO_OBRA_OPCOES, HORAS_MAO_OBRA } from "@/lib/mao-obra";
 
 function formatEuros(v: number) {
   return v.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
@@ -33,16 +14,6 @@ function formatEuros(v: number) {
 
 type LinhaMaterial = { nome: string; qtd: string; precoUnit: string };
 type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
-
-const ESTADO_LABEL: Record<string, [string, string]> = {
-  agendado: ["Agendado", "bg-neutral-800 text-neutral-200"],
-  em_curso: ["Em curso", "bg-amber-500/15 text-amber-400"],
-  aguarda_validacao: ["Aguarda validação", "bg-amber-500/15 text-amber-400"],
-  concluido: ["Concluído", "bg-emerald-500/15 text-emerald-400"],
-  correcao_necessaria: ["Correção necessária", "bg-red-500/15 text-red-400"],
-  nova_visita: ["Nova visita", "bg-orange-500/15 text-orange-400"],
-  nao_realizado: ["Não realizado", "bg-red-500/15 text-red-400"],
-};
 
 export function ServicoDetalheClient({
   servico,
@@ -74,14 +45,14 @@ export function ServicoDetalheClient({
   const [novaHora, setNovaHora] = useState("");
   const [problemaIdentificado, setProblemaIdentificado] = useState("");
   const [equipamentoInstalado, setEquipamentoInstalado] = useState("");
-  const [quantidadeInstalada, setQuantidadeInstalada] = useState("");
+  // Onda 2: pré-preenchida com "1" quando o serviço é Instalação — é o caso
+  // mais comum, e continua totalmente editável.
+  const [quantidadeInstalada, setQuantidadeInstalada] = useState(servico.tipo === "Instalação" ? "1" : "");
   const [testesRealizados, setTestesRealizados] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
 
   const isInstalacao = servico.tipo === "Instalação";
-
-  const [label, cls] = ESTADO_LABEL[servico.estado] ?? [servico.estado, "bg-neutral-800 text-neutral-200"];
 
   const atualizarLinha = (i: number, patch: Partial<LinhaMaterial>) => {
     setMateriaisLinhas((linhas) => linhas.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -135,6 +106,19 @@ export function ServicoDetalheClient({
         return;
       }
       setVisitaId(id);
+      // Onda 2: sugere a mão de obra a partir da duração real da visita —
+      // só se o Técnico ainda não tiver escolhido nada (nunca substitui uma
+      // escolha manual já feita, mesmo que ele volte atrás e reabra o
+      // formulário). Falha em silêncio se não conseguir sugerir: o campo
+      // fica vazio, exatamente como já era antes desta onda.
+      if (!maoObraTipo) {
+        try {
+          const sugestao = await sugerirMaoObraDaVisita(id);
+          if (sugestao) setMaoObraTipo(sugestao);
+        } catch {
+          // sugestão é só conveniência — nunca deve impedir o fecho do serviço.
+        }
+      }
       setAFinalizar(true);
     } catch (e: any) {
       setErro(e.message);
@@ -249,13 +233,16 @@ export function ServicoDetalheClient({
       </Link>
 
       <div className="mb-3 flex items-center justify-between">
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>
+        <Badge estado={servico.estado} />
         <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">{servico.tipo}</span>
       </div>
 
       {servico.estado === "correcao_necessaria" && servico.motivo_correcao && (
-        <div className="mb-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
-          <span className="font-semibold">⚠️ O Admin pediu uma correção:</span> {servico.motivo_correcao}
+        <div className="mb-3 flex items-start gap-1.5 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            <span className="font-semibold">O Admin pediu uma correção:</span> {servico.motivo_correcao}
+          </span>
         </div>
       )}
 
@@ -269,7 +256,7 @@ export function ServicoDetalheClient({
               rel="noopener noreferrer"
               className="mt-1 flex items-center gap-1 text-sm text-neutral-200 underline"
             >
-              📍 {servico.morada}
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /> {servico.morada}
             </a>
           )}
           {servico.cliente_telefone && <p className="mt-1 text-sm text-neutral-400">{servico.cliente_telefone}</p>}
@@ -278,13 +265,13 @@ export function ServicoDetalheClient({
               href={`tel:${servico.cliente_telefone}`}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-800"
             >
-              📞 Chamar cliente
+              <Phone className="h-4 w-4" aria-hidden="true" /> Chamar cliente
             </a>
           )}
         </>
       ) : (
-        <p className="mt-1 text-sm font-medium text-amber-400">
-          🔒 Morada, contacto e descrição ficam visíveis quando este for o próximo serviço.
+        <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-amber-400">
+          <Lock className="h-4 w-4 shrink-0" aria-hidden="true" /> Morada, contacto e descrição ficam visíveis quando este for o próximo serviço.
         </p>
       )}
 
@@ -318,8 +305,8 @@ export function ServicoDetalheClient({
         {!servico.desbloqueado &&
           ["agendado", "nova_visita", "correcao_necessaria"].includes(servico.estado) &&
           !aFinalizar && (
-            <div className="rounded-lg bg-neutral-800 p-3 text-center text-sm text-neutral-400">
-              🔒 Fecha o serviço anterior para poderes iniciar este.
+            <div className="flex items-center justify-center gap-1.5 rounded-lg bg-neutral-800 p-3 text-center text-sm text-neutral-400">
+              <Lock className="h-4 w-4 shrink-0" aria-hidden="true" /> Fecha o serviço anterior para poderes iniciar este.
             </div>
           )}
 
@@ -353,7 +340,7 @@ export function ServicoDetalheClient({
 
         {aFinalizar && sucesso && (
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-6 text-center">
-            <div className="mb-1 text-2xl">✓</div>
+              <CheckCircle2 className="mx-auto mb-1 h-8 w-8" aria-hidden="true" />
             <p className="text-sm font-semibold text-emerald-400">Serviço encerrado com sucesso.</p>
             <p className="mt-1 text-xs text-emerald-400">A voltar à agenda…</p>
           </div>
@@ -391,7 +378,7 @@ export function ServicoDetalheClient({
                         setNovaHora("");
                         setProblemaIdentificado("");
                         setEquipamentoInstalado("");
-                        setQuantidadeInstalada("");
+                        setQuantidadeInstalada(isInstalacao ? "1" : "");
                         setTestesRealizados("");
                         setErro(null);
                       }}
@@ -499,7 +486,7 @@ export function ServicoDetalheClient({
                           aria-label="Remover material"
                           className="shrink-0 px-1 text-neutral-500"
                         >
-                          ✕
+                          <X className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </div>
                     ))}

@@ -1,17 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FileText, MessageCircle, Mail, Copy } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
-import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento } from "../actions";
+import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento, duplicarOrcamento } from "../actions";
 import { AdicionarItemForm } from "./AdicionarItemForm";
 import { ESTADOS_ORCAMENTO_TERMINAIS } from "@/lib/orcamento-estado";
-
-const TIPO_LABEL: Record<string, string> = {
-  materiais: "Materiais",
-  mao_obra: "Mão de obra",
-  deslocacao: "Deslocação",
-  outros: "Outros",
-};
+import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_COLOR_FALLBACK } from "@/lib/orcamento-visual";
+import { TIPO_LABEL } from "@/lib/orcamento-item-tipo";
 
 export default async function OrcamentoDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -46,8 +42,8 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
       <div className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <div className="mb-1 flex items-start justify-between">
           <h1 className="text-lg font-bold text-white">#{orcamento.numero} · {orcamento.clients?.nome}</h1>
-          <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">
-            {orcamento.estado}
+          <span className={`rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[orcamento.estado] ?? ESTADO_COLOR_FALLBACK}`}>
+            {ESTADO_LABEL[orcamento.estado] ?? orcamento.estado}
           </span>
         </div>
         <p className="text-xs text-neutral-500">Criado {orcamento.criado_em}</p>
@@ -60,28 +56,34 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
             href={`/admin/orcamentos/${orcamento.id}/pdf`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
+            className="flex items-center gap-1.5 rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
           >
-            📄 Download PDF
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" /> Download PDF
           </a>
           <a
             href={`https://wa.me/${telefoneWhatsapp ?? ""}?text=${encodeURIComponent(mensagemPartilha)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-md border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10"
+            className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10"
           >
-            📱 Partilhar por WhatsApp
+            <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" /> Partilhar por WhatsApp
           </a>
           {orcamento.clients?.email && (
             <a
               href={`mailto:${orcamento.clients.email}?subject=${encodeURIComponent("Orçamento")}&body=${encodeURIComponent(
                 mensagemPartilha + "\n\n(Descarrega o PDF acima e anexa-o a este email antes de enviar.)"
               )}`}
-              className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
+              className="flex items-center gap-1.5 rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800"
             >
-              ✉️ Partilhar por email
+              <Mail className="h-3.5 w-3.5" aria-hidden="true" /> Partilhar por email
             </a>
           )}
+          <form action={duplicarOrcamento}>
+            <input type="hidden" name="id" value={orcamento.id} />
+            <button className="flex items-center gap-1.5 rounded-md border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800">
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" /> Duplicar orçamento
+            </button>
+          </form>
         </div>
 
         {!ESTADOS_ORCAMENTO_TERMINAIS.includes(orcamento.estado) && (

@@ -6,20 +6,38 @@ import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
 import { NexiaMark } from "@/components/NexiaMark";
 
-const NAV = [
-  { href: "/admin/dashboard", label: "Dashboard" },
-  { href: "/admin/pedidos", label: "Pedidos" },
-  { href: "/admin/agenda", label: "Agenda" },
-  { href: "/admin/clientes", label: "Clientes" },
-  { href: "/admin/servicos", label: "Serviços" },
-  { href: "/admin/orcamentos", label: "Orçamentos" },
-  { href: "/admin/catalogo", label: "Catálogo" },
-  { href: "/admin/compras", label: "Compras" },
-  { href: "/admin/financeiro", label: "Financeiro" },
-  { href: "/admin/faturacao", label: "Faturação" },
-  { href: "/admin/relatorios", label: "Relatórios" },
-  { href: "/admin/utilizadores", label: "Utilizadores" },
-  { href: "/admin/configuracoes", label: "Configurações" },
+// Onda 3 (Etapa 6) — os mesmos 13 itens, agora agrupados por frequência de
+// uso na operação diária (auditoria Onda 3, ponto 6). Nenhuma rota mudou —
+// só a organização visual do menu.
+const NAV_GROUPS: { titulo: string; itens: { href: string; label: string }[] }[] = [
+  {
+    titulo: "Operação",
+    itens: [
+      { href: "/admin/dashboard", label: "Dashboard" },
+      { href: "/admin/pedidos", label: "Pedidos" },
+      { href: "/admin/agenda", label: "Agenda" },
+      { href: "/admin/clientes", label: "Clientes" },
+      { href: "/admin/servicos", label: "Serviços" },
+    ],
+  },
+  {
+    titulo: "Negócio",
+    itens: [
+      { href: "/admin/orcamentos", label: "Orçamentos" },
+      { href: "/admin/compras", label: "Compras" },
+      { href: "/admin/catalogo", label: "Catálogo" },
+      { href: "/admin/financeiro", label: "Financeiro" },
+      { href: "/admin/faturacao", label: "Faturação" },
+      { href: "/admin/relatorios", label: "Relatórios" },
+    ],
+  },
+  {
+    titulo: "Sistema",
+    itens: [
+      { href: "/admin/utilizadores", label: "Utilizadores" },
+      { href: "/admin/configuracoes", label: "Configurações" },
+    ],
+  },
 ];
 
 export function AdminSidebar({ orgNome, nome }: { orgNome: string; nome?: string }) {
@@ -62,18 +80,27 @@ export function AdminSidebar({ orgNome, nome }: { orgNome: string; nome?: string
             <div className="text-[11px] leading-tight text-neutral-400">{orgNome}</div>
           </div>
         </div>
-        <nav className="mt-2 flex-1 space-y-0.5 overflow-y-auto px-2">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setAberto(false)}
-              className={`block rounded-md px-3 py-2 text-sm hover:bg-white hover:text-neutral-950 ${
-                pathname === item.href ? "bg-white text-neutral-950" : "text-neutral-400"
-              }`}
-            >
-              {item.label}
-            </Link>
+        <nav className="mt-2 flex-1 space-y-4 overflow-y-auto px-2">
+          {NAV_GROUPS.map((grupo) => (
+            <div key={grupo.titulo}>
+              <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-wide text-neutral-600">
+                {grupo.titulo}
+              </h2>
+              <div className="space-y-0.5">
+                {grupo.itens.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setAberto(false)}
+                    className={`block rounded-md px-3 py-2 text-sm hover:bg-white hover:text-neutral-950 ${
+                      pathname === item.href ? "bg-white text-neutral-950" : "text-neutral-400"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         <div className="border-t border-neutral-700 p-3">

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
-import { podeReagendarServico, deveTransicionarParaAgendado } from "@/lib/servico-estado";
+import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
 
 // Ação única usada pelo popup da Agenda — cobre os dois modos do modal
 // (agendar um serviço já existente, ou criar um serviço novo já agendado,
@@ -39,32 +39,26 @@ export async function criarOuAgendarNoPopup(input: {
   let serviceId = input.existingServiceId || null;
 
   if (serviceId) {
-    const { data: current } = await supabase
-      .from("services")
-      .select("estado, data_agendada, faturacao_estado")
-      .eq("id", serviceId)
-      .single();
-    if (!current) throw new Error("Serviço não encontrado.");
+    // Onda 3 (Etapa 5) — a leitura do estado atual, o guard
+    // podeReagendarServico e o próprio .update() em `services` ficaram numa
+    // única função partilhada com atualizarAgendamento
+    // (lib/agendamento-servico.ts). Este fluxo continua a exigir sempre os
+    // três campos preenchidos (validado acima) e continua a lançar erro
+    // quando o serviço não é encontrado — nunca em silêncio, diferente de
+    // atualizarAgendamento, porque é esse o comportamento já existente aqui.
+    const anterior = await escreverAgendamentoServico(supabase, {
+      serviceId,
+      dataAgendada: input.data,
+      horaAgendada: input.horaInicio,
+      horaFimAgendada: input.horaFim,
+    });
+    if (!anterior) throw new Error("Serviço não encontrado.");
 
-    // Mesma regra de app/admin/servicos/actions.ts (atualizarAgendamento) —
-    // nunca duas versões diferentes desta validação (auditoria BLOCO 5).
-    if (!podeReagendarServico(current)) {
-      throw new Error("Este serviço já não pode ser reagendado (concluído, cancelado, não realizado ou já faturado).");
-    }
-
-    const update: Record<string, unknown> = {
-      data_agendada: input.data,
-      hora_agendada: input.horaInicio,
-      hora_fim_agendada: input.horaFim,
-    };
-    if (deveTransicionarParaAgendado(current.estado)) update.estado = "agendado";
-
-    await supabase.from("services").update(update).eq("id", serviceId);
     await registarEventoServico(supabase, {
       organizationId,
       serviceId,
-      tipo: current.data_agendada ? "reagendado" : "agendado",
-      descricao: `${current.data_agendada ? "Reagendado" : "Agendado"} para ${input.data} ${input.horaInicio}–${input.horaFim} a partir da agenda.`,
+      tipo: anterior.data_agendada ? "reagendado" : "agendado",
+      descricao: `${anterior.data_agendada ? "Reagendado" : "Agendado"} para ${input.data} ${input.horaInicio}–${input.horaFim} a partir da agenda.`,
     });
   } else {
     if (!input.clientId || !input.addressId || !input.tipo || !input.descricao) {

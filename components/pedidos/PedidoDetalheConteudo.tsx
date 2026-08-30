@@ -1,13 +1,6 @@
 import Link from "next/link";
-import { estadoOperacionalPedido } from "@/lib/pedido-estado";
+import { estadoOperacionalPedido, ESTADO_PEDIDO_LABEL } from "@/lib/pedido-estado";
 import { ESTADO_LABEL as SERVICO_ESTADO_LABEL, ESTADO_COLOR as SERVICO_ESTADO_COLOR } from "@/app/admin/servicos/estados";
-
-const ESTADO_PEDIDO_LABEL: Record<string, string> = {
-  novo: "Novo",
-  orcamento: "Em orçamento",
-  convertido: "Convertido em serviço",
-  arquivado: "Arquivado",
-};
 
 // O tipo exato devolvido por obterDetalhePedido() depende de como o
 // supabase-js infere as relações aninhadas (este projeto não usa tipos

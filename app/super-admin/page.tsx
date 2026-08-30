@@ -1,12 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { criarEmpresa, criarAdminDaEmpresa, criarAtendimentoDaEmpresa, alterarEstadoEmpresa, alterarEstadoUtilizador } from "./actions";
-
-const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Admin",
-  TECHNICIAN: "Técnico",
-  FINANCE: "Financeiro",
-  ATENDIMENTO: "Atendimento",
-};
+import { ROLE_LABEL } from "@/lib/roles";
 
 export default async function SuperAdminPage() {
   const supabase = createClient();

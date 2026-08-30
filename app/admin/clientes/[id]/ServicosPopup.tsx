@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { ESTADO_LABEL, ESTADO_COLOR } from "@/app/admin/servicos/estados";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 type ServicoResumo = { id: string; codigo: string; tipo: string; descricao: string; estado: string; data_agendada: string | null };
 
@@ -36,9 +39,9 @@ export function ServicosPopup({ servicos }: { servicos: ServicoResumo[] }) {
           >
             <div className="mb-4 flex items-start justify-between">
               <h2 className="text-base font-bold text-white">Serviços · {servicos.length}</h2>
-              <button onClick={() => setAberto(false)} className="rounded-md px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800">
-                Fechar ✕
-              </button>
+              <Button variant="ghost" size="icon" onClick={() => setAberto(false)} aria-label="Fechar" className="flex items-center gap-1">
+                Fechar <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
             </div>
 
             <div className="space-y-1.5">
@@ -67,7 +70,7 @@ export function ServicosPopup({ servicos }: { servicos: ServicoResumo[] }) {
                   </div>
                 </Link>
               ))}
-              {servicos.length === 0 && <p className="py-8 text-center text-sm text-neutral-500">Ainda sem serviços.</p>}
+              {servicos.length === 0 && <EmptyState message="Ainda sem serviços." />}
             </div>
           </div>
         </div>

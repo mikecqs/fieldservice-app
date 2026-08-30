@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { nowTimeHHMMSS } from "@/lib/agenda-dates";
+import { sugerirMaoObraPorDuracao } from "@/lib/mao-obra";
 
 // Vai sempre buscar a visita aberta mais recente diretamente à BD — usado
 // pelo botão "Terminar serviço" para nunca depender de um valor de
@@ -20,6 +22,35 @@ export async function obterVisitaAberta(serviceId: string) {
     .limit(1)
     .maybeSingle();
   return data?.id ?? null;
+}
+
+// Onda 2 — sugestão inicial de mão de obra para o formulário de fecho,
+// calculada a partir de hora_inicio_real da visita (gravada
+// automaticamente por tech_start_service, nunca pedida ao Técnico). Usa o
+// mesmo padrão de comparação de colunas `time` já estabelecido em
+// lib/operacional.ts (nowTimeHHMMSS() do lado do servidor, comparado como
+// texto) — nunca a hora do telemóvel do Técnico, para não desalinhar com o
+// fuso horário da própria base de dados.
+// É só uma pré-seleção: o Técnico continua sempre livre para escolher outra
+// opção, e o valor realmente faturado é sempre recalculado por
+// tech_finish_visit a partir da opção que ficar selecionada no momento de
+// confirmar — nunca a partir deste cálculo.
+export async function sugerirMaoObraDaVisita(visitId: string) {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("visits")
+    .select("hora_inicio_real")
+    .eq("id", visitId)
+    .is("hora_fim_real", null)
+    .maybeSingle();
+
+  if (!data?.hora_inicio_real) return null;
+
+  const [ih, im] = (data.hora_inicio_real as string).split(":").map(Number);
+  const [ah, am] = nowTimeHHMMSS().split(":").map(Number);
+  let minutos = ah * 60 + am - (ih * 60 + im);
+  if (minutos < 0) minutos += 24 * 60; // visita atravessou a meia-noite
+  return sugerirMaoObraPorDuracao(minutos);
 }
 
 export async function iniciarServico(serviceId: string) {

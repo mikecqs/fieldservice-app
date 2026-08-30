@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { NovoPedidoForm } from "@/components/pedidos/NovoPedidoForm";
-
-const TIPOS = ["Agendamento", "Orçamento", "Manutenção", "Instalação"];
-const ORIGENS = ["Telefone", "Loja", "Email", "Outro"];
+import { TIPOS_SERVICO as TIPOS, ORIGENS_PEDIDO as ORIGENS } from "@/lib/pedido-opcoes";
 
 export default async function NovoPedidoPage({ searchParams }: { searchParams: { clientId?: string } }) {
   const supabase = createClient();
@@ -25,6 +23,7 @@ export default async function NovoPedidoPage({ searchParams }: { searchParams: {
           tipos={TIPOS}
           origens={ORIGENS}
           showInfoFalta
+          permitirDecisaoOrcamento
           voltarHref="/admin/pedidos"
           // Vindo de "Novo cliente → Sim, criar pedido" (BLOCO 4): o cliente
           // já chega selecionado, sem o Admin ter de o procurar outra vez.

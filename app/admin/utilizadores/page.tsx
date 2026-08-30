@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { desativarUtilizador, reativarUtilizador, resetPasswordUtilizador } from "./actions";
 import { NovoUtilizadorForm } from "./NovoUtilizadorForm";
+import { ROLE_LABEL } from "@/lib/roles";
 
 // ATENDIMENTO pode aparecer aqui em modo só-leitura (a policy "org members
 // can read colleagues" deixa qualquer perfil da empresa ver os colegas) —
@@ -8,12 +9,6 @@ import { NovoUtilizadorForm } from "./NovoUtilizadorForm";
 // TECHNICIAN/ADMIN/FINANCE, e a policy "admin can manage profiles in own
 // org" em schema.sql rejeita qualquer tentativa de insert/update com
 // role='ATENDIMENTO', mesmo por fora desta página.
-const ROLE_LABEL: Record<string, string> = {
-  ADMIN: "Admin",
-  FINANCE: "Financeiro",
-  TECHNICIAN: "Técnico",
-  ATENDIMENTO: "Atendimento",
-};
 
 export default async function UtilizadoresPage() {
   const supabase = createClient();

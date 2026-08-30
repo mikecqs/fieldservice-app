@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { X, Lock, AlertTriangle } from "lucide-react";
 import { criarOuAgendarNoPopup } from "./actions";
 import { verificarConflitoAgenda, atualizarAgendamento, atribuirTecnico, removerTecnico } from "../servicos/actions";
-import { criarClienteRapido, criarMoradaRapida } from "../clientes/actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
 import { podeReagendarServico } from "@/lib/servico-estado";
-
-const TIPOS_SERVICO = ["Agendamento", "Orçamento", "Manutenção", "Instalação"];
+import { Button } from "@/components/ui/Button";
+import { ClienteMoradaFields } from "@/components/ClienteMoradaFields";
+import { TIPOS_SERVICO } from "@/lib/pedido-opcoes";
 
 export type ServicoAgenda = {
   id: string;
@@ -57,13 +58,7 @@ export function ServicoModal({
   const [servicoExistenteId, setServicoExistenteId] = useState("");
   const [listaClientes, setListaClientes] = useState(clientes);
   const [clientId, setClientId] = useState(servico?.client_id ?? "");
-  const [novoClienteAberto, setNovoClienteAberto] = useState(false);
-  const [novoClienteNome, setNovoClienteNome] = useState("");
-  const [aGuardarCliente, setAGuardarCliente] = useState(false);
   const [addressId, setAddressId] = useState("");
-  const [novaMoradaAberta, setNovaMoradaAberta] = useState(false);
-  const [novoEndereco, setNovoEndereco] = useState("");
-  const [aGuardarMorada, setAGuardarMorada] = useState(false);
   const [requestId, setRequestId] = useState("");
   const [tipo, setTipo] = useState(servico?.tipo ?? "");
   const [descricao, setDescricao] = useState(servico?.descricao ?? "");
@@ -86,8 +81,6 @@ export function ServicoModal({
   const servicoSelecionado = servicosPendentes.find((s) => s.id === servicoExistenteId);
   const pedidosDoCliente = pedidosAbertos.filter((p) => p.client_id === clientId);
   const tecnicosAtuais = servico?.service_technicians ?? [];
-  const clienteSelecionado = listaClientes.find((c) => c.id === clientId);
-  const moradas = clienteSelecionado?.client_addresses ?? [];
 
   const guardar = async () => {
     setErro(null);
@@ -181,52 +174,6 @@ export function ServicoModal({
     onSaved();
   };
 
-  const criarClienteInline = async () => {
-    setErro(null);
-    if (!novoClienteNome.trim()) {
-      setErro("Nome do cliente é obrigatório.");
-      return;
-    }
-    setAGuardarCliente(true);
-    try {
-      const novo = await criarClienteRapido({ nome: novoClienteNome });
-      setListaClientes((prev) => [...prev, { ...novo, client_addresses: [] }]);
-      setClientId(novo.id);
-      setAddressId("");
-      setRequestId("");
-      setNovoClienteAberto(false);
-      setNovoClienteNome("");
-      // Cliente novo nunca tem moradas — abre logo a criação da primeira.
-      setNovaMoradaAberta(true);
-    } catch (e: any) {
-      setErro(e?.message || "Não foi possível criar o cliente.");
-    } finally {
-      setAGuardarCliente(false);
-    }
-  };
-
-  const criarMoradaInline = async () => {
-    setErro(null);
-    if (!novoEndereco.trim() || !clientId) {
-      setErro("Morada é obrigatória.");
-      return;
-    }
-    setAGuardarMorada(true);
-    try {
-      const nova = await criarMoradaRapida({ client_id: clientId, endereco: novoEndereco });
-      setListaClientes((prev) =>
-        prev.map((c) => (c.id === clientId ? { ...c, client_addresses: [...c.client_addresses, nova] } : c))
-      );
-      setAddressId(nova.id);
-      setNovaMoradaAberta(false);
-      setNovoEndereco("");
-    } catch (e: any) {
-      setErro(e?.message || "Não foi possível criar a morada.");
-    } finally {
-      setAGuardarMorada(false);
-    }
-  };
-
   // Mesma regra do servidor (lib/servico-estado.ts) — um serviço já
   // concluído/cancelado/não realizado/faturado deixa de ser editável a
   // partir daqui; só consulta rápida + link para a ficha completa.
@@ -244,9 +191,9 @@ export function ServicoModal({
                 {ESTADO_LABEL[servico.estado] ?? servico.estado}
               </span>
             </div>
-            <button onClick={onClose} className="rounded-md px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800">
-              Fechar ✕
-            </button>
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar" className="flex items-center gap-1">
+              Fechar <X className="h-4 w-4" aria-hidden="true" />
+            </Button>
           </div>
 
           <div className="space-y-2 text-sm text-neutral-300">
@@ -260,8 +207,9 @@ export function ServicoModal({
                 Técnico(s): {tecnicosAtuais.map((t) => t.profiles?.nome).filter(Boolean).join(", ")}
               </p>
             )}
-            <div className="rounded-md border border-neutral-800 bg-neutral-800/50 p-3 text-xs text-neutral-400">
-              🔒 Este serviço já não pode ser editado (concluído, cancelado, não realizado ou já faturado).
+            <div className="flex items-start gap-1.5 rounded-md border border-neutral-800 bg-neutral-800/50 p-3 text-xs text-neutral-400">
+              <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Este serviço já não pode ser editado (concluído, cancelado, não realizado ou já faturado).
             </div>
           </div>
 
@@ -295,9 +243,9 @@ export function ServicoModal({
               </span>
             )}
           </div>
-          <button onClick={onClose} className="rounded-md px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-800">
-            Fechar ✕
-          </button>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fechar" className="flex items-center gap-1">
+            Fechar <X className="h-4 w-4" aria-hidden="true" />
+          </Button>
         </div>
 
         <div className="space-y-3">
@@ -345,118 +293,19 @@ export function ServicoModal({
                 </label>
               ) : (
                 <>
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-300">Cliente</span>
-                    {!novoClienteAberto ? (
-                      <div className="space-y-1.5">
-                        <select
-                          value={clientId}
-                          onChange={(e) => {
-                            setClientId(e.target.value);
-                            setRequestId("");
-                            setAddressId("");
-                            setNovaMoradaAberta(false);
-                          }}
-                          className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                        >
-                          <option value="">Seleciona…</option>
-                          {listaClientes.map((c) => (
-                            <option key={c.id} value={c.id}>{c.nome}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setNovoClienteAberto(true)}
-                          className="text-xs font-medium text-neutral-300 underline hover:text-white"
-                        >
-                          + Criar cliente novo
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 rounded-md border border-neutral-700 bg-neutral-800 p-3">
-                        <input
-                          value={novoClienteNome}
-                          onChange={(e) => setNovoClienteNome(e.target.value)}
-                          placeholder="Nome do cliente"
-                          className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            disabled={aGuardarCliente}
-                            onClick={criarClienteInline}
-                            className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200 disabled:opacity-60"
-                          >
-                            {aGuardarCliente ? "A criar…" : "Criar e selecionar"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setNovoClienteAberto(false)}
-                            className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-900"
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </label>
-
-                  {clientId && (
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-medium text-neutral-300">Morada</span>
-                      {!novaMoradaAberta ? (
-                        <div className="space-y-1.5">
-                          {moradas.length > 0 && (
-                            <select
-                              value={addressId}
-                              onChange={(e) => setAddressId(e.target.value)}
-                              className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                            >
-                              <option value="">— Selecionar morada —</option>
-                              {moradas.map((m) => (
-                                <option key={m.id} value={m.id}>{m.label}: {m.endereco}</option>
-                              ))}
-                            </select>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setNovaMoradaAberta(true)}
-                            className="text-xs font-medium text-neutral-300 underline hover:text-white"
-                          >
-                            + {moradas.length > 0 ? "Adicionar outra morada" : "Adicionar morada"}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 rounded-md border border-neutral-700 bg-neutral-800 p-3">
-                          <input
-                            value={novoEndereco}
-                            onChange={(e) => setNovoEndereco(e.target.value)}
-                            placeholder="Morada completa"
-                            className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={aGuardarMorada}
-                              onClick={criarMoradaInline}
-                              className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200 disabled:opacity-60"
-                            >
-                              {aGuardarMorada ? "A guardar…" : "Guardar morada"}
-                            </button>
-                            {moradas.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => setNovaMoradaAberta(false)}
-                                className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-900"
-                              >
-                                Cancelar
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </label>
-                  )}
+                  <ClienteMoradaFields
+                    clientes={listaClientes}
+                    onClientesChange={setListaClientes}
+                    clientId={clientId}
+                    onClientIdChange={(id) => {
+                      setClientId(id);
+                      setRequestId("");
+                    }}
+                    addressId={addressId}
+                    onAddressIdChange={setAddressId}
+                    onErro={setErro}
+                    camposNovoCliente="nome"
+                  />
 
                   {pedidosDoCliente.length > 0 && (
                     <label className="block">
@@ -533,7 +382,9 @@ export function ServicoModal({
               {tecnicosAtuais.map((t) => (
                 <span key={t.user_id} className="flex items-center gap-1 rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-200">
                   {t.profiles?.nome}
-                  <button onClick={() => removerEsteTecnico(t.user_id)} className="text-neutral-500 hover:text-red-400">✕</button>
+                  <button onClick={() => removerEsteTecnico(t.user_id)} aria-label={`Remover ${t.profiles?.nome ?? "técnico"}`} className="text-neutral-500 hover:text-red-400">
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
                 </span>
               ))}
             </div>
@@ -558,7 +409,9 @@ export function ServicoModal({
 
           {conflito && (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
-              <p className="font-semibold">⚠️ Conflito de agenda</p>
+              <p className="flex items-center gap-1.5 font-semibold">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> Conflito de agenda
+              </p>
               <p className="mt-1">{conflito}</p>
               <div className="mt-2 flex gap-2">
                 <button onClick={() => setConflito(null)} className="flex-1 rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200">
