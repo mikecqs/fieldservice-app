@@ -17,7 +17,11 @@ export async function guardarConfiguracoes(formData: FormData) {
   const valor_mao_obra_hora_adicional = Number(formData.get("valor_mao_obra_hora_adicional") || 0);
   const valor_mao_obra_dia_completo = Number(formData.get("valor_mao_obra_dia_completo") || 0);
   const valor_mao_obra_2_dias = Number(formData.get("valor_mao_obra_2_dias") || 0);
+  const valor_mao_obra_visita_orcamento = Number(formData.get("valor_mao_obra_visita_orcamento") || 0);
+  const valor_mao_obra_taxa_deslocacao = Number(formData.get("valor_mao_obra_taxa_deslocacao") || 0);
   for (const [campo, valor] of [
+    ["Visita para Orçamento", valor_mao_obra_visita_orcamento],
+    ["Taxa de Deslocação", valor_mao_obra_taxa_deslocacao],
     ["1ª hora", valor_mao_obra_primeira_hora],
     ["hora adicional", valor_mao_obra_hora_adicional],
     ["dia completo", valor_mao_obra_dia_completo],
@@ -36,6 +40,8 @@ export async function guardarConfiguracoes(formData: FormData) {
       valor_mao_obra_hora_adicional,
       valor_mao_obra_dia_completo,
       valor_mao_obra_2_dias,
+      valor_mao_obra_visita_orcamento,
+      valor_mao_obra_taxa_deslocacao,
     })
     .eq("organization_id", organizationId);
 

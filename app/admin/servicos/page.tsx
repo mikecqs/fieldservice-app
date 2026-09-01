@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { calcularPreparacao } from "@/lib/preparacao";
 import { ServicosLista } from "./ServicosLista";
@@ -37,17 +36,11 @@ export default async function ServicosPage() {
           <h1 className="text-xl font-bold text-white">Serviços</h1>
           <p className="mt-0.5 text-sm text-neutral-400">Ordens de serviço, desde agendamento até conclusão.</p>
         </div>
-        {/* Onda 3 (Etapa 9) — /admin/servicos/novo deixou de existir como
-            ponto de criação independente (decisão C da auditoria): criar um
-            serviço passa sempre pelo fluxo de Pedido, que já cobre o mesmo
-            caso (tipo "Agendamento" cria o serviço de imediato) e acrescenta
-            rastreabilidade (Origem) que este caminho nunca tinha. */}
-        <Link
-          href="/admin/pedidos/novo"
-          className="rounded-md bg-white px-3.5 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
-        >
-          Novo serviço
-        </Link>
+        {/* Auditoria "Centralizar criação" — o botão "Novo serviço" já não
+            existe aqui (já não fazia nada além de apontar para Pedidos, ver
+            Onda 3/Etapa 9). A criação de trabalho novo está agora centralizada
+            só em /admin/pedidos, que continua a cobrir exatamente o mesmo
+            caso (tipo "Agendamento" cria o serviço de imediato). */}
       </div>
 
       <ServicosLista servicos={servicosComPreparacao} />

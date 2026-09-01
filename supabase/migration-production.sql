@@ -232,6 +232,8 @@ declare
   v_valor_hora_adicional numeric;
   v_valor_dia_completo numeric;
   v_valor_2_dias numeric;
+  v_valor_visita_orcamento numeric;
+  v_valor_taxa_deslocacao numeric;
   v_valor_materiais numeric;
   v_valor_mao_obra numeric;
 begin
@@ -274,7 +276,7 @@ begin
     if p_mao_obra_tipo is null or length(trim(p_mao_obra_tipo)) = 0 then
       raise exception 'Mão de obra é obrigatória para concluir o serviço.';
     end if;
-    if p_mao_obra_tipo not in ('1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro') then
+    if p_mao_obra_tipo not in ('visita_orcamento','taxa_deslocacao','1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro') then
       raise exception 'Tipo de mão de obra inválido.';
     end if;
     if p_mao_obra_tipo = 'outro' and length(trim(coalesce(p_mao_obra_detalhe, ''))) = 0 then
@@ -339,15 +341,20 @@ begin
       into v_valor_materiais
       from jsonb_array_elements(p_materiais) as item;
 
-    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias
-      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias
+    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias,
+           valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao
+      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias,
+           v_valor_visita_orcamento, v_valor_taxa_deslocacao
       from org_settings where organization_id = v_org_id;
 
     -- Tabela comercial, não horas × taxa fixa: 1ª hora inclui deslocação,
     -- horas seguintes a preço avulso, "dia completo"/8h e "2 dias
     -- completos" são valores fixos explícitos (nunca derivados de
-    -- horas × taxa).
+    -- horas × taxa). "Visita para Orçamento"/"Taxa de Deslocação" são o
+    -- mesmo princípio: valores fixos configuráveis, nunca uma duração.
     v_valor_mao_obra := case p_mao_obra_tipo
+      when 'visita_orcamento' then coalesce(v_valor_visita_orcamento, 0)
+      when 'taxa_deslocacao' then coalesce(v_valor_taxa_deslocacao, 0)
       when '1h' then coalesce(v_valor_primeira_hora, 0)
       when '2h' then coalesce(v_valor_primeira_hora, 0) + 1 * coalesce(v_valor_hora_adicional, 0)
       when '3h' then coalesce(v_valor_primeira_hora, 0) + 2 * coalesce(v_valor_hora_adicional, 0)
@@ -590,6 +597,25 @@ alter table org_settings alter column valor_mao_obra_2_dias set default 500;
 update org_settings set valor_mao_obra_2_dias = 500 where valor_mao_obra_2_dias = 0;
 
 -- =============================================================================
+-- Duas opções novas na tabela de Tipos de Mão de Obra (local, ainda por
+-- commitar): "Visita para Orçamento" (0,00€, sempre gratuita) e "Taxa de
+-- Deslocação" (20,00€) — mesmo padrão ADD COLUMN + default constante das
+-- 3 colunas acima (backfill automático para as empresas já existentes,
+-- nenhuma tinha nada configurado porque a coluna não existia). O CHECK de
+-- visits.mao_obra_tipo já existia antes da baseline desta migração (por
+-- isso nunca apareceu como ALTER neste ficheiro até agora) — atualizado
+-- aqui com DROP + ADD CONSTRAINT, mesmo padrão já usado acima para
+-- service_events_tipo_check. tech_finish_visit já foi substituída acima
+-- (CREATE OR REPLACE) para usar as 2 colunas novas.
+-- =============================================================================
+alter table org_settings add column if not exists valor_mao_obra_visita_orcamento numeric not null default 0;
+alter table org_settings add column if not exists valor_mao_obra_taxa_deslocacao numeric not null default 20;
+
+alter table visits drop constraint if exists visits_mao_obra_tipo_check;
+alter table visits add constraint visits_mao_obra_tipo_check
+  check (mao_obra_tipo in ('visita_orcamento','taxa_deslocacao','1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro'));
+
+-- =============================================================================
 -- Referência de fatura obrigatória (local, ainda por commitar) — antes era
 -- possível marcar um serviço como faturado com faturacao_referencia vazia
 -- (só a UI tinha o campo, sem required, e nem a Server Action nem a RPC
@@ -706,6 +732,28 @@ left join lateral (
 ) s on true
 where r.organization_id = my_org() and my_role() = 'ATENDIMENTO';
 
+-- =============================================================================
+-- PDF do Fecho de Serviço (local, ainda por commitar) — um único documento
+-- por Serviço, sempre no mesmo caminho "{organization_id}/{service_id}/
+-- fecho.pdf" (upload com upsert, nunca "v1"/"v2"). Gerado por
+-- lib/pdf-fecho.ts com createAdminClient() — nunca pela sessão do Técnico
+-- nem do Financeiro, precisamente para não ter de lhes dar SELECT em
+-- visits/visit_materials_used/visit_photos só para montar o documento. O
+-- Financeiro só precisa de ler o ficheiro já pronto.
+-- =============================================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('fechos', 'fechos', false, 10485760, array['application/pdf'])
+on conflict (id) do nothing;
+
+drop policy if exists "admin manages fechos storage" on storage.objects;
+create policy "admin manages fechos storage" on storage.objects for all
+  using (bucket_id = 'fechos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (bucket_id = 'fechos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "finance reads fechos storage" on storage.objects;
+create policy "finance reads fechos storage" on storage.objects for select
+  using (bucket_id = 'fechos' and (storage.foldername(name))[1] = my_org()::text and my_role() = 'FINANCE');
+
 commit;
 
 -- =============================================================================
@@ -723,6 +771,16 @@ commit;
 --     tabela nova — só o `create or replace view` acima (fan-out corrigido
 --     em requests_status_atendimento_view). Todo o resto (Server Actions,
 --     páginas, o rótulo "Visita Prévia" na UI) é só código.
+--   - PDF do Fecho de Serviço: só o bucket "fechos" + as duas policies acima
+--     (Admin total, Financeiro só leitura) — sem coluna/sequência nova
+--     (services.codigo reaproveitado como ID_Fecho). O resto (geração do
+--     PDF, chamada nos 4 pontos do ciclo, botão "Ver PDF do Fecho") é só
+--     código.
+--   - Tipos de Mão de Obra "Visita para Orçamento"/"Taxa de Deslocação":
+--     2 colunas novas em org_settings + o CHECK de visits.mao_obra_tipo
+--     atualizado + tech_finish_visit substituída acima — sem tabela nova. O
+--     resto (lib/mao-obra.ts, o formulário do Técnico, Configurações) é só
+--     código.
 --   - Falta ainda, fora deste ficheiro: configurar as 4 env vars de Web
 --     Push no Vercel e agendar manualmente o job pg_cron acima — sem isso,
 --     as tabelas/policies existem mas a funcionalidade não envia nada.

@@ -9,12 +9,14 @@ export type ClienteResumo = {
   nome: string;
   empresa: string | null;
   telefone: string | null;
+  nif: string | null;
+  moradas: string;
   totalMoradas: number;
 };
 
-// Não existia nenhuma pesquisa nesta lista — mesmo padrão leve já usado em
-// Pedidos (useState + filtro client-side, sem dependências novas), agora
-// também a encontrar pelo código humano do cliente.
+// Mesmo padrão leve já usado em Pedidos (useState + filtro client-side, sem
+// dependências novas) — completado para também encontrar por NIF e morada,
+// além de código/nome/empresa/telefone.
 export function ClientesLista({ clientes }: { clientes: ClienteResumo[] }) {
   const [busca, setBusca] = useState("");
 
@@ -22,7 +24,7 @@ export function ClientesLista({ clientes }: { clientes: ClienteResumo[] }) {
     const termo = busca.trim().toLowerCase();
     if (!termo) return clientes;
     return clientes.filter((c) =>
-      [c.codigo, c.nome, c.empresa, c.telefone].filter(Boolean).join(" ").toLowerCase().includes(termo)
+      [c.codigo, c.nome, c.empresa, c.telefone, c.nif, c.moradas].filter(Boolean).join(" ").toLowerCase().includes(termo)
     );
   }, [clientes, busca]);
 
@@ -32,7 +34,7 @@ export function ClientesLista({ clientes }: { clientes: ClienteResumo[] }) {
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          placeholder="Pesquisar por código, nome, empresa ou telefone…"
+          placeholder="Pesquisar por nome, morada, NIF, código ou telefone…"
           className="mb-4 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500"
         />
       )}

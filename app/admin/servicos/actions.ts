@@ -8,6 +8,7 @@ import { registarEventoServico } from "@/lib/service-events";
 import { podeReagendarServico, podeCancelarServico, podeReativarServico, podeGerarOrcamentoDeVisita } from "@/lib/servico-estado";
 import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
 import { criarOrcamentoDePedido } from "../pedidos/actions";
+import { gerarPdfFechoSemBloquear } from "@/lib/pdf-fecho";
 
 // Aviso não-bloqueante de conflito de agenda — chamado pelo formulário antes
 // de gravar. Não impede nada sozinho: só devolve a informação para o Admin
@@ -340,6 +341,10 @@ export async function validarServico(formData: FormData) {
   const { error } = await supabase.rpc("finance_validar_servico", { p_service_id: id });
   if (error) throw new Error(error.message);
 
+  // PDF do Fecho (Ponto 5) — regenera para incluir a validação; nunca
+  // bloqueia a validação em si (já teve sucesso na RPC acima).
+  await gerarPdfFechoSemBloquear(id, "finance_validar_servico");
+
   revalidatePath("/admin/faturacao");
   revalidatePath(`/admin/servicos/${id}`);
   revalidatePath("/admin/dashboard");
@@ -396,6 +401,11 @@ export async function enviarParaCorrecao(formData: FormData) {
 
   const { error } = await supabase.rpc("finance_rejeitar_servico", { p_service_id: id, p_motivo: motivo });
   if (error) throw new Error(error.message);
+
+  // PDF do Fecho (Ponto 5) — regenera para refletir a devolução para
+  // correção; quando o Técnico fechar de novo, o passo em
+  // app/tecnico/actions.ts regenera outra vez, substituindo este.
+  await gerarPdfFechoSemBloquear(id, "finance_rejeitar_servico");
 
   revalidatePath("/admin/faturacao");
   revalidatePath(`/admin/servicos/${id}`);

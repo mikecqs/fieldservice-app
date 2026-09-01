@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { gerarPdfFechoSemBloquear } from "@/lib/pdf-fecho";
 
 // Admin e Financeiro (role FINANCE) partilham a mesma RPC — ver
 // finance_marcar_faturado em schema.sql, que valida permissão e estado
@@ -28,6 +29,10 @@ export async function marcarFaturado(formData: FormData) {
     p_referencia: faturacao_referencia,
   });
   if (error) throw new Error(error.message);
+
+  // PDF do Fecho (Ponto 5) — regenera para incluir a referência/valor/data
+  // de faturação; nunca bloqueia a faturação em si (já teve sucesso na RPC).
+  await gerarPdfFechoSemBloquear(id, "finance_marcar_faturado");
 
   revalidatePath("/admin/faturacao");
 }

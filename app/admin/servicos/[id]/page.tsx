@@ -25,8 +25,10 @@ import {
   podeReativarServico,
   podeGerarOrcamentoDeVisita,
   podeVoltarAoOrcamentoDaVisita,
+  podeVerPdfFecho,
   rotuloTipoServico,
 } from "@/lib/servico-estado";
+import { VerPdfFechoLink } from "@/components/VerPdfFechoLink";
 
 const EVENTO_LABEL: Record<string, string> = {
   criado: "Criado",
@@ -132,9 +134,15 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
             {ESTADO_LABEL[servico.estado] ?? servico.estado}
           </span>
         </div>
-        <p className="mt-2 text-sm font-semibold text-neutral-200">
-          {Number(servico.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
-        </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-neutral-200">
+            {Number(servico.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+          </p>
+          {/* Ação única "Ver PDF do Fecho" (Ponto 11) — mesmo componente do
+              PainelFaturacao, nunca duas implementações. Só aparece depois de
+              o Técnico ter fechado pelo menos uma vez (podeVerPdfFecho). */}
+          {podeVerPdfFecho(servico) && <VerPdfFechoLink servicoId={servico.id} />}
+        </div>
         {mostrarPreparacao && (
           <div className={`mt-3 flex items-start gap-2 rounded-md p-2.5 text-xs ${badgePreparacao.cls}`}>
             <Circle className={`mt-0.5 h-2.5 w-2.5 shrink-0 fill-current ${badgePreparacao.dotColor}`} aria-hidden="true" />

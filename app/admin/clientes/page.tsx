@@ -6,7 +6,7 @@ export default async function ClientesPage() {
   const supabase = createClient();
   const { data: clients } = await supabase
     .from("clients")
-    .select("id, codigo, nome, empresa, telefone, client_addresses(id)")
+    .select("id, codigo, nome, empresa, telefone, nif, client_addresses(label, endereco)")
     .order("nome");
 
   const resumo: ClienteResumo[] = (clients ?? []).map((c: any) => ({
@@ -15,6 +15,10 @@ export default async function ClientesPage() {
     nome: c.nome,
     empresa: c.empresa,
     telefone: c.telefone,
+    nif: c.nif,
+    // Texto simples com todas as moradas juntas, só para a pesquisa — a
+    // lista continua a mostrar apenas a contagem, como já acontecia.
+    moradas: (c.client_addresses ?? []).map((a: any) => `${a.label} ${a.endereco}`).join(" "),
     totalMoradas: (c.client_addresses ?? []).length,
   }));
 

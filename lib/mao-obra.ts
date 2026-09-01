@@ -20,7 +20,13 @@
 // fora do fluxo do Técnico, por isso deixadas como estavam nesta onda.
 // Ambas só leem horas (para estatísticas), nunca o preço — a etapa "Preços
 // da mão de obra" (calcularPrecoMaoObra, abaixo) não lhes diz respeito.
+// "Visita para Orçamento" e "Taxa de Deslocação" foram acrescentadas antes
+// de "1 hora" — são valores fixos configuráveis (org_settings), nunca uma
+// duração real, por isso ficam de fora de HORAS_MAO_OBRA/
+// sugerirMaoObraPorDuracao abaixo, no mesmo espírito de "outro".
 export const MAO_OBRA_OPCOES: [string, string][] = [
+  ["visita_orcamento", "Visita para Orçamento"],
+  ["taxa_deslocacao", "Taxa de Deslocação"],
   ["1h", "1 hora"],
   ["2h", "2 horas"],
   ["3h", "3 horas"],
@@ -36,8 +42,12 @@ export const MAO_OBRA_OPCOES: [string, string][] = [
 
 export const HORAS_MAO_OBRA: Record<string, number> = {
   "1h": 1, "2h": 2, "3h": 3, "4h": 4, "5h": 5, "6h": 6, "7h": 7, "8h": 8,
-  dia_completo: 8, "2dias": 16, outro: 0,
+  dia_completo: 8, "2dias": 16, outro: 0, visita_orcamento: 0, taxa_deslocacao: 0,
 };
+
+// Nunca sugeridas por duração (mesmo critério de "outro" em
+// sugerirMaoObraPorDuracao) — são categorias fixas, não uma duração real.
+const TIPOS_SEM_DURACAO_REAL = new Set(["outro", "visita_orcamento", "taxa_deslocacao"]);
 
 // Tabela comercial de preços (Etapa "Preços da mão de obra"): 1ª hora já
 // inclui deslocação, horas seguintes a preço avulso, "dia completo"/8h e "2
@@ -52,10 +62,16 @@ export type PrecosMaoObra = {
   horaAdicional: number;
   diaCompleto: number;
   doisDias: number;
+  visitaOrcamento: number;
+  taxaDeslocacao: number;
 };
 
 export function calcularPrecoMaoObra(tipo: string, precos: PrecosMaoObra): number {
   switch (tipo) {
+    case "visita_orcamento":
+      return precos.visitaOrcamento;
+    case "taxa_deslocacao":
+      return precos.taxaDeslocacao;
     case "1h":
       return precos.primeiraHora;
     case "2h":
@@ -90,7 +106,7 @@ export function sugerirMaoObraPorDuracao(minutos: number): string {
   let melhor = "1h";
   let menorDiferenca = Infinity;
   for (const [tipo, horas] of Object.entries(HORAS_MAO_OBRA)) {
-    if (tipo === "outro") continue;
+    if (TIPOS_SEM_DURACAO_REAL.has(tipo)) continue;
     const diferenca = Math.abs(horas - horasReais);
     if (diferenca < menorDiferenca) {
       menorDiferenca = diferenca;

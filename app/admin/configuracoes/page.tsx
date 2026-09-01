@@ -14,7 +14,7 @@ export default async function ConfiguracoesPage({
   const { data: settings } = await supabase
     .from("org_settings")
     .select(
-      "followup_dias_default, valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias"
+      "followup_dias_default, valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao"
     )
     .eq("organization_id", organizationId)
     .single();
@@ -50,6 +50,28 @@ export default async function ConfiguracoesPage({
               completos). O Técnico nunca introduz o preço manualmente.
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-neutral-400">Visita para Orçamento (€)</span>
+                <input
+                  name="valor_mao_obra_visita_orcamento"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={settings?.valor_mao_obra_visita_orcamento ?? 0}
+                  className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-neutral-400">Taxa de Deslocação (€)</span>
+                <input
+                  name="valor_mao_obra_taxa_deslocacao"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={settings?.valor_mao_obra_taxa_deslocacao ?? 20}
+                  className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+                />
+              </label>
               <label className="block">
                 <span className="mb-1 block text-[11px] text-neutral-400">1ª hora (€)</span>
                 <input

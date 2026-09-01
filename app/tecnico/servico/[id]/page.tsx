@@ -22,7 +22,9 @@ export default async function ServicoTecnicoPage({ params }: { params: { id: str
     supabase.from("catalog_items").select("id, referencia, descricao, preco_venda").order("referencia").limit(500),
     supabase
       .from("org_settings")
-      .select("valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias")
+      .select(
+        "valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao"
+      )
       .eq("organization_id", organizationId)
       .single(),
     supabase
@@ -45,6 +47,8 @@ export default async function ServicoTecnicoPage({ params }: { params: { id: str
         horaAdicional: settings?.valor_mao_obra_hora_adicional ?? 0,
         diaCompleto: settings?.valor_mao_obra_dia_completo ?? 0,
         doisDias: settings?.valor_mao_obra_2_dias ?? 0,
+        visitaOrcamento: settings?.valor_mao_obra_visita_orcamento ?? 0,
+        taxaDeslocacao: settings?.valor_mao_obra_taxa_deslocacao ?? 0,
       }}
       visitaAbertaId={visitaAberta?.id ?? null}
       organizationId={organizationId}

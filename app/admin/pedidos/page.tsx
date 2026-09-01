@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { estadoOperacionalPedido } from "@/lib/pedido-estado";
 import { PedidosLista, type PedidoResumo } from "./PedidosLista";
@@ -54,11 +55,16 @@ export default async function PedidosPage() {
             Pedidos recebidos de clientes, antes de se tornarem orçamento ou serviço.
           </p>
         </div>
+        {/* Auditoria "Centralizar criação" — este é agora o único ponto de
+            entrada visual para trabalho novo (Serviços e Orçamentos já não
+            têm botão de criação próprio). Maior e com ícone, sem inventar
+            uma cor nova — continua o branco já usado como "ação principal"
+            em toda a app, só mais destacado. */}
         <Link
           href="/admin/pedidos/novo"
-          className="rounded-md bg-white px-3.5 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+          className="flex items-center gap-1.5 rounded-md bg-white px-5 py-2.5 text-sm font-semibold text-neutral-950 shadow-sm hover:bg-neutral-200"
         >
-          Novo pedido
+          <Plus className="h-4 w-4" aria-hidden="true" /> Novo Pedido
         </Link>
       </div>
 

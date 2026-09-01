@@ -91,7 +91,14 @@ create table org_settings (
   valor_mao_obra_primeira_hora numeric not null default 40,
   valor_mao_obra_hora_adicional numeric not null default 30,
   valor_mao_obra_dia_completo numeric not null default 250,
-  valor_mao_obra_2_dias numeric not null default 500
+  valor_mao_obra_2_dias numeric not null default 500,
+  -- Duas opções adicionais à tabela comercial (nunca uma duração real, por
+  -- isso fora de HORAS_MAO_OBRA/sugerirMaoObraPorDuracao em lib/mao-obra.ts):
+  -- "Visita para Orçamento" é sempre gratuita por definição de negócio, mas
+  -- fica configurável como as restantes, em vez de um 0 hardcoded só no
+  -- calculo — mesma tabela, mesmo padrão, só um valor por omissão diferente.
+  valor_mao_obra_visita_orcamento numeric not null default 0,
+  valor_mao_obra_taxa_deslocacao numeric not null default 20
 );
 
 -- -----------------------------------------------------------------------------
@@ -337,7 +344,7 @@ create table visits (
   hora_fim_real time,
   trabalho_realizado text,
   resultado text check (resultado in ('concluido','nova_visita','nao_realizado')),
-  mao_obra_tipo text check (mao_obra_tipo in ('1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro')),
+  mao_obra_tipo text check (mao_obra_tipo in ('visita_orcamento','taxa_deslocacao','1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro')),
   mao_obra_detalhe text,
   -- checklist de fecho, diferente consoante o tipo do serviço (ver
   -- tech_finish_visit): problema_identificado/testes_realizados aplicam-se
@@ -996,6 +1003,8 @@ declare
   v_valor_hora_adicional numeric;
   v_valor_dia_completo numeric;
   v_valor_2_dias numeric;
+  v_valor_visita_orcamento numeric;
+  v_valor_taxa_deslocacao numeric;
   v_valor_materiais numeric;
   v_valor_mao_obra numeric;
 begin
@@ -1038,7 +1047,7 @@ begin
     if p_mao_obra_tipo is null or length(trim(p_mao_obra_tipo)) = 0 then
       raise exception 'Mão de obra é obrigatória para concluir o serviço.';
     end if;
-    if p_mao_obra_tipo not in ('1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro') then
+    if p_mao_obra_tipo not in ('visita_orcamento','taxa_deslocacao','1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro') then
       raise exception 'Tipo de mão de obra inválido.';
     end if;
     if p_mao_obra_tipo = 'outro' and length(trim(coalesce(p_mao_obra_detalhe, ''))) = 0 then
@@ -1103,15 +1112,20 @@ begin
       into v_valor_materiais
       from jsonb_array_elements(p_materiais) as item;
 
-    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias
-      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias
+    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias,
+           valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao
+      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias,
+           v_valor_visita_orcamento, v_valor_taxa_deslocacao
       from org_settings where organization_id = v_org_id;
 
     -- Tabela comercial, não horas × taxa fixa: 1ª hora inclui deslocação,
     -- horas seguintes a preço avulso, "dia completo"/8h e "2 dias
     -- completos" são valores fixos explícitos (nunca derivados de
-    -- horas × taxa).
+    -- horas × taxa). "Visita para Orçamento"/"Taxa de Deslocação" são o
+    -- mesmo princípio: valores fixos configuráveis, nunca uma duração.
     v_valor_mao_obra := case p_mao_obra_tipo
+      when 'visita_orcamento' then coalesce(v_valor_visita_orcamento, 0)
+      when 'taxa_deslocacao' then coalesce(v_valor_taxa_deslocacao, 0)
       when '1h' then coalesce(v_valor_primeira_hora, 0)
       when '2h' then coalesce(v_valor_primeira_hora, 0) + 1 * coalesce(v_valor_hora_adicional, 0)
       when '3h' then coalesce(v_valor_primeira_hora, 0) + 2 * coalesce(v_valor_hora_adicional, 0)
@@ -1355,6 +1369,30 @@ create policy "technician uploads own visit photos storage" on storage.objects f
         and v.created_by = auth.uid()
     )
   );
+
+-- =============================================================================
+-- PDF DO FECHO DE SERVIÇO — um único documento por Serviço, gerado/
+-- regenerado sempre no mesmo caminho "{organization_id}/{service_id}/
+-- fecho.pdf" (nunca "v1"/"v2" — o upload usa sempre upsert). Gerado pela
+-- lib/pdf-fecho.ts com createAdminClient() (privilégio de serviço, filtra
+-- organization_id manualmente) — nunca pela sessão do Técnico/Financeiro,
+-- precisamente para não ter de lhes dar SELECT em visits/
+-- visit_materials_used/visit_photos (tabelas privadas do Técnico) só para
+-- montar o PDF. O Financeiro só precisa de ler o FICHEIRO já pronto — nunca
+-- as tabelas de origem.
+-- =============================================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('fechos', 'fechos', false, 10485760, array['application/pdf'])
+on conflict (id) do nothing;
+
+drop policy if exists "admin manages fechos storage" on storage.objects;
+create policy "admin manages fechos storage" on storage.objects for all
+  using (bucket_id = 'fechos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (bucket_id = 'fechos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "finance reads fechos storage" on storage.objects;
+create policy "finance reads fechos storage" on storage.objects for select
+  using (bucket_id = 'fechos' and (storage.foldername(name))[1] = my_org()::text and my_role() = 'FINANCE');
 
 -- =============================================================================
 -- INTEGRAÇÃO GOOGLE SHEETS — espelho de gestão em tempo real por empresa.

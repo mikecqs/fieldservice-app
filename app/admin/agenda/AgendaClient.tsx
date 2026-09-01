@@ -15,9 +15,6 @@ const ALTURA_HORA = 48; // px
 
 type Servico = ServicoAgenda & { preparacaoNivel?: NivelPreparacao };
 type Pessoa = { id: string; nome: string };
-type Morada = { id: string; label: string; endereco: string };
-type Cliente = { id: string; nome: string; nif?: string | null; telefone?: string | null; client_addresses: Morada[] };
-type PedidoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 type ServicoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 
 function minutosDoDia(hora: string) {
@@ -30,18 +27,14 @@ export function AgendaClient({
   refDateIso,
   dias: diasIso,
   servicosPorDiaEntries,
-  clientes,
   tecnicos,
-  pedidosAbertos,
   servicosPendentes,
 }: {
   view: "dia" | "semana" | "mes";
   refDateIso: string;
   dias: string[];
   servicosPorDiaEntries: [string, Servico[]][];
-  clientes: Cliente[];
   tecnicos: Pessoa[];
-  pedidosAbertos: PedidoOpcao[];
   servicosPendentes: ServicoOpcao[];
 }) {
   const router = useRouter();
@@ -101,9 +94,7 @@ export function AgendaClient({
           mode={modal.mode}
           servico={modal.mode === "ver" ? modal.servico : null}
           slot={modal.mode === "criar" ? modal.slot : null}
-          clientes={clientes}
           tecnicos={tecnicos}
-          pedidosAbertos={pedidosAbertos}
           servicosPendentes={servicosPendentes}
           onClose={fecharModal}
           onSaved={salvarEFechar}

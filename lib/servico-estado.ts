@@ -97,3 +97,14 @@ export function podeVoltarAoOrcamentoDaVisita(servico: {
 }): boolean {
   return eVisitaOrcamentoConcluida(servico) && !!servico.budget_id;
 }
+
+// PDF do Fecho (auditoria "Centralizar/PDF") — o documento (lib/pdf-fecho.ts)
+// só passa a existir depois do Técnico fechar pelo menos uma vez como
+// "concluido" (ver gerarPdfFechoSemBloquear em app/tecnico/actions.ts). Gate
+// único, partilhado entre a ficha do Serviço e o PainelFaturacao — nunca
+// duas versões deste critério.
+const ESTADOS_COM_PDF_FECHO = ["aguarda_validacao", "correcao_necessaria", "concluido"] as const;
+
+export function podeVerPdfFecho(servico: { estado: string }): boolean {
+  return (ESTADOS_COM_PDF_FECHO as readonly string[]).includes(servico.estado);
+}

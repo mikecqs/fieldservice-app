@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { nowTimeHHMMSS } from "@/lib/agenda-dates";
 import { sugerirMaoObraPorDuracao } from "@/lib/mao-obra";
+import { gerarPdfFechoSemBloquear } from "@/lib/pdf-fecho";
 
 // Vai sempre buscar a visita aberta mais recente diretamente à BD — usado
 // pelo botão "Terminar serviço" para nunca depender de um valor de
@@ -107,4 +108,28 @@ export async function concluirVisita(input: {
   revalidatePath("/tecnico");
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/agenda");
+
+  // PDF do Fecho (Ponto 5) — só quando a visita fecha mesmo como "concluido"
+  // (nova_visita/nao_realizado não são um fecho real, ver lib/pdf-fecho.ts).
+  // Nunca bloqueia o fecho do Técnico: corre depois de a RPC já ter tido
+  // sucesso, e falhas ficam só em log (gerarPdfFechoSemBloquear nunca lança).
+  //
+  // Auditoria de segurança (Ponto 2) — nunca usar input.serviceId
+  // diretamente aqui: é um valor submetido pelo cliente que tech_finish_visit
+  // nunca valida (a RPC só olha para p_visit_id, deriva o service_id dela
+  // própria por dentro). Sem esta verificação, um pedido forjado a esta
+  // Server Action (visitId de uma visita própria válida + serviceId de um
+  // Serviço de outra organização) faria gerarPdfFecho sobrescrever o
+  // fecho.pdf de um Serviço que não é deste técnico. Reconfirma-se sempre o
+  // service_id a partir da própria visita, com a sessão do técnico (RLS
+  // "technician selects own service visits" só devolve linha se o técnico
+  // estiver mesmo atribuído a esse serviço) — nunca com createAdminClient().
+  if (input.resultado === "concluido") {
+    const { data: visitaFechada } = await supabase.from("visits").select("service_id").eq("id", input.visitId).maybeSingle();
+    if (visitaFechada?.service_id) {
+      await gerarPdfFechoSemBloquear(visitaFechada.service_id, "tech_finish_visit");
+    } else {
+      console.error(`[pdf-fecho] Não foi possível confirmar o service_id da visita ${input.visitId} para gerar o PDF do fecho.`);
+    }
+  }
 }

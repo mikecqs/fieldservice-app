@@ -3,6 +3,7 @@ import { marcarFaturado } from "@/app/admin/faturacao/actions";
 import { validarServico, enviarParaCorrecao } from "@/app/admin/servicos/actions";
 import { PedidoCodigoBadge } from "@/components/pedidos/PedidoCodigoBadge";
 import { rotuloTipoServico } from "@/lib/servico-estado";
+import { VerPdfFechoLink } from "@/components/VerPdfFechoLink";
 
 // Partilhado entre /admin/faturacao (Admin) e /financeiro/faturacao (role
 // FINANCE) — mesma consulta, mesmas ações (as RPCs finance_* já validam a
@@ -78,6 +79,7 @@ export async function PainelFaturacao({ q }: { q?: string }) {
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
+              <VerPdfFechoLink servicoId={s.id} />
               <form action={validarServico}>
                 <input type="hidden" name="id" value={s.id} />
                 <button className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800">
@@ -125,25 +127,28 @@ export async function PainelFaturacao({ q }: { q?: string }) {
                 {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
               </span>
             </div>
-            <form action={marcarFaturado} className="flex gap-2">
-              <input type="hidden" name="id" value={s.id} />
-              <input
-                name="faturacao_valor"
-                type="number"
-                step="0.01"
-                defaultValue={s.valor}
-                className="w-28 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
-              />
-              <input
-                name="faturacao_referencia"
-                placeholder="Nº fatura / referência"
-                required
-                className="flex-1 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
-              />
-              <button className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
-                Marcar faturado
-              </button>
-            </form>
+            <div className="flex flex-wrap items-center gap-2">
+              <VerPdfFechoLink servicoId={s.id} />
+              <form action={marcarFaturado} className="flex flex-1 gap-2">
+                <input type="hidden" name="id" value={s.id} />
+                <input
+                  name="faturacao_valor"
+                  type="number"
+                  step="0.01"
+                  defaultValue={s.valor}
+                  className="w-28 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+                />
+                <input
+                  name="faturacao_referencia"
+                  placeholder="Nº fatura / referência"
+                  required
+                  className="flex-1 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+                />
+                <button className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
+                  Marcar faturado
+                </button>
+              </form>
+            </div>
           </div>
         ))}
         {porFaturar.length === 0 && <p className="py-6 text-center text-sm text-neutral-500">Nada por faturar.</p>}
@@ -172,6 +177,10 @@ export async function PainelFaturacao({ q }: { q?: string }) {
               <span className="font-semibold text-neutral-200">
                 {Number(s.faturacao_valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
               </span>
+              <VerPdfFechoLink
+                servicoId={s.id}
+                className="flex items-center gap-1 rounded bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700 hover:text-white"
+              />
             </div>
           </div>
         ))}

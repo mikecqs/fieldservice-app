@@ -38,7 +38,7 @@ export default async function AgendaPage({
 
   const organizationId = await getOrgId();
 
-  const [{ data: servicos }, { data: pendentes }, { data: comprasPendentes }, { data: clientes }, { data: tecnicos }, { data: pedidosAbertos }] = await Promise.all([
+  const [{ data: servicos }, { data: pendentes }, { data: comprasPendentes }, { data: tecnicos }] = await Promise.all([
     supabase
       .from("services")
       .select(
@@ -53,20 +53,16 @@ export default async function AgendaPage({
       .select("id, tipo, descricao, estado, client_id, clients(nome)")
       .is("data_agendada", null)
       .in("estado", ESTADOS_SERVICO_POR_AGENDAR)
+      // Auditoria "Centralizar criação" (Ponto 2) — a Agenda só agenda
+      // Serviços rastreáveis a um Pedido (request_id) ou a um Orçamento
+      // (budget_id, ex: Visita Prévia do Fluxo B, que pode não ter Pedido de
+      // origem) — nunca um órfão sem nenhum dos dois. Como o único caminho
+      // que criava órfãos (o sub-modo "Criar novo" deste popup) foi removido,
+      // isto só passa a excluir dados históricos anteriores a essa remoção.
+      .or("request_id.not.is.null,budget_id.not.is.null")
       .order("created_at", { ascending: false }),
     supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
-    supabase
-      .from("clients")
-      .select("id, nome, nif, telefone, client_addresses(id, label, endereco)")
-      .eq("organization_id", organizationId)
-      .order("nome"),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
-    supabase
-      .from("requests")
-      .select("id, tipo, descricao, client_id, clients(nome)")
-      .eq("organization_id", organizationId)
-      .in("estado", ["novo", "orcamento"])
-      .order("created_at", { ascending: false }),
   ]);
 
   const materialPendentePorServico = new Set((comprasPendentes ?? []).map((c: any) => c.service_id));
@@ -137,9 +133,7 @@ export default async function AgendaPage({
         refDateIso={toISO(refDate)}
         dias={dias.map((d) => toISO(d))}
         servicosPorDiaEntries={Array.from(servicosPorDia.entries())}
-        clientes={clientes ?? []}
         tecnicos={tecnicos ?? []}
-        pedidosAbertos={(pedidosAbertos ?? []) as any}
         servicosPendentes={(pendentes ?? []) as any}
       />
 

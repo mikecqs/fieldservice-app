@@ -3,13 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X, Lock, AlertTriangle } from "lucide-react";
-import { criarOuAgendarNoPopup } from "./actions";
+import { agendarServicoExistente } from "./actions";
 import { verificarConflitoAgenda, atualizarAgendamento, atribuirTecnico, removerTecnico } from "../servicos/actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
 import { podeReagendarServico, rotuloTipoServico } from "@/lib/servico-estado";
 import { Button } from "@/components/ui/Button";
-import { ClienteMoradaFields } from "@/components/ClienteMoradaFields";
-import { TIPOS_SERVICO } from "@/lib/pedido-opcoes";
 
 export type ServicoAgenda = {
   id: string;
@@ -28,18 +26,18 @@ export type ServicoAgenda = {
 };
 
 type Pessoa = { id: string; nome: string };
-type Morada = { id: string; label: string; endereco: string };
-type Cliente = { id: string; nome: string; nif?: string | null; telefone?: string | null; client_addresses: Morada[] };
-type PedidoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 type ServicoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 
+// Auditoria "Centralizar criação" (Ponto 2) — este popup já não cria
+// Serviços novos (removido o sub-modo "Criar novo"). Só agenda um Serviço
+// que já exista, sempre com request_id ou budget_id (nunca um órfão) — ver
+// o filtro na query de `servicosPendentes` em app/admin/agenda/page.tsx.
+// Regra: Pedido → Serviço → Agenda, sem atalho nenhum por aqui.
 export function ServicoModal({
   mode,
   servico,
   slot,
-  clientes,
   tecnicos,
-  pedidosAbertos,
   servicosPendentes,
   onClose,
   onSaved,
@@ -47,21 +45,12 @@ export function ServicoModal({
   mode: "ver" | "criar";
   servico?: ServicoAgenda | null;
   slot?: { data: string; horaInicio: string; horaFim: string } | null;
-  clientes: Cliente[];
   tecnicos: Pessoa[];
-  pedidosAbertos: PedidoOpcao[];
   servicosPendentes: ServicoOpcao[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [subModo, setSubModo] = useState<"existente" | "novo">(servicosPendentes.length > 0 ? "existente" : "novo");
   const [servicoExistenteId, setServicoExistenteId] = useState("");
-  const [listaClientes, setListaClientes] = useState(clientes);
-  const [clientId, setClientId] = useState(servico?.client_id ?? "");
-  const [addressId, setAddressId] = useState("");
-  const [requestId, setRequestId] = useState("");
-  const [tipo, setTipo] = useState(servico?.tipo ?? "");
-  const [descricao, setDescricao] = useState(servico?.descricao ?? "");
   const [prioridade, setPrioridade] = useState(servico?.prioridade ?? "normal");
   const [notas, setNotas] = useState(servico?.notas ?? "");
   const [data, setData] = useState(servico?.data_agendada ?? slot?.data ?? "");
@@ -78,8 +67,6 @@ export function ServicoModal({
     setConfirmouConflito(false);
   }, [data, horaInicio, horaFim, tecnicoId]);
 
-  const servicoSelecionado = servicosPendentes.find((s) => s.id === servicoExistenteId);
-  const pedidosDoCliente = pedidosAbertos.filter((p) => p.client_id === clientId);
   const tecnicosAtuais = servico?.service_technicians ?? [];
 
   const guardar = async () => {
@@ -93,12 +80,8 @@ export function ServicoModal({
       return;
     }
 
-    if (mode === "criar" && subModo === "existente" && !servicoExistenteId) {
+    if (mode === "criar" && !servicoExistenteId) {
       setErro("Seleciona o serviço a agendar.");
-      return;
-    }
-    if (mode === "criar" && subModo === "novo" && (!clientId || !addressId || !tipo || !descricao)) {
-      setErro("Cliente, morada, tipo e descrição são obrigatórios.");
       return;
     }
 
@@ -106,7 +89,7 @@ export function ServicoModal({
     // selecionado (sem técnico não há conflito possível) e ainda não foi
     // confirmado "agendar na mesma" para esta combinação.
     if (!confirmouConflito) {
-      const idParaExcluir = mode === "ver" ? servico!.id : subModo === "existente" ? servicoExistenteId : undefined;
+      const idParaExcluir = mode === "ver" ? servico!.id : servicoExistenteId;
       const idsExistentes = tecnicosAtuais.map((t) => t.user_id);
       const idsTecnicos = tecnicoId && !idsExistentes.includes(tecnicoId) ? [...idsExistentes, tecnicoId] : idsExistentes;
       if (idsTecnicos.length > 0) {
@@ -143,14 +126,8 @@ export function ServicoModal({
           await atribuirTecnico(fdT);
         }
       } else {
-        await criarOuAgendarNoPopup({
-          existingServiceId: subModo === "existente" ? servicoExistenteId : null,
-          clientId: subModo === "novo" ? clientId : null,
-          addressId: subModo === "novo" ? addressId : null,
-          requestId: subModo === "novo" ? requestId || null : null,
-          tipo: subModo === "novo" ? tipo : null,
-          descricao: subModo === "novo" ? descricao : null,
-          prioridade,
+        await agendarServicoExistente({
+          existingServiceId: servicoExistenteId,
           data,
           horaInicio,
           horaFim,
@@ -258,24 +235,7 @@ export function ServicoModal({
 
           {mode === "criar" && (
             <>
-              {servicosPendentes.length > 0 && (
-                <div className="flex overflow-hidden rounded-md border border-neutral-700 text-xs">
-                  <button
-                    onClick={() => setSubModo("existente")}
-                    className={`flex-1 px-2 py-1.5 ${subModo === "existente" ? "bg-white text-neutral-950" : "text-neutral-300"}`}
-                  >
-                    Serviço existente
-                  </button>
-                  <button
-                    onClick={() => setSubModo("novo")}
-                    className={`flex-1 px-2 py-1.5 ${subModo === "novo" ? "bg-white text-neutral-950" : "text-neutral-300"}`}
-                  >
-                    Criar novo
-                  </button>
-                </div>
-              )}
-
-              {subModo === "existente" ? (
+              {servicosPendentes.length > 0 ? (
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-neutral-300">Serviço por agendar</span>
                   <select
@@ -292,63 +252,14 @@ export function ServicoModal({
                   </select>
                 </label>
               ) : (
-                <>
-                  <ClienteMoradaFields
-                    clientes={listaClientes}
-                    onClientesChange={setListaClientes}
-                    clientId={clientId}
-                    onClientIdChange={(id) => {
-                      setClientId(id);
-                      setRequestId("");
-                    }}
-                    addressId={addressId}
-                    onAddressIdChange={setAddressId}
-                    onErro={setErro}
-                    camposNovoCliente="nome"
-                    permitirPesquisa
-                  />
-
-                  {pedidosDoCliente.length > 0 && (
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-medium text-neutral-300">Pedido existente (opcional)</span>
-                      <select
-                        value={requestId}
-                        onChange={(e) => {
-                          setRequestId(e.target.value);
-                          const p = pedidosDoCliente.find((p) => p.id === e.target.value);
-                          if (p) {
-                            setTipo(p.tipo);
-                            setDescricao(p.descricao);
-                          }
-                        }}
-                        className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                      >
-                        <option value="">Nenhum</option>
-                        {pedidosDoCliente.map((p) => (
-                          <option key={p.id} value={p.id}>{p.tipo} · {p.descricao}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-300">Tipo de serviço</span>
-                    <select
-                      value={tipo}
-                      onChange={(e) => setTipo(e.target.value)}
-                      className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                    >
-                      <option value="">Seleciona…</option>
-                      {TIPOS_SERVICO.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-300">Descrição</span>
-                    <textarea rows={2} value={descricao} onChange={(e) => setDescricao(e.target.value)} className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
-                  </label>
-                </>
+                <div className="rounded-md border border-neutral-700 bg-neutral-800 p-3 text-sm text-neutral-300">
+                  Não há nenhum serviço por agendar. A Agenda só marca dia/hora de
+                  Serviços que já existem — cria primeiro um{" "}
+                  <Link href="/admin/pedidos/novo" className="underline hover:text-white">
+                    Novo Pedido
+                  </Link>
+                  .
+                </div>
               )}
             </>
           )}
@@ -445,7 +356,7 @@ export function ServicoModal({
               </button>
               <button
                 onClick={guardar}
-                disabled={aGuardar || !!conflito}
+                disabled={aGuardar || !!conflito || (mode === "criar" && servicosPendentes.length === 0)}
                 className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200 disabled:opacity-40"
               >
                 {aGuardar ? "A guardar…" : "Guardar"}
