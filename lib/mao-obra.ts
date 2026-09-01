@@ -18,6 +18,8 @@
 // (mas hoje idênticas) desta mesma tabela em lib/relatorios.ts e
 // lib/google-sheets/rows.ts, usadas em relatórios/exportações do Admin —
 // fora do fluxo do Técnico, por isso deixadas como estavam nesta onda.
+// Ambas só leem horas (para estatísticas), nunca o preço — a etapa "Preços
+// da mão de obra" (calcularPrecoMaoObra, abaixo) não lhes diz respeito.
 export const MAO_OBRA_OPCOES: [string, string][] = [
   ["1h", "1 hora"],
   ["2h", "2 horas"],
@@ -36,6 +38,47 @@ export const HORAS_MAO_OBRA: Record<string, number> = {
   "1h": 1, "2h": 2, "3h": 3, "4h": 4, "5h": 5, "6h": 6, "7h": 7, "8h": 8,
   dia_completo: 8, "2dias": 16, outro: 0,
 };
+
+// Tabela comercial de preços (Etapa "Preços da mão de obra"): 1ª hora já
+// inclui deslocação, horas seguintes a preço avulso, "dia completo"/8h e "2
+// dias completos" são valores fixos explícitos (nunca derivados de horas ×
+// taxa). Mesma fórmula da RPC `tech_finish_visit` (supabase/schema.sql) —
+// duplicação documentada, não eliminada, pela mesma razão do bucket→horas
+// acima: qualquer mudança na tabela comercial tem de ser replicada à mão
+// aqui e lá, ou o preview deixa de bater certo com o valor realmente
+// gravado.
+export type PrecosMaoObra = {
+  primeiraHora: number;
+  horaAdicional: number;
+  diaCompleto: number;
+  doisDias: number;
+};
+
+export function calcularPrecoMaoObra(tipo: string, precos: PrecosMaoObra): number {
+  switch (tipo) {
+    case "1h":
+      return precos.primeiraHora;
+    case "2h":
+      return precos.primeiraHora + 1 * precos.horaAdicional;
+    case "3h":
+      return precos.primeiraHora + 2 * precos.horaAdicional;
+    case "4h":
+      return precos.primeiraHora + 3 * precos.horaAdicional;
+    case "5h":
+      return precos.primeiraHora + 4 * precos.horaAdicional;
+    case "6h":
+      return precos.primeiraHora + 5 * precos.horaAdicional;
+    case "7h":
+      return precos.primeiraHora + 6 * precos.horaAdicional;
+    case "8h":
+    case "dia_completo":
+      return precos.diaCompleto;
+    case "2dias":
+      return precos.doisDias;
+    default:
+      return 0;
+  }
+}
 
 // Bucket existente mais próximo de uma duração real, em minutos — nunca
 // inventa uma opção nova, só escolhe entre as que já existem em

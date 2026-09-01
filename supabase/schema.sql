@@ -83,9 +83,15 @@ create table org_settings (
   -- serviço agendado depois de encerrar o anterior. Ver
   -- tech_service_desbloqueado() e services_technician_view.
   acesso_sequencial_tecnico boolean not null default false,
-  -- taxa/hora usada para converter a mão de obra (ex: '2h', 'dia_completo')
-  -- em valor monetário no cálculo automático do fecho da OS.
-  valor_hora_mao_obra numeric not null default 0
+  -- Tabela comercial de mão de obra (fecho de OS pelo Técnico): 1ª hora já
+  -- inclui deslocação; horas seguintes a preço avulso; "dia completo" é um
+  -- valor fixo explícito, nunca 8 × hora adicional. Ver tech_finish_visit
+  -- (cálculo real) e lib/mao-obra.ts::calcularPrecoMaoObra (mesma fórmula,
+  -- do lado do preview do Técnico).
+  valor_mao_obra_primeira_hora numeric not null default 40,
+  valor_mao_obra_hora_adicional numeric not null default 30,
+  valor_mao_obra_dia_completo numeric not null default 250,
+  valor_mao_obra_2_dias numeric not null default 500
 );
 
 -- -----------------------------------------------------------------------------
@@ -965,8 +971,10 @@ declare
   v_tipo text;
   v_estado_servico text;
   v_novo_estado text;
-  v_valor_hora numeric;
-  v_horas numeric;
+  v_valor_primeira_hora numeric;
+  v_valor_hora_adicional numeric;
+  v_valor_dia_completo numeric;
+  v_valor_2_dias numeric;
   v_valor_materiais numeric;
   v_valor_mao_obra numeric;
 begin
@@ -1074,13 +1082,27 @@ begin
       into v_valor_materiais
       from jsonb_array_elements(p_materiais) as item;
 
-    select valor_hora_mao_obra into v_valor_hora from org_settings where organization_id = v_org_id;
-    v_horas := case p_mao_obra_tipo
-      when '1h' then 1 when '2h' then 2 when '3h' then 3 when '4h' then 4
-      when '5h' then 5 when '6h' then 6 when '7h' then 7 when '8h' then 8
-      when 'dia_completo' then 8 when '2dias' then 16 else 0
+    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias
+      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias
+      from org_settings where organization_id = v_org_id;
+
+    -- Tabela comercial, não horas × taxa fixa: 1ª hora inclui deslocação,
+    -- horas seguintes a preço avulso, "dia completo"/8h e "2 dias
+    -- completos" são valores fixos explícitos (nunca derivados de
+    -- horas × taxa).
+    v_valor_mao_obra := case p_mao_obra_tipo
+      when '1h' then coalesce(v_valor_primeira_hora, 0)
+      when '2h' then coalesce(v_valor_primeira_hora, 0) + 1 * coalesce(v_valor_hora_adicional, 0)
+      when '3h' then coalesce(v_valor_primeira_hora, 0) + 2 * coalesce(v_valor_hora_adicional, 0)
+      when '4h' then coalesce(v_valor_primeira_hora, 0) + 3 * coalesce(v_valor_hora_adicional, 0)
+      when '5h' then coalesce(v_valor_primeira_hora, 0) + 4 * coalesce(v_valor_hora_adicional, 0)
+      when '6h' then coalesce(v_valor_primeira_hora, 0) + 5 * coalesce(v_valor_hora_adicional, 0)
+      when '7h' then coalesce(v_valor_primeira_hora, 0) + 6 * coalesce(v_valor_hora_adicional, 0)
+      when '8h' then coalesce(v_valor_dia_completo, 0)
+      when 'dia_completo' then coalesce(v_valor_dia_completo, 0)
+      when '2dias' then coalesce(v_valor_2_dias, 0)
+      else 0
     end;
-    v_valor_mao_obra := v_horas * coalesce(v_valor_hora, 0);
 
     update visits set valor_calculado = v_valor_materiais + v_valor_mao_obra where id = p_visit_id;
 

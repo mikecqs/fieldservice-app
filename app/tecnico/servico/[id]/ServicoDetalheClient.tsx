@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, MapPin, Phone, Lock, CheckCircle2, X } from "lucide-react";
 import { iniciarServico, concluirVisita, obterVisitaAberta, sugerirMaoObraDaVisita } from "../../actions";
 import { Badge } from "@/components/ui/Badge";
-import { MAO_OBRA_OPCOES, HORAS_MAO_OBRA } from "@/lib/mao-obra";
+import { MAO_OBRA_OPCOES, calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib/mao-obra";
 
 function formatEuros(v: number) {
   return v.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
@@ -19,13 +19,13 @@ export function ServicoDetalheClient({
   servico,
   materiaisPrevistos,
   catalogo,
-  valorHoraMaoObra,
+  precosMaoObra,
   visitaAbertaId,
 }: {
   servico: any;
   materiaisPrevistos: { nome: string; qtd: number; preco_venda: number }[];
   catalogo: CatalogItem[];
-  valorHoraMaoObra: number;
+  precosMaoObra: PrecosMaoObra;
   visitaAbertaId: string | null;
 }) {
   const router = useRouter();
@@ -77,7 +77,7 @@ export function ServicoDetalheClient({
     (soma, l) => soma + (Number(l.qtd) || 0) * (Number(l.precoUnit) || 0),
     0
   );
-  const totalMaoObra = (HORAS_MAO_OBRA[maoObraTipo] ?? 0) * valorHoraMaoObra;
+  const totalMaoObra = calcularPrecoMaoObra(maoObraTipo, precosMaoObra);
 
   const iniciar = async () => {
     setAGuardar(true);
@@ -397,7 +397,7 @@ export function ServicoDetalheClient({
                   value={problemaIdentificado}
                   onChange={(e) => setProblemaIdentificado(e.target.value)}
                   className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
-                  placeholder="ex: disjuntor a disparar por sobrecarga"
+                  placeholder="ex: Descreva o problema identificado e a causa encontrada"
                 />
               </label>
             )}

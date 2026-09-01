@@ -228,8 +228,10 @@ declare
   v_tipo text;
   v_estado_servico text;
   v_novo_estado text;
-  v_valor_hora numeric;
-  v_horas numeric;
+  v_valor_primeira_hora numeric;
+  v_valor_hora_adicional numeric;
+  v_valor_dia_completo numeric;
+  v_valor_2_dias numeric;
   v_valor_materiais numeric;
   v_valor_mao_obra numeric;
 begin
@@ -337,13 +339,27 @@ begin
       into v_valor_materiais
       from jsonb_array_elements(p_materiais) as item;
 
-    select valor_hora_mao_obra into v_valor_hora from org_settings where organization_id = v_org_id;
-    v_horas := case p_mao_obra_tipo
-      when '1h' then 1 when '2h' then 2 when '3h' then 3 when '4h' then 4
-      when '5h' then 5 when '6h' then 6 when '7h' then 7 when '8h' then 8
-      when 'dia_completo' then 8 when '2dias' then 16 else 0
+    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias
+      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias
+      from org_settings where organization_id = v_org_id;
+
+    -- Tabela comercial, não horas × taxa fixa: 1ª hora inclui deslocação,
+    -- horas seguintes a preço avulso, "dia completo"/8h e "2 dias
+    -- completos" são valores fixos explícitos (nunca derivados de
+    -- horas × taxa).
+    v_valor_mao_obra := case p_mao_obra_tipo
+      when '1h' then coalesce(v_valor_primeira_hora, 0)
+      when '2h' then coalesce(v_valor_primeira_hora, 0) + 1 * coalesce(v_valor_hora_adicional, 0)
+      when '3h' then coalesce(v_valor_primeira_hora, 0) + 2 * coalesce(v_valor_hora_adicional, 0)
+      when '4h' then coalesce(v_valor_primeira_hora, 0) + 3 * coalesce(v_valor_hora_adicional, 0)
+      when '5h' then coalesce(v_valor_primeira_hora, 0) + 4 * coalesce(v_valor_hora_adicional, 0)
+      when '6h' then coalesce(v_valor_primeira_hora, 0) + 5 * coalesce(v_valor_hora_adicional, 0)
+      when '7h' then coalesce(v_valor_primeira_hora, 0) + 6 * coalesce(v_valor_hora_adicional, 0)
+      when '8h' then coalesce(v_valor_dia_completo, 0)
+      when 'dia_completo' then coalesce(v_valor_dia_completo, 0)
+      when '2dias' then coalesce(v_valor_2_dias, 0)
+      else 0
     end;
-    v_valor_mao_obra := v_horas * coalesce(v_valor_hora, 0);
 
     update visits set valor_calculado = v_valor_materiais + v_valor_mao_obra where id = p_visit_id;
 
@@ -539,6 +555,40 @@ alter table services
 -- para materiais já planeados antes desta alteração.
 alter table service_materials_planned add column if not exists preco_venda numeric not null default 0;
 
+-- =============================================================================
+-- Preços comerciais da mão de obra (local, ainda por commitar) — tabela
+-- comercial completa (1ª hora 40€ com deslocação, horas seguintes 30€, dia
+-- completo 250€, 2 dias completos 500€, todos fixos) configurável por
+-- empresa em org_settings, substituindo o cálculo linear antigo
+-- (v_horas × valor_hora_mao_obra) que nunca teve UI para ser configurado —
+-- por isso a mão de obra era sempre gravada a 0€ em qualquer empresa.
+-- Aditivo: ADD COLUMN com default constante já faz backfill automático dos
+-- 3 primeiros valores para todas as empresas existentes (nenhuma tinha
+-- configurado nada, porque não havia onde). tech_finish_visit já foi
+-- substituída acima (CREATE OR REPLACE) para usar as 4 colunas novas.
+-- =============================================================================
+alter table org_settings add column if not exists valor_mao_obra_primeira_hora numeric not null default 40;
+alter table org_settings add column if not exists valor_mao_obra_hora_adicional numeric not null default 30;
+alter table org_settings add column if not exists valor_mao_obra_dia_completo numeric not null default 250;
+
+-- "2 dias completos" tem preço fixo próprio (500€), não 16 × uma taxa/hora
+-- — reutiliza a coluna valor_hora_mao_obra (que só servia isto, sem UI,
+-- sempre 0) em vez de criar uma coluna nova a mais: rename + novo default +
+-- backfill explícito das linhas que ainda estavam no valor por omissão
+-- antigo (0), a mesma lógica do ADD COLUMN DEFAULT acima, só que aqui tem
+-- de ser um UPDATE porque a coluna já existia (RENAME não reescreve dados).
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'org_settings' and column_name = 'valor_hora_mao_obra'
+  ) then
+    alter table org_settings rename column valor_hora_mao_obra to valor_mao_obra_2_dias;
+  end if;
+end $$;
+alter table org_settings alter column valor_mao_obra_2_dias set default 500;
+update org_settings set valor_mao_obra_2_dias = 500 where valor_mao_obra_2_dias = 0;
+
 commit;
 
 -- =============================================================================
@@ -546,9 +596,10 @@ commit;
 --   - Os BLOCOS 6, 7, 8, 10–19 desta sessão, a página de Relatórios do
 --     f3b2177, e toda a auditoria "APP" (Dashboard/Atenção, Agenda,
 --     Serviços, Orçamentos, Faturação, Utilizadores, Configurações, Super
---     Admin) não precisam de nenhuma alteração adicional à BD além das 3
---     colunas acima — o resto foi só código (Server Actions/páginas),
---     publicado com o deploy normal da app (git push + vercel --prod).
+--     Admin), e os preços comerciais da mão de obra, não precisam de
+--     nenhuma alteração adicional à BD além das colunas/função acima — o
+--     resto foi só código (Server Actions/páginas), publicado com o deploy
+--     normal da app (git push + vercel --prod).
 --   - Falta ainda, fora deste ficheiro: configurar as 4 env vars de Web
 --     Push no Vercel e agendar manualmente o job pg_cron acima — sem isso,
 --     as tabelas/policies existem mas a funcionalidade não envia nada.

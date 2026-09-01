@@ -13,9 +13,30 @@ export async function guardarConfiguracoes(formData: FormData) {
     throw new Error("Os dias de follow-up têm de ser um número igual ou superior a 0.");
   }
 
+  const valor_mao_obra_primeira_hora = Number(formData.get("valor_mao_obra_primeira_hora") || 0);
+  const valor_mao_obra_hora_adicional = Number(formData.get("valor_mao_obra_hora_adicional") || 0);
+  const valor_mao_obra_dia_completo = Number(formData.get("valor_mao_obra_dia_completo") || 0);
+  const valor_mao_obra_2_dias = Number(formData.get("valor_mao_obra_2_dias") || 0);
+  for (const [campo, valor] of [
+    ["1ª hora", valor_mao_obra_primeira_hora],
+    ["hora adicional", valor_mao_obra_hora_adicional],
+    ["dia completo", valor_mao_obra_dia_completo],
+    ["2 dias completos", valor_mao_obra_2_dias],
+  ] as const) {
+    if (!Number.isFinite(valor) || valor < 0) {
+      throw new Error(`O preço da mão de obra (${campo}) tem de ser um número igual ou superior a 0.`);
+    }
+  }
+
   await supabase
     .from("org_settings")
-    .update({ followup_dias_default })
+    .update({
+      followup_dias_default,
+      valor_mao_obra_primeira_hora,
+      valor_mao_obra_hora_adicional,
+      valor_mao_obra_dia_completo,
+      valor_mao_obra_2_dias,
+    })
     .eq("organization_id", organizationId);
 
   revalidatePath("/admin/configuracoes");
