@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
-import { ESTADO_LABEL, ESTADO_COLOR } from "@/lib/orcamento-visual";
+import { OrcamentosLista } from "./OrcamentosLista";
 
 export default async function OrcamentosPage() {
   const supabase = createClient();
@@ -11,6 +10,11 @@ export default async function OrcamentosPage() {
     .order("created_at", { ascending: false });
 
   const { data: clients } = await supabase.from("clients").select("id, nome").order("nome");
+
+  const orcamentosComTotal = (orcamentos ?? []).map((o: any) => {
+    const { total } = calcularOrcamento(o.budget_items ?? [], o.iva_percent);
+    return { ...o, total };
+  });
 
   return (
     <div>
@@ -39,37 +43,7 @@ export default async function OrcamentosPage() {
         </details>
       </div>
 
-      <div className="space-y-2">
-        {(orcamentos ?? []).map((o: any) => {
-          const { total } = calcularOrcamento(o.budget_items ?? [], o.iva_percent);
-          return (
-            <Link
-              key={o.id}
-              href={`/admin/orcamentos/${o.id}`}
-              className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-neutral-600 hover:shadow-sm"
-            >
-              <div>
-                <div className="font-medium text-neutral-100">#{o.numero} · {o.clients?.nome}</div>
-                <div className="text-xs text-neutral-500">Criado {o.criado_em}</div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <div className="text-sm font-semibold text-neutral-200">
-                    {total.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
-                  </div>
-                  <div className="text-[10px] text-neutral-500">c/ IVA ({o.iva_percent}%)</div>
-                </div>
-                <span className={`rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[o.estado] ?? ""}`}>
-                  {ESTADO_LABEL[o.estado] ?? o.estado}
-                </span>
-              </div>
-            </Link>
-          );
-        })}
-        {(orcamentos ?? []).length === 0 && (
-          <p className="py-10 text-center text-sm text-neutral-500">Ainda sem orçamentos.</p>
-        )}
-      </div>
+      <OrcamentosLista orcamentos={orcamentosComTotal} />
     </div>
   );
 }

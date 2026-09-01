@@ -259,8 +259,8 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
         <h2 className="mb-3 text-sm font-semibold text-neutral-100">Materiais planeados</h2>
         <div className="mb-3 space-y-1.5">
           {(servico.service_materials_planned ?? []).map((m: any) => (
-            <div key={m.id} className="flex items-center justify-between rounded-md border border-neutral-800 p-2 text-sm">
-              <span>
+            <div key={m.id} className="flex flex-col gap-2 rounded-md border border-neutral-800 p-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <span className="break-words">
                 {m.nome} · {m.qtd}
                 {Number(m.preco_venda) > 0 && (
                   <span className="ml-1 text-neutral-500">

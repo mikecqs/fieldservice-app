@@ -56,7 +56,7 @@ export default async function AgendaPage({
     supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
     supabase
       .from("clients")
-      .select("id, nome, client_addresses(id, label, endereco)")
+      .select("id, nome, nif, telefone, client_addresses(id, label, endereco)")
       .eq("organization_id", organizationId)
       .order("nome"),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),

@@ -6,7 +6,7 @@ import { criarPedido } from "@/app/admin/pedidos/actions";
 import { ClienteMoradaFields } from "@/components/ClienteMoradaFields";
 
 type Morada = { id: string; label: string; endereco: string };
-type Cliente = { id: string; nome: string; codigo?: string | null; client_addresses: Morada[] };
+type Cliente = { id: string; nome: string; codigo?: string | null; nif?: string | null; telefone?: string | null; client_addresses: Morada[] };
 
 // Formulário partilhado por /admin/pedidos/novo e /atendimento/pedidos/novo —
 // mesmo fluxo rápido de loja para as duas roles: Cliente → Morada → Tipo →

@@ -8,7 +8,7 @@ export default async function AtendimentoNovoPedidoPage() {
 
   const { data: clients } = await supabase
     .from("clients")
-    .select("id, nome, codigo, client_addresses(id, label, endereco)")
+    .select("id, nome, codigo, nif, telefone, client_addresses(id, label, endereco)")
     .order("nome");
 
   return (

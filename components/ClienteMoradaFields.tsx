@@ -4,7 +4,14 @@ import { useState } from "react";
 import { criarClienteRapido, criarMoradaRapida } from "@/app/admin/clientes/actions";
 
 export type MoradaSelecao = { id: string; label: string; endereco: string };
-export type ClienteSelecao = { id: string; nome: string; codigo?: string | null; client_addresses: MoradaSelecao[] };
+export type ClienteSelecao = {
+  id: string;
+  nome: string;
+  codigo?: string | null;
+  nif?: string | null;
+  telefone?: string | null;
+  client_addresses: MoradaSelecao[];
+};
 
 // Onda 3 (Etapa 4) — bloco "Cliente (+criar) → Morada (+criar)" partilhado
 // por NovoPedidoForm, ServicoModal (Agenda) e NovoServicoForm, que antes
@@ -75,7 +82,14 @@ export function ClienteMoradaFields({
   const moradas = clienteSelecionado?.client_addresses ?? [];
   const clientesFiltrados =
     permitirPesquisa && filtro.trim()
-      ? clientes.filter((c) => c.nome.toLowerCase().includes(filtro.trim().toLowerCase()))
+      ? clientes.filter((c) => {
+          const termo = filtro.trim().toLowerCase();
+          return (
+            c.nome.toLowerCase().includes(termo) ||
+            (c.nif ?? "").toLowerCase().includes(termo) ||
+            (c.telefone ?? "").toLowerCase().includes(termo)
+          );
+        })
       : clientes;
 
   function selecionarCliente(id: string) {
@@ -147,7 +161,7 @@ export function ClienteMoradaFields({
               <input
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
-                placeholder="Procurar cliente…"
+                placeholder="Procurar por nome, NIF ou telefone…"
                 className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
               />
             )}
@@ -161,6 +175,7 @@ export function ClienteMoradaFields({
                 <option key={c.id} value={c.id}>
                   {c.nome}
                   {mostrarCodigoCliente && c.codigo ? ` · ${c.codigo}` : ""}
+                  {c.telefone ? ` · ${c.telefone}` : ""}
                 </option>
               ))}
             </select>

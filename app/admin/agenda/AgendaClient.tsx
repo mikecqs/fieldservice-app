@@ -15,7 +15,7 @@ const ALTURA_HORA = 48; // px
 type Servico = ServicoAgenda & { preparacaoNivel?: NivelPreparacao };
 type Pessoa = { id: string; nome: string };
 type Morada = { id: string; label: string; endereco: string };
-type Cliente = { id: string; nome: string; client_addresses: Morada[] };
+type Cliente = { id: string; nome: string; nif?: string | null; telefone?: string | null; client_addresses: Morada[] };
 type PedidoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 type ServicoOpcao = { id: string; tipo: string; descricao: string; client_id: string; clients: { nome: string } | null };
 
@@ -146,7 +146,8 @@ function GrelhaHoraria({
 
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900">
-      <div className="flex min-w-[600px]">
+      {/* Sem min-width forçado: cada coluna (flex-1) usa sempre a largura real disponível, em vez de um valor fixo pensado só para desktop. */}
+      <div className="flex">
         <div className="w-14 shrink-0 border-r border-neutral-800 pt-8">
           {horas.map((h) => (
             <div key={h} style={{ height: ALTURA_HORA }} className="border-t border-neutral-800 pl-1 text-[10px] text-neutral-500">

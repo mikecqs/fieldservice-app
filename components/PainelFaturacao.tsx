@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { marcarFaturado } from "@/app/admin/faturacao/actions";
 import { validarServico, enviarParaCorrecao } from "@/app/admin/servicos/actions";
+import { PedidoCodigoBadge } from "@/components/pedidos/PedidoCodigoBadge";
 
 // Partilhado entre /admin/faturacao (Admin) e /financeiro/faturacao (role
 // FINANCE) — mesma consulta, mesmas ações (as RPCs finance_* já validam a
@@ -17,7 +18,7 @@ export async function PainelFaturacao({ q }: { q?: string }) {
   const { data: servicos } = await supabase
     .from("services")
     .select(
-      "id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, clients(nome, codigo), requests(codigo)"
+      "id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, clients(nome, codigo), requests(id, codigo)"
     )
     .eq("estado", "concluido")
     .order("faturacao_estado")
@@ -152,7 +153,13 @@ export async function PainelFaturacao({ q }: { q?: string }) {
           <div key={s.id} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-800 p-3.5 text-sm">
             <div>
               <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
-                {s.requests?.codigo && <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono">{s.requests.codigo}</span>}
+                {s.requests?.codigo && (
+                  <PedidoCodigoBadge
+                    id={s.requests.id}
+                    codigo={s.requests.codigo}
+                    className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono hover:bg-neutral-800 hover:text-white"
+                  />
+                )}
                 {s.clients?.codigo && <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono">{s.clients.codigo}</span>}
               </div>
               <span className="font-medium text-neutral-200">{s.clients?.nome}</span>

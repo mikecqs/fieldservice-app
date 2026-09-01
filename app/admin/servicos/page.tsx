@@ -1,10 +1,7 @@
 import Link from "next/link";
-import { Circle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { ESTADO_LABEL, ESTADO_COLOR } from "./estados";
-import { calcularPreparacao, PREPARACAO_BADGE } from "@/lib/preparacao";
-
-const ESTADOS_POR_EXECUTAR = ["por_agendar", "agendado", "nova_visita", "correcao_necessaria"];
+import { calcularPreparacao } from "@/lib/preparacao";
+import { ServicosLista } from "./ServicosLista";
 
 export default async function ServicosPage() {
   const supabase = createClient();
@@ -19,6 +16,19 @@ export default async function ServicosPage() {
   ]);
 
   const materialPendentePorServico = new Set((comprasPendentes ?? []).map((c: any) => c.service_id));
+
+  const servicosComPreparacao = (servicos ?? []).map((s: any) => {
+    const prep = calcularPreparacao({
+      temTecnico: (s.service_technicians ?? []).length > 0,
+      morada: s.client_addresses?.endereco,
+      temContacto: !!(s.clients?.telefone || s.clients?.email),
+      descricao: s.descricao,
+      dataAgendada: s.data_agendada,
+      horaAgendada: s.hora_agendada,
+      materialBloqueando: materialPendentePorServico.has(s.id),
+    });
+    return { ...s, preparacaoNivel: prep.nivel, preparacaoMotivos: prep.motivos };
+  });
 
   return (
     <div>
@@ -40,57 +50,7 @@ export default async function ServicosPage() {
         </Link>
       </div>
 
-      <div className="space-y-2">
-        {(servicos ?? []).map((s: any) => {
-          const prep = calcularPreparacao({
-            temTecnico: (s.service_technicians ?? []).length > 0,
-            morada: s.client_addresses?.endereco,
-            temContacto: !!(s.clients?.telefone || s.clients?.email),
-            descricao: s.descricao,
-            dataAgendada: s.data_agendada,
-            horaAgendada: s.hora_agendada,
-            materialBloqueando: materialPendentePorServico.has(s.id),
-          });
-          const badge = PREPARACAO_BADGE[prep.nivel];
-          const mostrarPreparacao = ESTADOS_POR_EXECUTAR.includes(s.estado);
-          return (
-          <Link
-            key={s.id}
-            href={`/admin/servicos/${s.id}`}
-            className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 p-4 hover:border-neutral-600 hover:shadow-sm"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                {mostrarPreparacao && (
-                  <span title={prep.motivos.join(", ")}>
-                    <Circle className={`h-2.5 w-2.5 fill-current ${badge.dotColor}`} aria-hidden="true" />
-                  </span>
-                )}
-                <span className="font-medium text-neutral-100">{s.clients?.nome}</span>
-                <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">{s.tipo}</span>
-                {s.prioridade === "alta" && (
-                  <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">Alta prioridade</span>
-                )}
-              </div>
-              <p className="mt-1 truncate text-sm text-neutral-400">{s.descricao}</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              {s.data_agendada && (
-                <span className="text-xs text-neutral-500">
-                  {s.data_agendada} {s.hora_agendada?.slice(0, 5)}
-                </span>
-              )}
-              <span className={`rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[s.estado] ?? ""}`}>
-                {ESTADO_LABEL[s.estado] ?? s.estado}
-              </span>
-            </div>
-          </Link>
-          );
-        })}
-        {(servicos ?? []).length === 0 && (
-          <p className="py-10 text-center text-sm text-neutral-500">Ainda sem serviços.</p>
-        )}
-      </div>
+      <ServicosLista servicos={servicosComPreparacao} />
     </div>
   );
 }
