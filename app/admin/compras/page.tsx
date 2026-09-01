@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { avancarEstadoCompra } from "./actions";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 const ESTADO_LABEL: Record<string, string> = {
   por_encomendar: "Por encomendar",
@@ -49,7 +50,7 @@ export default async function ComprasPage() {
                     href={`/admin/servicos/${c.services.id}`}
                     className="mt-0.5 inline-block text-xs text-neutral-200 underline"
                   >
-                    {c.services.clients?.nome} — {c.services.tipo} · {c.services.descricao}
+                    {c.services.clients?.nome} — {rotuloTipoServico(c.services.tipo)} · {c.services.descricao}
                   </Link>
                 ) : (
                   <div className="mt-0.5 text-xs text-neutral-500">Sem serviço associado</div>

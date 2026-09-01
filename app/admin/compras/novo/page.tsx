@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { criarCompra } from "../actions";
 import { ItemRows } from "../ItemRows";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 export default async function NovaCompraPage() {
   const supabase = createClient();
@@ -38,7 +39,7 @@ export default async function NovaCompraPage() {
             <select name="service_id" className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm">
               <option value="">—</option>
               {(servicos ?? []).map((s: any) => (
-                <option key={s.id} value={s.id}>{s.clients?.nome} — {s.tipo}</option>
+                <option key={s.id} value={s.id}>{s.clients?.nome} — {rotuloTipoServico(s.tipo)}</option>
               ))}
             </select>
           </label>

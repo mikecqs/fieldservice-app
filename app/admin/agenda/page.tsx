@@ -5,6 +5,7 @@ import { ESTADO_LABEL } from "../servicos/estados";
 import { toISO, parseISO, addDays, mondayOf, monthGridRange, MESES } from "@/lib/agenda-dates";
 import { calcularPreparacao, type NivelPreparacao } from "@/lib/preparacao";
 import { ESTADOS_SERVICO_POR_AGENDAR } from "@/lib/operacional";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 import { AgendaClient } from "./AgendaClient";
 import type { ServicoAgenda } from "./ServicoModal";
 
@@ -154,7 +155,7 @@ export default async function AgendaPage({
                 href={`/admin/servicos/${s.id}`}
                 className="block rounded-md border border-amber-500/20 bg-neutral-900 p-2.5 text-sm text-amber-300 hover:bg-amber-500/15"
               >
-                {s.clients?.nome} — {s.tipo} · {s.descricao} · <span className="text-xs">{ESTADO_LABEL[s.estado]}</span>
+                {s.clients?.nome} — {rotuloTipoServico(s.tipo)} · {s.descricao} · <span className="text-xs">{ESTADO_LABEL[s.estado]}</span>
               </Link>
             ))}
           </div>

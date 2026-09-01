@@ -7,13 +7,16 @@ import { getOrgId, getOrgIdAndRole } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
 import { podeDecidirPedido } from "@/lib/pedido-estado";
 import { ORIGENS_PEDIDO as ORIGENS_VALIDAS } from "@/lib/pedido-opcoes";
+import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
 
 // Única lógica que cria um orçamento a partir de um pedido — usada tanto
 // quando o tipo já é "Orçamento" (automático, sem perguntar nada) como
-// quando o Admin responde "Sim" à pergunta "é necessário orçamento?".
-// O pedido fica sempre associado ao orçamento (request_id), e o próprio
-// estado do pedido reflete o que aconteceu — nunca fica por atualizar à mão.
-async function criarOrcamentoDePedido(
+// quando o Admin responde "Sim" à pergunta "é necessário orçamento?", e
+// também depois de uma Visita Prévia concluída (criarOrcamentoDeVisita,
+// em app/admin/servicos/actions.ts — por isso exportada). O pedido fica
+// sempre associado ao orçamento (request_id), e o próprio estado do pedido
+// reflete o que aconteceu — nunca fica por atualizar à mão.
+export async function criarOrcamentoDePedido(
   supabase: ReturnType<typeof createClient>,
   organizationId: string,
   requestId: string,
@@ -83,6 +86,55 @@ async function criarServicoDePedido(
   return service;
 }
 
+// Visita Prévia — mesmo mecanismo de Serviço/Agenda já
+// usado por criarServicoDePedido acima, mas com tipo fixo
+// (TIPO_VISITA_ORCAMENTO, nunca pedido.tipo) para nunca ser confundida com
+// uma Manutenção/Instalação normal. Fica "por_agendar" tal como qualquer
+// serviço novo — o Admin agenda-a na Agenda como a qualquer outro (aparece
+// em "Pendentes de agendamento"), sem nenhum mecanismo novo. Só depois de
+// "concluido" é que a ficha do Serviço oferece gerar o Orçamento a partir
+// dela (podeGerarOrcamentoDeVisita, lib/servico-estado.ts).
+async function criarVisitaOrcamentoDePedido(
+  supabase: ReturnType<typeof createClient>,
+  organizationId: string,
+  pedido: { id: string; client_id: string; address_id: string; descricao: string }
+) {
+  const { data: morada } = await supabase
+    .from("client_addresses")
+    .select("id")
+    .eq("id", pedido.address_id)
+    .eq("client_id", pedido.client_id)
+    .single();
+  if (!morada) throw new Error("A morada do pedido não pertence ao cliente do pedido.");
+
+  const { data: service, error } = await supabase
+    .from("services")
+    .insert({
+      organization_id: organizationId,
+      client_id: pedido.client_id,
+      address_id: pedido.address_id,
+      request_id: pedido.id,
+      tipo: TIPO_VISITA_ORCAMENTO,
+      descricao: `Visita Prévia — ${pedido.descricao}`,
+    })
+    .select()
+    .single();
+  if (error || !service) throw new Error(error?.message || "Não foi possível criar a Visita Prévia.");
+
+  // 'orcamento', não 'convertido' — este pedido ainda vai dar um Orçamento,
+  // só depois de uma visita; mesmo estado que criarOrcamentoDePedido usa.
+  await supabase.from("requests").update({ estado: "orcamento" }).eq("id", pedido.id);
+
+  await registarEventoServico(supabase, {
+    organizationId,
+    serviceId: service.id,
+    tipo: "criado",
+    descricao: "Visita Prévia criada a partir do pedido — por agendar na Agenda.",
+  });
+
+  return service;
+}
+
 // Partilhada por /admin/pedidos/novo (ADMIN/SUPER_ADMIN) e
 // /atendimento/pedidos/novo (ATENDIMENTO) — o comportamento depois de criar
 // o pedido diverge por role (ver fim da função), porque ATENDIMENTO não tem
@@ -107,6 +159,11 @@ export async function criarPedido(formData: FormData) {
   // "Orçamento" nem "Agendamento" — nos outros dois casos vem sempre vazia
   // e é ignorada, porque esses ramos nem chegam a olhar para ela.
   const necessita_orcamento = String(formData.get("necessita_orcamento") || "");
+  // Só perguntada quando o pedido vai mesmo dar um Orçamento (tipo
+  // "Orçamento" direto, ou "sim" acima) — ver NovoPedidoForm. Vazio/
+  // inesperado cai no valor que já existia antes desta funcionalidade:
+  // direto ao Orçamento, sem visita (nunca bloqueia por causa disto).
+  const necessita_visita_previa = String(formData.get("necessita_visita_previa") || "");
 
   if (!client_id || !address_id || !tipo || !descricao) return;
   if (!ORIGENS_VALIDAS.includes(origem)) return;
@@ -140,26 +197,33 @@ export async function criarPedido(formData: FormData) {
 
   revalidatePath("/admin/pedidos");
 
-  // "Orçamento" segue sempre para lá, sem perguntar nada. "Agendamento"
-  // segue sempre direto para o Serviço/OS, também sem perguntar nada — só
-  // "Manutenção"/"Instalação" perguntam primeiro se é necessário orçamento.
-  if (tipo === "Orçamento") {
-    const budget = await criarOrcamentoDePedido(supabase, organizationId, pedido.id, client_id);
-    redirect(`/admin/orcamentos/${budget.id}`);
-  }
+  // "Agendamento" segue sempre direto para o Serviço/OS, sem perguntar nada
+  // — nunca envolve Orçamento, por isso nunca pergunta visita prévia.
   if (tipo === "Agendamento") {
     const service = await criarServicoDePedido(supabase, organizationId, pedido, prioridade);
     redirect(`/admin/servicos/${service.id}`);
+  }
+
+  // "Orçamento" (tipo direto, sem perguntar "é necessário orçamento?") ou
+  // "sim" a essa pergunta (Manutenção/Instalação) levam ambos ao mesmo
+  // sítio: a pergunta "É necessária visita prévia?" (ver NovoPedidoForm).
+  // "Sim" cria a visita (Serviço com tipo fixo, nunca o tipo do pedido) e
+  // manda para a Agenda para a marcar; "não" segue exatamente como já
+  // seguia antes desta funcionalidade — cria logo o Orçamento.
+  const vaiParaOrcamento = tipo === "Orçamento" || necessita_orcamento === "sim";
+  if (vaiParaOrcamento) {
+    if (necessita_visita_previa === "sim") {
+      await criarVisitaOrcamentoDePedido(supabase, organizationId, pedido);
+      redirect("/admin/agenda");
+    }
+    const budget = await criarOrcamentoDePedido(supabase, organizationId, pedido.id, client_id);
+    redirect(`/admin/orcamentos/${budget.id}`);
   }
 
   // Onda 3 (Etapa 10) — resposta já veio no mesmo formulário (ver
   // NovoPedidoForm): decide já, em vez de mandar para /decisao. Reutiliza
   // exatamente as mesmas duas funções que decidirComOrcamento/
   // decidirSemOrcamento já usavam — nunca uma segunda versão desta lógica.
-  if (necessita_orcamento === "sim") {
-    const budget = await criarOrcamentoDePedido(supabase, organizationId, pedido.id, client_id);
-    redirect(`/admin/orcamentos/${budget.id}`);
-  }
   if (necessita_orcamento === "nao") {
     const service = await criarServicoDePedido(supabase, organizationId, pedido, prioridade);
     redirect(`/admin/servicos/${service.id}`);
@@ -168,7 +232,9 @@ export async function criarPedido(formData: FormData) {
   // Rede de segurança (mantida) — só chega aqui se necessita_orcamento vier
   // vazio ou inesperado (ex: JavaScript desativado no toggle do
   // formulário). /decisao e decidirComOrcamento/decidirSemOrcamento
-  // continuam exatamente como estavam.
+  // continuam exatamente como estavam, sem pergunta de visita prévia — este
+  // caminho de exceção já existia antes desta funcionalidade e não foi
+  // tocado.
   redirect(`/admin/pedidos/${pedido.id}/decisao`);
 }
 
@@ -255,13 +321,19 @@ export async function arquivarPedido(formData: FormData) {
 }
 
 // Única fonte do "percurso completo" de um pedido (Pedido → Orçamento →
-// Serviço/OS, com o histórico de eventos de cada um) — usada tanto pela
+// Serviço(s), com o histórico de eventos de cada um) — usada tanto pela
 // página completa (/admin/pedidos/[id]) como pelo popup de consulta rápida
 // na lista, para nunca haver duas versões desta query. Reutiliza sempre
 // budget_events/service_events já existentes — nunca um histórico novo.
 // Sem verificação de role aqui: a barreira real é sempre a RLS de cada
 // tabela (ex: ATENDIMENTO não tem policy nenhuma em budgets/services, por
 // isso nunca veria esses dados mesmo chamando isto diretamente).
+//
+// `services` é uma LISTA (nunca .maybeSingle()) — a Visita Prévia tornou
+// normal um Pedido ter mais do que um Serviço ao longo do tempo (a visita
+// + o Serviço de Instalação/Manutenção que resulta do Orçamento aceite
+// depois dela). Ordenada por `created_at` ascendente para a página mostrar
+// sempre o percurso pela ordem em que aconteceu, sem esconder nada.
 export async function obterDetalhePedido(id: string) {
   const supabase = createClient();
 
@@ -274,26 +346,42 @@ export async function obterDetalhePedido(id: string) {
     .single();
   if (!pedido) return null;
 
-  const [{ data: budget }, { data: service }] = await Promise.all([
+  const [{ data: budget }, { data: services }] = await Promise.all([
     supabase.from("budgets").select("id, estado, numero").eq("request_id", id).maybeSingle(),
-    supabase.from("services").select("id, estado, tipo").eq("request_id", id).maybeSingle(),
+    supabase
+      .from("services")
+      .select("id, estado, tipo, budget_id")
+      .eq("request_id", id)
+      .order("created_at", { ascending: true }),
   ]);
 
-  const [{ data: budgetEvents }, { data: serviceEvents }] = await Promise.all([
+  const serviceIds = (services ?? []).map((s) => s.id);
+  const [{ data: budgetEvents }, { data: serviceEventsRaw }] = await Promise.all([
     budget
       ? supabase.from("budget_events").select("id, tipo, descricao, created_at").eq("budget_id", budget.id).order("created_at", { ascending: true })
       : Promise.resolve({ data: [] as any[] }),
-    service
-      ? supabase.from("service_events").select("id, tipo, descricao, created_at").eq("service_id", service.id).order("created_at", { ascending: true })
+    serviceIds.length > 0
+      ? supabase
+          .from("service_events")
+          .select("id, service_id, tipo, descricao, created_at")
+          .in("service_id", serviceIds)
+          .order("created_at", { ascending: true })
       : Promise.resolve({ data: [] as any[] }),
   ]);
+
+  // Agrupado por serviço — cada bloco da lista mostra só o seu próprio
+  // histórico, nunca o de outro Serviço do mesmo pedido misturado.
+  const serviceEventsByServiceId: Record<string, any[]> = {};
+  for (const ev of serviceEventsRaw ?? []) {
+    (serviceEventsByServiceId[ev.service_id] ??= []).push(ev);
+  }
 
   return {
     pedido,
     budget: budget ?? null,
-    service: service ?? null,
     budgetEvents: budgetEvents ?? [],
-    serviceEvents: serviceEvents ?? [],
+    services: services ?? [],
+    serviceEventsByServiceId,
   };
 }
 

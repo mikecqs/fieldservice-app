@@ -29,8 +29,11 @@ export default async function AtendimentoPedidoDetalhePage({ params }: { params:
     .maybeSingle();
 
   const budget = estadoLinha?.orcamento_estado ? { estado: estadoLinha.orcamento_estado } : undefined;
-  const service = estadoLinha?.servico_estado ? { estado: estadoLinha.servico_estado } : undefined;
-  const estado = estadoOperacionalPedido(pedido, budget, service);
+  // A view já devolve no máximo um Serviço por pedido (ver
+  // requests_status_atendimento_view em schema.sql); envolve-se num array só
+  // para bater certo com a assinatura partilhada com o Admin.
+  const services = estadoLinha?.servico_estado ? [{ estado: estadoLinha.servico_estado }] : [];
+  const estado = estadoOperacionalPedido(pedido, budget, services);
 
   return (
     <div className="mx-auto max-w-lg">

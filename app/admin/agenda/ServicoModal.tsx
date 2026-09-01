@@ -6,7 +6,7 @@ import { X, Lock, AlertTriangle } from "lucide-react";
 import { criarOuAgendarNoPopup } from "./actions";
 import { verificarConflitoAgenda, atualizarAgendamento, atribuirTecnico, removerTecnico } from "../servicos/actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
-import { podeReagendarServico } from "@/lib/servico-estado";
+import { podeReagendarServico, rotuloTipoServico } from "@/lib/servico-estado";
 import { Button } from "@/components/ui/Button";
 import { ClienteMoradaFields } from "@/components/ClienteMoradaFields";
 import { TIPOS_SERVICO } from "@/lib/pedido-opcoes";
@@ -197,7 +197,7 @@ export function ServicoModal({
           </div>
 
           <div className="space-y-2 text-sm text-neutral-300">
-            <p>{servico.tipo} · {servico.descricao}</p>
+            <p>{rotuloTipoServico(servico.tipo)} · {servico.descricao}</p>
             <p className="text-neutral-400">
               {servico.data_agendada ?? "sem data"} {servico.hora_agendada?.slice(0, 5) ?? ""}
               {servico.hora_fim_agendada ? `–${servico.hora_fim_agendada.slice(0, 5)}` : ""}
@@ -251,7 +251,7 @@ export function ServicoModal({
         <div className="space-y-3">
           {mode === "ver" && servico && (
             <p className="text-sm text-neutral-300">
-              {servico.tipo} · {servico.descricao}
+              {rotuloTipoServico(servico.tipo)} · {servico.descricao}
               {servico.clients?.telefone && <span className="text-neutral-500"> · {servico.clients.telefone}</span>}
             </p>
           )}
@@ -286,7 +286,7 @@ export function ServicoModal({
                     <option value="">Seleciona…</option>
                     {servicosPendentes.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.clients?.nome} — {s.tipo} · {s.descricao}
+                        {s.clients?.nome} — {rotuloTipoServico(s.tipo)} · {s.descricao}
                       </option>
                     ))}
                   </select>

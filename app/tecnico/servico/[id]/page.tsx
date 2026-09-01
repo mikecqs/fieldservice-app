@@ -47,6 +47,7 @@ export default async function ServicoTecnicoPage({ params }: { params: { id: str
         doisDias: settings?.valor_mao_obra_2_dias ?? 0,
       }}
       visitaAbertaId={visitaAberta?.id ?? null}
+      organizationId={organizationId}
     />
   );
 }

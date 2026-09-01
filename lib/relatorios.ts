@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 const HORAS_MAO_OBRA: Record<string, number> = {
   "1h": 1, "2h": 2, "3h": 3, "4h": 4, "5h": 5, "6h": 6, "7h": 7, "8h": 8,
@@ -202,7 +203,7 @@ export async function getTiposServico(supabase: SB, desde: string, ate: string, 
 
   return Array.from(porTipo.entries())
     .map(([tipo, v]) => ({
-      tipo,
+      tipo: rotuloTipoServico(tipo),
       quantidade: v.quantidade,
       tempoMedioHoras: media(v.tempos),
       valorMedio: v.valores.length ? v.valores.reduce((a, b) => a + b, 0) / v.valores.length : null,

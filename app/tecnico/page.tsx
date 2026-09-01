@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AtivarNotificacoes } from "./AtivarNotificacoes";
 import { Badge } from "@/components/ui/Badge";
 import { ESTADO_COLOR } from "@/app/admin/servicos/estados";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 // Repara na tabela usada: `services_technician_view`, não `services`.
 // A tabela services nem sequer tem policy de SELECT para TECHNICIAN — se
@@ -97,7 +98,7 @@ function ServicoCard({ s, hoje }: { s: any; hoje: string }) {
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-base font-semibold text-neutral-100">{s.cliente_nome}</span>
-        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">{s.tipo}</span>
+        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">{rotuloTipoServico(s.tipo)}</span>
       </div>
       {rejeitado && s.motivo_correcao ? (
         <div className="flex items-center gap-1.5 text-sm font-medium text-red-400">

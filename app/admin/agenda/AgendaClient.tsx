@@ -6,6 +6,7 @@ import { Circle } from "lucide-react";
 import { ESTADO_COLOR } from "../servicos/estados";
 import { toISO, addDays, monthGridRange, DIAS_SEMANA } from "@/lib/agenda-dates";
 import { PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 import { ServicoModal, type ServicoAgenda } from "./ServicoModal";
 
 const HORA_INICIO_GRELHA = 7;
@@ -125,7 +126,7 @@ function EventoResumo({ s, onClick }: { s: Servico; onClick: () => void }) {
         {s.hora_agendada?.slice(0, 5)}
         {s.hora_fim_agendada ? `–${s.hora_fim_agendada.slice(0, 5)}` : ""} · {s.clients?.nome}
       </div>
-      <div className="truncate opacity-80">{s.tipo}{tecnicos ? ` · ${tecnicos}` : ""}</div>
+      <div className="truncate opacity-80">{rotuloTipoServico(s.tipo)}{tecnicos ? ` · ${tecnicos}` : ""}</div>
     </button>
   );
 }

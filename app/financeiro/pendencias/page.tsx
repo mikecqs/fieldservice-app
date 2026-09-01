@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 // Pendências relevantes para o financeiro: serviços bloqueados antes de
 // chegarem a "por faturar" (correção pedida ao técnico). Só leitura — a
@@ -37,7 +38,7 @@ export default async function PendenciasPage() {
             <div className="mb-1 flex items-start justify-between">
               <div>
                 <div className="font-medium text-neutral-100">{s.clients?.nome}</div>
-                <div className="text-sm text-neutral-300">{s.tipo} · {s.descricao}</div>
+                <div className="text-sm text-neutral-300">{rotuloTipoServico(s.tipo)} · {s.descricao}</div>
               </div>
               <span className="font-semibold text-neutral-200">
                 {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}

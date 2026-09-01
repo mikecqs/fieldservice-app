@@ -8,6 +8,7 @@ import { TiposServicoChart } from "@/components/relatorios/TiposServicoChart";
 import { OrcamentosDonut } from "@/components/relatorios/OrcamentosDonut";
 import { TabelaServicos, type ServicoLinha } from "@/components/relatorios/TabelaServicos";
 import { ExportarRelatoriosExcel } from "@/components/relatorios/ExportarRelatoriosExcel";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 const PRESETS = [
   { value: "hoje", label: "Hoje" },
@@ -79,7 +80,7 @@ export default async function RelatoriosPage({
   const linhas: ServicoLinha[] = (servicosLinhas ?? []).map((s: any) => ({
     id: s.id,
     cliente: s.clients?.nome ?? "—",
-    tipo: s.tipo,
+    tipo: rotuloTipoServico(s.tipo),
     estado: s.estado,
     data_agendada: s.data_agendada,
     valor: Number(s.valor ?? 0),

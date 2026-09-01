@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { ESTADO_LABEL, ESTADO_COLOR } from "@/app/admin/servicos/estados";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -54,7 +55,7 @@ export function ServicosPopup({ servicos }: { servicos: ServicoResumo[] }) {
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono text-neutral-400">{s.codigo}</span>
-                      <span className="truncate font-medium text-neutral-100">{s.tipo}</span>
+                      <span className="truncate font-medium text-neutral-100">{rotuloTipoServico(s.tipo)}</span>
                     </div>
                     <div className="truncate text-xs text-neutral-500">{s.descricao}</div>
                   </div>

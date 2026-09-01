@@ -7,6 +7,7 @@ import { ESTADO_LABEL, ESTADO_COLOR } from "../servicos/estados";
 import { toISO, addDays, nowTimeHHMMSS, startOfLocalDayUTC } from "@/lib/agenda-dates";
 import { estaAtrasado, orcamentoPrecisaFollowup, ESTADOS_SERVICO_POR_AGENDAR } from "@/lib/operacional";
 import { calcularPreparacao } from "@/lib/preparacao";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 // Estados que já não fazem parte do trabalho "por realizar" de hoje — o
 // técnico já não vai voltar a mexer no serviço no âmbito do dia agendado.
@@ -201,7 +202,7 @@ export default async function DashboardPage() {
       titulo: "Serviços por agendar",
       itens: (porAgendar ?? []).map((s: any) => ({
         id: s.id,
-        texto: `${s.clients?.nome} — ${s.tipo}${s.descricao ? `: ${s.descricao}` : ""}`,
+        texto: `${s.clients?.nome} — ${rotuloTipoServico(s.tipo)}${s.descricao ? `: ${s.descricao}` : ""}`,
         href: `/admin/servicos/${s.id}`,
       })),
     },
@@ -209,7 +210,7 @@ export default async function DashboardPage() {
       titulo: "Serviços de hoje sem técnico atribuído",
       itens: semTecnicoHoje.map((s: any) => ({
         id: s.id,
-        texto: `${s.clients?.nome} — ${s.tipo}${s.hora_agendada ? ` às ${s.hora_agendada.slice(0, 5)}` : ""}`,
+        texto: `${s.clients?.nome} — ${rotuloTipoServico(s.tipo)}${s.hora_agendada ? ` às ${s.hora_agendada.slice(0, 5)}` : ""}`,
         href: `/admin/servicos/${s.id}`,
       })),
     },
@@ -381,7 +382,7 @@ export default async function DashboardPage() {
                       {s.hora_agendada ? s.hora_agendada.slice(0, 5) : "—"}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-neutral-200">
-                      {s.clients?.nome} <span className="text-neutral-500">· {s.tipo}</span>
+                      {s.clients?.nome} <span className="text-neutral-500">· {rotuloTipoServico(s.tipo)}</span>
                     </span>
                     <span className="shrink-0 truncate text-xs text-neutral-500">{tecnicosNomes || "sem técnico"}</span>
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${ESTADO_COLOR[s.estado] ?? "bg-neutral-800 text-neutral-300"}`}>
@@ -410,7 +411,7 @@ export default async function DashboardPage() {
                   </div>
                   {atual ? (
                     <Link href={`/admin/servicos/${atual.id}`} className="block text-xs text-neutral-400 hover:text-neutral-200">
-                      Atual: {atual.clients?.nome} · {atual.tipo}
+                      Atual: {atual.clients?.nome} · {rotuloTipoServico(atual.tipo)}
                       {atual.hora_agendada ? ` às ${atual.hora_agendada.slice(0, 5)}` : ""} · {ESTADO_LABEL[atual.estado] ?? atual.estado}
                     </Link>
                   ) : (

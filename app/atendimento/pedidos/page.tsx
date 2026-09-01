@@ -54,8 +54,12 @@ export default async function AtendimentoPedidosPage() {
         {pedidosOrdenados.map((p: any) => {
           const e = estadoPorPedido.get(p.id);
           const budget = e?.orcamento_estado ? { estado: e.orcamento_estado } : undefined;
-          const service = e?.servico_estado ? { estado: e.servico_estado } : undefined;
-          const estado = estadoOperacionalPedido(p, budget, service);
+          // A view já devolve no máximo um Serviço por pedido (ver
+          // requests_status_atendimento_view em schema.sql); envolve-se num
+          // array só para bater certo com a assinatura partilhada com o
+          // Admin, que já lida com mais do que um.
+          const services = e?.servico_estado ? [{ estado: e.servico_estado }] : [];
+          const estado = estadoOperacionalPedido(p, budget, services);
           return (
             <Link
               key={p.id}

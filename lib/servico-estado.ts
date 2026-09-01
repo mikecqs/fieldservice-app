@@ -43,3 +43,57 @@ export function podeReativarServico(servico: { estado: string; faturacao_estado?
   if (servico.faturacao_estado === "faturado") return false;
   return true;
 }
+
+// "Visita de Orçamento" é um Serviço como outro qualquer — mesmo ciclo de
+// vida, mesma Agenda, mesma execução pelo técnico — só com este tipo fixo,
+// nunca o tipo original do Pedido (Manutenção/Instalação/Orçamento), para
+// nunca ser confundida com um Serviço normal de execução. Duas origens
+// possíveis, que a ficha do Serviço distingue pelo que fica preenchido:
+//   Fluxo A — criarVisitaOrcamentoDePedido (app/admin/pedidos/actions.ts),
+//   quando "É necessária visita prévia?" é "sim" a partir de um Pedido que
+//   ainda não tem Orçamento nenhum: só `request_id` fica preenchido.
+//   Fluxo B — agendarVisitaPreviaDoOrcamento (app/admin/orcamentos/actions.ts),
+//   a partir de um Orçamento já existente (antes de aceite): `budget_id`
+//   fica sempre preenchido (e também `request_id`, quando o orçamento tinha
+//   um pedido de origem).
+export const TIPO_VISITA_ORCAMENTO = "Visita de Orçamento";
+
+// Rótulo visível ao utilizador para o tipo de Serviço — o valor gravado em
+// `services.tipo` continua "Visita de Orçamento" (TIPO_VISITA_ORCAMENTO,
+// nunca alterado: evita reescrever dados já gravados só por causa de uma
+// string técnica), mas o utilizador vê sempre "Visita Prévia", em todo o
+// lado onde `tipo` é mostrado (ficha do Serviço, listas, Agenda, Técnico,
+// relatórios, faturação). Qualquer outro tipo passa tal e qual, sem mapa
+// novo — mesmo padrão "passthrough" já usado no resto da app.
+export function rotuloTipoServico(tipo: string): string {
+  return tipo === TIPO_VISITA_ORCAMENTO ? "Visita Prévia" : tipo;
+}
+
+function eVisitaOrcamentoConcluida(servico: { tipo: string; estado: string }): boolean {
+  return servico.tipo === TIPO_VISITA_ORCAMENTO && servico.estado === "concluido";
+}
+
+// Fluxo A — a visita veio de um Pedido sem Orçamento ainda: só aqui é que a
+// ficha do Serviço oferece CRIAR o Orçamento a partir dela
+// (criarOrcamentoDeVisita, em app/admin/servicos/actions.ts). `budget_id`
+// presente significa Fluxo B (já existe um Orçamento — ver
+// podeVoltarAoOrcamentoDaVisita abaixo), nunca os dois ao mesmo tempo.
+export function podeGerarOrcamentoDeVisita(servico: {
+  tipo: string;
+  estado: string;
+  request_id?: string | null;
+  budget_id?: string | null;
+}): boolean {
+  return eVisitaOrcamentoConcluida(servico) && !!servico.request_id && !servico.budget_id;
+}
+
+// Fluxo B — a visita veio de um Orçamento já existente: já não há nada para
+// criar, só um caminho de volta para o Admin rever/confirmar/ajustar esse
+// mesmo Orçamento.
+export function podeVoltarAoOrcamentoDaVisita(servico: {
+  tipo: string;
+  estado: string;
+  budget_id?: string | null;
+}): boolean {
+  return eVisitaOrcamentoConcluida(servico) && !!servico.budget_id;
+}

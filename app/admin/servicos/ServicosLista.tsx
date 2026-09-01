@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { Circle } from "lucide-react";
 import { ESTADO_LABEL, ESTADO_COLOR } from "./estados";
 import { PREPARACAO_BADGE, type NivelPreparacao } from "@/lib/preparacao";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 const ESTADOS_POR_EXECUTAR = ["por_agendar", "agendado", "nova_visita", "correcao_necessaria"];
 
@@ -28,7 +29,7 @@ export function ServicosLista({ servicos }: { servicos: ServicoResumo[] }) {
     const termo = busca.trim().toLowerCase();
     if (!termo) return servicos;
     return servicos.filter((s) => {
-      const alvo = [s.clients?.nome, s.tipo, s.descricao, ESTADO_LABEL[s.estado] ?? s.estado, s.prioridade]
+      const alvo = [s.clients?.nome, rotuloTipoServico(s.tipo), s.descricao, ESTADO_LABEL[s.estado] ?? s.estado, s.prioridade]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -68,7 +69,7 @@ export function ServicosLista({ servicos }: { servicos: ServicoResumo[] }) {
                     </span>
                   )}
                   <span className="font-medium text-neutral-100">{s.clients?.nome}</span>
-                  <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">{s.tipo}</span>
+                  <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">{rotuloTipoServico(s.tipo)}</span>
                   {s.prioridade === "alta" && (
                     <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">Alta prioridade</span>
                   )}

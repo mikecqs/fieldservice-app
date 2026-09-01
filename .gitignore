@@ -28,6 +28,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# supabase CLI (cache local, nunca commitar; connection strings ficam em .env*, já ignorado acima)
+supabase/.temp
+
 .vercel
 .env*
 dev-out.log

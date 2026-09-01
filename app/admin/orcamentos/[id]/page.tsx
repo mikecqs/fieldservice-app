@@ -4,6 +4,7 @@ import { FileText, MessageCircle, Mail, Copy } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
 import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento, duplicarOrcamento } from "../actions";
+import { AgendarVisitaPreviaButton } from "./AgendarVisitaPreviaButton";
 import { AdicionarItemForm } from "./AdicionarItemForm";
 import { ESTADOS_ORCAMENTO_TERMINAIS } from "@/lib/orcamento-estado";
 import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_COLOR_FALLBACK } from "@/lib/orcamento-visual";
@@ -120,6 +121,11 @@ export default async function OrcamentoDetalhePage({ params }: { params: { id: s
                 Aceite → criar serviço
               </button>
             </form>
+            {/* Alternativa ao "Aceite → criar serviço": para quando o cliente
+                concorda com o valor preliminar mas ainda falta confirmar
+                cablagens/acessos/medidas no local antes de fechar. Nunca
+                substitui o caminho normal — é só mais uma opção nesta zona. */}
+            <AgendarVisitaPreviaButton orcamentoId={orcamento.id} />
             <form action={avancarEstado}>
               <input type="hidden" name="id" value={orcamento.id} />
               <input type="hidden" name="estado" value="recusado" />

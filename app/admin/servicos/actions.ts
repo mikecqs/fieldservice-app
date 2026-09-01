@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId, getOrgIdAndRole } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
-import { podeReagendarServico, podeCancelarServico, podeReativarServico } from "@/lib/servico-estado";
+import { podeReagendarServico, podeCancelarServico, podeReativarServico, podeGerarOrcamentoDeVisita } from "@/lib/servico-estado";
 import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
+import { criarOrcamentoDePedido } from "../pedidos/actions";
 
 // Aviso não-bloqueante de conflito de agenda — chamado pelo formulário antes
 // de gravar. Não impede nada sozinho: só devolve a informação para o Admin
@@ -341,6 +343,49 @@ export async function validarServico(formData: FormData) {
   revalidatePath("/admin/faturacao");
   revalidatePath(`/admin/servicos/${id}`);
   revalidatePath("/admin/dashboard");
+}
+
+// Único caminho de saída de uma Visita Prévia concluída (Fluxo A) — gera o
+// Orçamento reutilizando exatamente criarOrcamentoDePedido (a mesma função
+// já usada quando o pedido nunca passa por visita nenhuma), nunca uma
+// segunda versão da mesma lógica. Bloqueado se o serviço não for mesmo uma
+// Visita Prévia já concluída (podeGerarOrcamentoDeVisita); se o pedido já
+// tiver um orçamento (ex: clique duplo), liga-se a essa visita a ele em vez
+// de criar um segundo. Em ambos os casos a própria visita fica sempre
+// ligada ao Orçamento via `budget_id` — nunca fica por trás, tal como o
+// Fluxo B já faz desde a criação — para (a) o botão "Criar orçamento a
+// partir desta visita" deixar de aparecer aqui (podeGerarOrcamentoDeVisita
+// exige `!budget_id`) e (b) futuras análises encontrarem todas as visitas
+// de um Orçamento por `budget_id`, sejam do Fluxo A ou do Fluxo B.
+export async function criarOrcamentoDeVisita(formData: FormData) {
+  const organizationId = await getOrgId();
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  const { data: servico } = await supabase
+    .from("services")
+    .select("tipo, estado, request_id, budget_id, client_id")
+    .eq("id", id)
+    .single();
+  if (!servico || !podeGerarOrcamentoDeVisita(servico)) {
+    throw new Error("Este serviço não é uma Visita Prévia já concluída.");
+  }
+
+  const { data: orcamentoExistente } = await supabase
+    .from("budgets")
+    .select("id")
+    .eq("request_id", servico.request_id as string)
+    .maybeSingle();
+  if (orcamentoExistente) {
+    await supabase.from("services").update({ budget_id: orcamentoExistente.id }).eq("id", id);
+    redirect(`/admin/orcamentos/${orcamentoExistente.id}`);
+  }
+
+  const budget = await criarOrcamentoDePedido(supabase, organizationId, servico.request_id as string, servico.client_id);
+  await supabase.from("services").update({ budget_id: budget.id }).eq("id", id);
+  revalidatePath(`/admin/servicos/${id}`);
+  redirect(`/admin/orcamentos/${budget.id}`);
 }
 
 export async function enviarParaCorrecao(formData: FormData) {

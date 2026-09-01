@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { marcarFaturado } from "@/app/admin/faturacao/actions";
 import { validarServico, enviarParaCorrecao } from "@/app/admin/servicos/actions";
 import { PedidoCodigoBadge } from "@/components/pedidos/PedidoCodigoBadge";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 // Partilhado entre /admin/faturacao (Admin) e /financeiro/faturacao (role
 // FINANCE) — mesma consulta, mesmas ações (as RPCs finance_* já validam a
@@ -70,7 +71,7 @@ export async function PainelFaturacao({ q }: { q?: string }) {
             <div className="mb-2 flex items-start justify-between">
               <div>
                 <div className="font-medium text-neutral-100">{s.clients?.nome}</div>
-                <div className="text-sm text-neutral-300">{s.tipo} · {s.descricao}</div>
+                <div className="text-sm text-neutral-300">{rotuloTipoServico(s.tipo)} · {s.descricao}</div>
               </div>
               <span className="font-semibold text-neutral-200">
                 {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
@@ -118,7 +119,7 @@ export async function PainelFaturacao({ q }: { q?: string }) {
             <div className="mb-2 flex items-start justify-between">
               <div>
                 <div className="font-medium text-neutral-100">{s.clients?.nome}</div>
-                <div className="text-sm text-neutral-400">{s.tipo} · {s.descricao}</div>
+                <div className="text-sm text-neutral-400">{rotuloTipoServico(s.tipo)} · {s.descricao}</div>
               </div>
               <span className="font-semibold text-neutral-200">
                 {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
@@ -136,6 +137,7 @@ export async function PainelFaturacao({ q }: { q?: string }) {
               <input
                 name="faturacao_referencia"
                 placeholder="Nº fatura / referência"
+                required
                 className="flex-1 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
               />
               <button className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200">

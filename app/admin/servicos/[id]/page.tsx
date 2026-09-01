@@ -11,6 +11,7 @@ import {
   enviarParaCorrecao,
   associarEquipamento,
   cancelarServico,
+  criarOrcamentoDeVisita,
 } from "../actions";
 import { criarCompraRapida } from "../../compras/actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../estados";
@@ -18,7 +19,14 @@ import { AgendamentoForm } from "./AgendamentoForm";
 import { ReativarServicoForm } from "./ReativarServicoForm";
 import { MaterialPlaneadoForm } from "./MaterialPlaneadoForm";
 import { calcularPreparacao, PREPARACAO_BADGE } from "@/lib/preparacao";
-import { podeReagendarServico, podeCancelarServico, podeReativarServico } from "@/lib/servico-estado";
+import {
+  podeReagendarServico,
+  podeCancelarServico,
+  podeReativarServico,
+  podeGerarOrcamentoDeVisita,
+  podeVoltarAoOrcamentoDaVisita,
+  rotuloTipoServico,
+} from "@/lib/servico-estado";
 
 const EVENTO_LABEL: Record<string, string> = {
   criado: "Criado",
@@ -115,7 +123,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
               <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-mono text-neutral-400">{servico.codigo}</span>
               <h1 className="text-lg font-bold text-white">{servico.clients?.nome}</h1>
             </div>
-            <p className="text-sm text-neutral-400">{servico.tipo} · {servico.descricao}</p>
+            <p className="text-sm text-neutral-400">{rotuloTipoServico(servico.tipo)} · {servico.descricao}</p>
             {servico.client_addresses && (
               <p className="mt-1 text-xs text-neutral-500">{servico.client_addresses.label}: {servico.client_addresses.endereco}</p>
             )}
@@ -198,6 +206,36 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
           </details>
         )}
       </div>
+
+      {podeGerarOrcamentoDeVisita(servico) && (
+        <div className="mb-5 rounded-xl border border-sky-500/30 bg-neutral-900 p-6">
+          <h2 className="mb-1 text-sm font-semibold text-neutral-100">Visita Prévia concluída</h2>
+          <p className="mb-3 text-xs text-neutral-500">
+            Esta Visita Prévia já foi realizada. Podes agora gerar o Orçamento a partir dela.
+          </p>
+          <form action={criarOrcamentoDeVisita}>
+            <input type="hidden" name="id" value={servico.id} />
+            <button className="rounded-md bg-white px-3.5 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
+              Criar orçamento a partir desta visita
+            </button>
+          </form>
+        </div>
+      )}
+
+      {podeVoltarAoOrcamentoDaVisita(servico) && (
+        <div className="mb-5 rounded-xl border border-sky-500/30 bg-neutral-900 p-6">
+          <h2 className="mb-1 text-sm font-semibold text-neutral-100">Visita Prévia concluída</h2>
+          <p className="mb-3 text-xs text-neutral-500">
+            Esta Visita Prévia foi feita para confirmar o Orçamento que a originou. Revê-o para confirmar ou ajustar o valor.
+          </p>
+          <Link
+            href={`/admin/orcamentos/${servico.budget_id}`}
+            className="inline-block rounded-md bg-white px-3.5 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
+          >
+            Rever orçamento →
+          </Link>
+        </div>
+      )}
 
       {podeReativarServico(servico) && (
         <div className="mb-5 rounded-xl border border-emerald-500/30 bg-neutral-900 p-6">

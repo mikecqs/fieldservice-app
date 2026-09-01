@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { estadoOperacionalPedido, ESTADO_PEDIDO_LABEL } from "@/lib/pedido-estado";
 import { ESTADO_LABEL as SERVICO_ESTADO_LABEL, ESTADO_COLOR as SERVICO_ESTADO_COLOR } from "@/app/admin/servicos/estados";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 // O tipo exato devolvido por obterDetalhePedido() depende de como o
 // supabase-js infere as relações aninhadas (este projeto não usa tipos
@@ -27,8 +28,9 @@ export function PedidoDetalheConteudo({
   // leitura, com um link para "abrir página completa" para quem quiser agir.
   acoes?: React.ReactNode;
 }) {
-  const { pedido, budget, service, budgetEvents, serviceEvents } = detalhe;
-  const estadoOperacional = estadoOperacionalPedido(pedido, budget ?? undefined, service ?? undefined);
+  const { pedido, budget, budgetEvents, services, serviceEventsByServiceId } = detalhe;
+  const listaServicos: any[] = services ?? [];
+  const estadoOperacional = estadoOperacionalPedido(pedido, budget ?? undefined, listaServicos);
 
   return (
     <div>
@@ -94,26 +96,33 @@ export function PedidoDetalheConteudo({
         )}
       </div>
 
-      {/* Orçamento → Serviço/OS (agendamento, estado operacional, conclusão) */}
+      {/* Orçamento → Serviço(s) (agendamento, estado operacional, conclusão) —
+          um Pedido pode ter mais do que um Serviço ao longo do tempo (ex:
+          Visita Prévia + Serviço de Instalação); mostra todos, pela ordem em
+          que aconteceram, nunca só "o mais recente". */}
       <div className="rounded-lg border border-neutral-800 p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <h4 className="text-xs font-bold uppercase tracking-wide text-neutral-400">Serviço / OS</h4>
-          {service && (
-            <Link href={`/admin/servicos/${service.id}`} className="text-xs text-neutral-400 underline hover:text-white">
-              Ver serviço →
-            </Link>
-          )}
-        </div>
-        {service ? (
-          <>
-            <p className="mb-2 text-sm text-neutral-200">
-              {service.tipo} ·{" "}
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SERVICO_ESTADO_COLOR[service.estado] ?? "bg-neutral-800 text-neutral-300"}`}>
-                {SERVICO_ESTADO_LABEL[service.estado] ?? service.estado}
-              </span>
-            </p>
-            <HistoricoEventos eventos={serviceEvents} />
-          </>
+        <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-400">
+          Serviço{listaServicos.length > 1 ? "s" : ""} / OS
+        </h4>
+        {listaServicos.length > 0 ? (
+          <div className="space-y-3">
+            {listaServicos.map((s: any) => (
+              <div key={s.id} className={listaServicos.length > 1 ? "border-t border-neutral-800 pt-3 first:border-t-0 first:pt-0" : ""}>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm text-neutral-200">
+                    {rotuloTipoServico(s.tipo)} ·{" "}
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SERVICO_ESTADO_COLOR[s.estado] ?? "bg-neutral-800 text-neutral-300"}`}>
+                      {SERVICO_ESTADO_LABEL[s.estado] ?? s.estado}
+                    </span>
+                  </p>
+                  <Link href={`/admin/servicos/${s.id}`} className="text-xs text-neutral-400 underline hover:text-white">
+                    Ver serviço →
+                  </Link>
+                </div>
+                <HistoricoEventos eventos={serviceEventsByServiceId?.[s.id] ?? []} />
+              </div>
+            ))}
+          </div>
         ) : (
           <p className="text-xs text-neutral-500">Ainda não existe serviço/OS para este pedido.</p>
         )}

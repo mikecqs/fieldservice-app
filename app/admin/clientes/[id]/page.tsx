@@ -5,6 +5,7 @@ import { removerEquipamento } from "./actions";
 import { ServicosPopup } from "./ServicosPopup";
 import { PedidosCompactos } from "./PedidosCompactos";
 import { RegistarEquipamentoForm } from "./RegistarEquipamentoForm";
+import { rotuloTipoServico } from "@/lib/servico-estado";
 
 export default async function ClienteDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -132,7 +133,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
                           href={`/admin/servicos/${s.id}`}
                           className="block rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-800"
                         >
-                          {s.tipo} · {s.descricao} {s.data_agendada ? `· ${s.data_agendada}` : ""}
+                          {rotuloTipoServico(s.tipo)} · {s.descricao} {s.data_agendada ? `· ${s.data_agendada}` : ""}
                         </Link>
                       ))}
                     </div>

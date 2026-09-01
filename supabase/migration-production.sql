@@ -589,6 +589,123 @@ end $$;
 alter table org_settings alter column valor_mao_obra_2_dias set default 500;
 update org_settings set valor_mao_obra_2_dias = 500 where valor_mao_obra_2_dias = 0;
 
+-- =============================================================================
+-- Referência de fatura obrigatória (local, ainda por commitar) — antes era
+-- possível marcar um serviço como faturado com faturacao_referencia vazia
+-- (só a UI tinha o campo, sem required, e nem a Server Action nem a RPC
+-- validavam). finance_marcar_faturado não estava neste ficheiro porque já
+-- existia em produção antes da baseline desta migração — CREATE OR REPLACE
+-- de toda a função, mesma assinatura (uuid, numeric, text), sem alteração
+-- de permissões/grant.
+-- =============================================================================
+create or replace function finance_marcar_faturado(p_service_id uuid, p_valor numeric, p_referencia text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_estado text;
+  v_faturacao_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+  if p_referencia is null or length(trim(p_referencia)) = 0 then
+    raise exception 'Referência da fatura é obrigatória.';
+  end if;
+
+  select organization_id, estado, faturacao_estado into v_org_id, v_estado, v_faturacao_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_estado != 'concluido' or v_faturacao_estado != 'por_faturar' then
+    raise exception 'Este serviço não está pronto para faturar.';
+  end if;
+
+  update services
+    set faturacao_estado = 'faturado',
+        faturacao_valor = p_valor,
+        faturacao_referencia = p_referencia,
+        faturacao_data = current_date,
+        faturacao_utilizador = auth.uid()
+    where id = p_service_id;
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, p_service_id, 'faturado',
+    'Faturado — ref. ' || p_referencia || ', valor ' || p_valor || '€.',
+    auth.uid()
+  );
+end;
+$$;
+grant execute on function finance_marcar_faturado(uuid, numeric, text) to authenticated;
+
+-- =============================================================================
+-- Fotos no fecho de serviço (local, ainda por commitar) — bucket de Storage
+-- novo, "visitas", para o Técnico poder enviar fotografias opcionais ao
+-- fechar uma visita. visit_photos (tabela) e o parâmetro p_fotos de
+-- tech_finish_visit já existiam e já funcionavam — só faltava mesmo o
+-- bucket/policies para o Técnico poder enviar o ficheiro em si. Caminho
+-- sempre "{organization_id}/{visit_id}/{ficheiro}"; a policy do Técnico
+-- confirma posse da visita (visits.created_by = auth.uid()), mesmo critério
+-- já usado em visit_materials_used/visit_photos. Só INSERT para o Técnico
+-- (nunca lê de volta do Storage — as miniaturas antes de submeter são
+-- sempre locais); ADMIN/SUPER_ADMIN com acesso total, igual ao bucket
+-- "equipamentos" já existente.
+-- =============================================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('visitas', 'visitas', false, 8388608, array['image/jpeg','image/png','image/webp','image/heic','image/heif'])
+on conflict (id) do nothing;
+
+drop policy if exists "admin manages visitas storage" on storage.objects;
+create policy "admin manages visitas storage" on storage.objects for all
+  using (bucket_id = 'visitas' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (bucket_id = 'visitas' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "technician uploads own visit photos storage" on storage.objects;
+create policy "technician uploads own visit photos storage" on storage.objects for insert
+  with check (
+    bucket_id = 'visitas'
+    and (storage.foldername(name))[1] = my_org()::text
+    and exists (
+      select 1 from visits v
+      where v.id::text = (storage.foldername(name))[2]
+        and v.created_by = auth.uid()
+    )
+  );
+
+-- =============================================================================
+-- Visita Prévia (local, ainda por commitar) — nenhuma tabela/coluna nova
+-- (services.tipo/requests.tipo já não têm CHECK, aceitam o valor livre
+-- "Visita de Orçamento" sem alteração de schema). A única alteração de BD
+-- real é esta: um Pedido passou a poder ter mais do que um Serviço ligado
+-- (a Visita Prévia + o Serviço real que resulta do Orçamento aceite depois
+-- dela), e o `left join services` original desta view fazia *fan-out*
+-- (duas linhas para o mesmo pedido) nesse caso. Substituída por uma
+-- subquery lateral que escolhe sempre no máximo um Serviço — o "real" tem
+-- sempre prioridade sobre a Visita Prévia, mesmo critério usado do lado da
+-- app em estadoOperacionalPedido() (lib/pedido-estado.ts).
+-- =============================================================================
+create or replace view requests_status_atendimento_view as
+select
+  r.id as request_id,
+  b.estado as orcamento_estado,
+  s.estado as servico_estado
+from requests r
+left join budgets b on b.request_id = r.id
+left join lateral (
+  select services.estado
+  from services
+  where services.request_id = r.id
+  order by (services.tipo = 'Visita de Orçamento') asc, services.created_at desc
+  limit 1
+) s on true
+where r.organization_id = my_org() and my_role() = 'ATENDIMENTO';
+
 commit;
 
 -- =============================================================================
@@ -596,10 +713,16 @@ commit;
 --   - Os BLOCOS 6, 7, 8, 10–19 desta sessão, a página de Relatórios do
 --     f3b2177, e toda a auditoria "APP" (Dashboard/Atenção, Agenda,
 --     Serviços, Orçamentos, Faturação, Utilizadores, Configurações, Super
---     Admin), e os preços comerciais da mão de obra, não precisam de
---     nenhuma alteração adicional à BD além das colunas/função acima — o
---     resto foi só código (Server Actions/páginas), publicado com o deploy
---     normal da app (git push + vercel --prod).
+--     Admin), os preços comerciais da mão de obra, a referência de fatura
+--     obrigatória e o bucket "visitas" para fotos do fecho de serviço, não
+--     precisam de nenhuma alteração adicional à BD além das colunas/
+--     funções/buckets acima — o resto foi só código (Server Actions/
+--     páginas), publicado com o deploy normal da app (git push + vercel
+--     --prod).
+--   - Visita Prévia (Fluxos A e B) também não precisa de nenhuma coluna/
+--     tabela nova — só o `create or replace view` acima (fan-out corrigido
+--     em requests_status_atendimento_view). Todo o resto (Server Actions,
+--     páginas, o rótulo "Visita Prévia" na UI) é só código.
 --   - Falta ainda, fora deste ficheiro: configurar as 4 env vars de Web
 --     Push no Vercel e agendar manualmente o job pg_cron acima — sem isso,
 --     as tabelas/policies existem mas a funcionalidade não envia nada.

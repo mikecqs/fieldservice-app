@@ -3,16 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, MapPin, Phone, Lock, CheckCircle2, X } from "lucide-react";
+import { AlertTriangle, MapPin, Phone, Lock, CheckCircle2, X, Camera } from "lucide-react";
 import { iniciarServico, concluirVisita, obterVisitaAberta, sugerirMaoObraDaVisita } from "../../actions";
 import { Badge } from "@/components/ui/Badge";
 import { MAO_OBRA_OPCOES, calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib/mao-obra";
+import { rotuloTipoServico } from "@/lib/servico-estado";
+import { createClient } from "@/lib/supabase/client";
 
 function formatEuros(v: number) {
   return v.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
 }
 
 type LinhaMaterial = { nome: string; qtd: string; precoUnit: string };
+type FotoSelecionada = { file: File; previewUrl: string };
 type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
 
 export function ServicoDetalheClient({
@@ -21,14 +24,17 @@ export function ServicoDetalheClient({
   catalogo,
   precosMaoObra,
   visitaAbertaId,
+  organizationId,
 }: {
   servico: any;
   materiaisPrevistos: { nome: string; qtd: number; preco_venda: number }[];
   catalogo: CatalogItem[];
   precosMaoObra: PrecosMaoObra;
   visitaAbertaId: string | null;
+  organizationId: string;
 }) {
   const router = useRouter();
+  const supabase = createClient();
   const [visitaId, setVisitaId] = useState<string | null>(visitaAbertaId);
   const [aFinalizar, setAFinalizar] = useState(false);
   const [aAbrirFinalizar, setAAbrirFinalizar] = useState(false);
@@ -49,6 +55,7 @@ export function ServicoDetalheClient({
   // mais comum, e continua totalmente editável.
   const [quantidadeInstalada, setQuantidadeInstalada] = useState(servico.tipo === "Instalação" ? "1" : "");
   const [testesRealizados, setTestesRealizados] = useState("");
+  const [fotos, setFotos] = useState<FotoSelecionada[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
 
@@ -71,6 +78,23 @@ export function ServicoDetalheClient({
       ...linhas,
       { nome: item.descricao, qtd: "1", precoUnit: String(item.preco_venda) },
     ]);
+  };
+
+  // Fotos ficam só locais (File + preview via createObjectURL, criado uma
+  // única vez por ficheiro) até ao "Confirmar" — nunca são enviadas para o
+  // Storage antes disso, por isso remover uma aqui nunca precisa de tocar
+  // no Supabase.
+  const adicionarFotos = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const novas = Array.from(e.target.files ?? []).map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
+    if (novas.length > 0) setFotos((atuais) => [...atuais, ...novas]);
+    e.target.value = "";
+  };
+
+  const removerFoto = (i: number) => {
+    setFotos((atuais) => {
+      URL.revokeObjectURL(atuais[i].previewUrl);
+      return atuais.filter((_, idx) => idx !== i);
+    });
   };
 
   const totalMateriais = materiaisLinhas.reduce(
@@ -199,13 +223,26 @@ export function ServicoDetalheClient({
               .filter((m) => m.nome.trim() && Number(m.qtd) > 0)
               .map((m) => ({ nome: m.nome.trim(), qtd: Number(m.qtd), precoUnit: Number(m.precoUnit) || 0 }))
           : [];
+
+      // Fotos são sempre opcionais: uma foto que falhe o upload (sem rede,
+      // por exemplo) nunca impede o resto do fecho — só fica de fora do
+      // array enviado à RPC.
+      const fotosEnviadas: string[] = [];
+      for (let i = 0; i < fotos.length; i++) {
+        const { file } = fotos[i];
+        const ext = file.name.split(".").pop() || "jpg";
+        const path = `${organizationId}/${idParaSubmeter}/${Date.now()}-${i}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("visitas").upload(path, file, { contentType: file.type });
+        if (!upErr) fotosEnviadas.push(path);
+      }
+
       await concluirVisita({
         visitId: idParaSubmeter,
         serviceId: servico.id,
         resultado,
         trabalhoRealizado: trabalho,
         materiais,
-        fotos: [],
+        fotos: fotosEnviadas,
         maoObraTipo: resultado === "concluido" ? maoObraTipo : null,
         maoObraDetalhe: resultado === "concluido" && maoObraTipo === "outro" ? maoObraDetalhe : null,
         novaDataAgendada: resultado === "nova_visita" && agendouNovaData === "sim" ? novaData : null,
@@ -234,7 +271,7 @@ export function ServicoDetalheClient({
 
       <div className="mb-3 flex items-center justify-between">
         <Badge estado={servico.estado} />
-        <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">{servico.tipo}</span>
+        <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">{rotuloTipoServico(servico.tipo)}</span>
       </div>
 
       {servico.estado === "correcao_necessaria" && servico.motivo_correcao && (
@@ -368,9 +405,13 @@ export function ServicoDetalheClient({
                       checked={resultado === val}
                       onChange={() => {
                         setResultado(val as any);
-                        setMateriaisLinhas(
-                          materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
-                        );
+                        // Materiais NÃO são repostos aqui de propósito — só são
+                        // enviados quando resultado === "concluido" (ver
+                        // submeter()), por isso nunca precisaram de ser limpos
+                        // ao trocar de resultado. Repor apagava silenciosamente
+                        // edições já feitas pelo Técnico se ele voltasse a
+                        // escolher "concluído" depois de tocar noutra opção
+                        // por engano.
                         setMaoObraTipo("");
                         setMaoObraDetalhe("");
                         setAgendouNovaData(null);
@@ -439,6 +480,37 @@ export function ServicoDetalheClient({
                 placeholder="Descreve o que foi feito…"
               />
             </label>
+
+            <div>
+              <span className="mb-1 block text-xs font-medium text-neutral-300">Fotos (opcional)</span>
+              <div className="flex flex-wrap gap-2">
+                {fotos.map((foto, i) => (
+                  <div key={i} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-neutral-700">
+                    <img src={foto.previewUrl} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removerFoto(i)}
+                      aria-label="Remover foto"
+                      className="absolute right-0.5 top-0.5 rounded-full bg-black/70 p-0.5 text-white"
+                    >
+                      <X className="h-3 w-3" aria-hidden="true" />
+                    </button>
+                  </div>
+                ))}
+                <label className="flex h-16 w-16 shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-neutral-700 text-neutral-400">
+                  <Camera className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[10px]">Adicionar</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    multiple
+                    onChange={adicionarFotos}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
 
             {resultado === "concluido" && (
               <>

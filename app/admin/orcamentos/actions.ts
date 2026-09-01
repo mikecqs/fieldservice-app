@@ -8,6 +8,7 @@ import { calcularOrcamento } from "@/lib/orcamento";
 import { registarEventoServico } from "@/lib/service-events";
 import { registarEventoOrcamento } from "@/lib/budget-events";
 import { podeEditarItensOrcamento, podeMarcarEnviado, podeAceitarOrcamento, podeAvancarParaEstado } from "@/lib/orcamento-estado";
+import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
 
 export async function criarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -268,6 +269,84 @@ export async function avancarEstado(formData: FormData) {
 
   revalidatePath(`/admin/orcamentos/${id}`);
   revalidatePath("/admin/orcamentos");
+}
+
+// Fluxo B (Visita Prévia a partir de um Orçamento já existente, ANTES da
+// aceitação formal) — alternativa a aceitarOrcamento, nunca a substitui:
+// "Orçamento aceite → Instalação → Agendamento" continua exatamente como
+// estava; isto só acrescenta "Orçamento → Visita Prévia → Agendamento" como
+// caminho extra, para quando o cliente concorda com o valor preliminar mas
+// ainda falta confirmar cablagens/acessos/medidas no local antes de fechar.
+// Mesmo mecanismo de Serviço/Agenda que criarVisitaOrcamentoDePedido
+// (app/admin/pedidos/actions.ts) — só a origem muda (Orçamento, não
+// Pedido). Liga a visita ao Orçamento via `budget_id` (a mesma coluna que
+// aceitarOrcamento já usa, só que no sentido inverso) e, quando existir,
+// também ao Pedido via `request_id` — preserva a cadeia Cliente + Morada +
+// Orçamento + Visita para análise futura, sem tabela nem coluna nova.
+// Bloqueado quando o orçamento já foi decidido (mesma regra de
+// aceitarOrcamento) — não faz sentido agendar uma visita para um orçamento
+// já aceite, recusado ou cancelado.
+export async function agendarVisitaPreviaDoOrcamento(formData: FormData) {
+  const organizationId = await getOrgId();
+  const supabase = createClient();
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  const { data: budget } = await supabase
+    .from("budgets")
+    .select("id, estado, numero, client_id, request_id, requests(address_id, descricao)")
+    .eq("id", id)
+    .single();
+  if (!budget) return;
+
+  if (!podeAceitarOrcamento(budget)) {
+    throw new Error("Este orçamento já foi decidido — não é possível agendar uma visita prévia.");
+  }
+
+  // Regra: um Orçamento só pode ter uma Visita Prévia através deste fluxo —
+  // qualquer que seja o estado dela (por agendar/agendada/em curso/
+  // concluída/cancelada). Nunca cria uma segunda automaticamente; se no
+  // futuro for preciso repetir a visita, isso é uma ação explícita própria
+  // a criar depois, não esta. Encaminha para a visita já existente em vez
+  // de bloquear em seco, para o clique (ou um duplo clique/reenvio) nunca
+  // ficar sem destino nenhum.
+  const { data: visitaExistente } = await supabase
+    .from("services")
+    .select("id")
+    .eq("budget_id", id)
+    .eq("tipo", TIPO_VISITA_ORCAMENTO)
+    .maybeSingle();
+  if (visitaExistente) {
+    redirect(`/admin/servicos/${visitaExistente.id}`);
+  }
+
+  const addressId = (budget.requests as any)?.address_id as string | undefined;
+  const descricaoBase = ((budget.requests as any)?.descricao as string | undefined) || `Orçamento #${budget.numero}`;
+
+  const { data: service, error } = await supabase
+    .from("services")
+    .insert({
+      organization_id: organizationId,
+      client_id: budget.client_id,
+      address_id: addressId || null,
+      request_id: budget.request_id,
+      budget_id: budget.id,
+      tipo: TIPO_VISITA_ORCAMENTO,
+      descricao: `Visita Prévia — ${descricaoBase}`,
+    })
+    .select()
+    .single();
+  if (error || !service) throw new Error(error?.message || "Não foi possível criar a Visita Prévia.");
+
+  await registarEventoServico(supabase, {
+    organizationId,
+    serviceId: service.id,
+    tipo: "criado",
+    descricao: `Visita Prévia agendada a partir do orçamento #${budget.numero} — por agendar na Agenda.`,
+  });
+
+  revalidatePath(`/admin/orcamentos/${id}`);
+  redirect("/admin/agenda");
 }
 
 // Aceitar um orçamento cria o serviço correspondente com o valor TOTAL

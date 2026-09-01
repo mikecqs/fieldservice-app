@@ -15,12 +15,21 @@ export default async function PedidosPage() {
     pedidoIds.length > 0
       ? await Promise.all([
           supabase.from("budgets").select("estado, request_id").in("request_id", pedidoIds),
-          supabase.from("services").select("estado, request_id").in("request_id", pedidoIds),
+          supabase.from("services").select("estado, tipo, request_id").in("request_id", pedidoIds),
         ])
       : [{ data: [] }, { data: [] }];
 
   const budgetPorPedido = new Map((budgets ?? []).map((b: any) => [b.request_id, b]));
-  const servicePorPedido = new Map((services ?? []).map((s: any) => [s.request_id, s]));
+
+  // Agrupado (nunca um Map de "1 serviço por pedido") — a Visita Prévia
+  // tornou normal um Pedido ter mais do que um Serviço ao longo do tempo
+  // (Visita Prévia + Serviço de Instalação, por exemplo).
+  const servicosPorPedido = new Map<string, any[]>();
+  for (const s of (services ?? []) as any[]) {
+    const lista = servicosPorPedido.get(s.request_id) ?? [];
+    lista.push(s);
+    servicosPorPedido.set(s.request_id, lista);
+  }
 
   const resumo: PedidoResumo[] = (pedidos ?? []).map((p: any) => ({
     id: p.id,
@@ -33,7 +42,7 @@ export default async function PedidosPage() {
     created_at: p.created_at,
     cliente: p.clients ? { id: p.clients.id, nome: p.clients.nome, codigo: p.clients.codigo } : null,
     morada: p.client_addresses?.endereco ?? null,
-    estadoOperacional: estadoOperacionalPedido(p, budgetPorPedido.get(p.id), servicePorPedido.get(p.id)),
+    estadoOperacional: estadoOperacionalPedido(p, budgetPorPedido.get(p.id), servicosPorPedido.get(p.id) ?? []),
   }));
 
   return (

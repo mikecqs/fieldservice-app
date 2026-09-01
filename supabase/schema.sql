@@ -586,14 +586,35 @@ create policy "atendimento creates requests" on requests for insert
 -- empresa. A app do lado do cliente reutiliza sempre a mesma função de
 -- rótulo (estadoOperacionalPedido, em lib/pedido-estado.ts) que já é usada
 -- pelo Admin — nunca um segundo sistema de estado.
-create view requests_status_atendimento_view as
+--
+-- Atualização (auditoria "Visita Prévia") — um Pedido passou a poder ter
+-- mais do que um Serviço ligado (a Visita Prévia + o Serviço real que
+-- resulta do Orçamento aceite depois dela). Um `left join services` simples
+-- faria *fan-out* (duas linhas na view para o mesmo pedido) assim que isso
+-- acontecesse; a subquery lateral abaixo escolhe sempre no máximo um
+-- Serviço — o "real" (qualquer tipo que não seja a Visita Prévia) tem
+-- sempre prioridade sobre ela, e só na ausência de um Serviço real é que a
+-- própria Visita Prévia aparece. Mesmo critério usado do lado da app em
+-- estadoOperacionalPedido() (lib/pedido-estado.ts) — nunca uma segunda
+-- regra divergente. 'Visita de Orçamento' aqui tem de continuar igual ao
+-- valor de TIPO_VISITA_ORCAMENTO em lib/servico-estado.ts — o nome visível
+-- ao utilizador passou a ser "Visita Prévia", mas o valor gravado em
+-- services.tipo não mudou (evita reescrever dados já gravados só por causa
+-- de uma string).
+create or replace view requests_status_atendimento_view as
 select
   r.id as request_id,
   b.estado as orcamento_estado,
   s.estado as servico_estado
 from requests r
 left join budgets b on b.request_id = r.id
-left join services s on s.request_id = r.id
+left join lateral (
+  select services.estado
+  from services
+  where services.request_id = r.id
+  order by (services.tipo = 'Visita de Orçamento') asc, services.created_at desc
+  limit 1
+) s on true
 where r.organization_id = my_org() and my_role() = 'ATENDIMENTO';
 
 grant select on requests_status_atendimento_view to authenticated;
@@ -1243,6 +1264,9 @@ begin
   if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
     raise exception 'Sem permissão.';
   end if;
+  if p_referencia is null or length(trim(p_referencia)) = 0 then
+    raise exception 'Referência da fatura é obrigatória.';
+  end if;
 
   select organization_id, estado, faturacao_estado into v_org_id, v_estado, v_faturacao_estado
   from services where id = p_service_id and organization_id = my_org();
@@ -1265,7 +1289,7 @@ begin
   insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
   values (
     v_org_id, p_service_id, 'faturado',
-    'Faturado — ref. ' || coalesce(nullif(p_referencia, ''), 's/ referência') || ', valor ' || p_valor || '€.',
+    'Faturado — ref. ' || p_referencia || ', valor ' || p_valor || '€.',
     auth.uid()
   );
 end;
@@ -1299,6 +1323,38 @@ on conflict (id) do nothing;
 create policy "admin manages equipamentos storage" on storage.objects for all
   using (bucket_id = 'equipamentos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (bucket_id = 'equipamentos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+-- =============================================================================
+-- STORAGE: bucket para fotografias do fecho de visita (opcional, nunca
+-- obrigatório para concluir um serviço). Caminho sempre
+-- "{organization_id}/{visit_id}/{ficheiro}" — a policy do Técnico usa o 2º
+-- segmento para confirmar que a visita é mesmo dele (mesmo critério de posse
+-- já usado em visit_materials_used/visit_photos: visits.created_by =
+-- auth.uid()). Só INSERT para o Técnico (nunca SELECT/UPDATE/DELETE — as
+-- miniaturas antes de submeter são sempre locais, nunca lidas de volta do
+-- Storage); ADMIN/SUPER_ADMIN mantêm acesso total, igual ao bucket
+-- "equipamentos".
+-- =============================================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('visitas', 'visitas', false, 8388608, array['image/jpeg','image/png','image/webp','image/heic','image/heif'])
+on conflict (id) do nothing;
+
+drop policy if exists "admin manages visitas storage" on storage.objects;
+create policy "admin manages visitas storage" on storage.objects for all
+  using (bucket_id = 'visitas' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (bucket_id = 'visitas' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "technician uploads own visit photos storage" on storage.objects;
+create policy "technician uploads own visit photos storage" on storage.objects for insert
+  with check (
+    bucket_id = 'visitas'
+    and (storage.foldername(name))[1] = my_org()::text
+    and exists (
+      select 1 from visits v
+      where v.id::text = (storage.foldername(name))[2]
+        and v.created_by = auth.uid()
+    )
+  );
 
 -- =============================================================================
 -- INTEGRAÇÃO GOOGLE SHEETS — espelho de gestão em tempo real por empresa.

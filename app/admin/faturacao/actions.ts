@@ -18,6 +18,9 @@ export async function marcarFaturado(formData: FormData) {
   if (!Number.isFinite(faturacao_valor) || faturacao_valor < 0) {
     throw new Error("O valor de faturação tem de ser um número igual ou superior a 0.");
   }
+  if (!faturacao_referencia.trim()) {
+    throw new Error("A referência da fatura é obrigatória.");
+  }
 
   const { error } = await supabase.rpc("finance_marcar_faturado", {
     p_service_id: id,
