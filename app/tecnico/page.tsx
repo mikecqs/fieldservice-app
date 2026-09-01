@@ -3,6 +3,7 @@ import { AlertTriangle, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AtivarNotificacoes } from "./AtivarNotificacoes";
 import { Badge } from "@/components/ui/Badge";
+import { ESTADO_COLOR } from "@/app/admin/servicos/estados";
 
 // Repara na tabela usada: `services_technician_view`, não `services`.
 // A tabela services nem sequer tem policy de SELECT para TECHNICIAN — se
@@ -19,11 +20,11 @@ export default async function AgendaTecnicoPage() {
     .order("hora_agendada", { ascending: true });
 
   // Fechados ou à espera de validação já não têm nada a fazer pelo técnico —
-  // ficam no fundo da lista para não competirem por atenção com o que ainda
-  // está por resolver, mas continuam visíveis (histórico do que fez).
+  // desaparecem da vista operacional (não são apagados nem alterados, só
+  // deixam de ser listados aqui). "correcao_necessaria" fica de fora
+  // deliberadamente: o Admin devolveu a ordem, o Técnico ainda tem de agir.
   const FECHADOS = ["concluido", "aguarda_validacao", "nao_realizado", "cancelado"];
   const ativos = (servicos ?? []).filter((s: any) => !FECHADOS.includes(s.estado));
-  const fechados = (servicos ?? []).filter((s: any) => FECHADOS.includes(s.estado));
 
   // Alerta de possível atraso: está num serviço em curso e o próximo já
   // está a chegar (ou já passou da hora) — usa só dados já disponíveis
@@ -57,34 +58,31 @@ export default async function AgendaTecnicoPage() {
         </div>
       )}
       <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-neutral-400">A minha agenda</h2>
-      {(!servicos || servicos.length === 0) && (
-        <p className="py-10 text-center text-sm text-neutral-500">Sem serviços atribuídos.</p>
+      {ativos.length === 0 && (
+        <p className="py-10 text-center text-sm text-neutral-500">Sem serviços pendentes.</p>
       )}
       <div className="space-y-3">
         {ativos.map((s: any) => (
           <ServicoCard key={s.id} s={s} hoje={hoje} />
         ))}
       </div>
-
-      {fechados.length > 0 && (
-        <>
-          <h2 className="mb-3 mt-6 text-sm font-bold uppercase tracking-wide text-neutral-500">Fechados</h2>
-          <div className="space-y-3 opacity-60">
-            {fechados.map((s: any) => (
-              <ServicoCard key={s.id} s={s} hoje={hoje} />
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }
 
 function ServicoCard({ s, hoje }: { s: any; hoje: string }) {
+  const rejeitado = s.estado === "correcao_necessaria";
+  // Cor de destaque do card = a mesma já atribuída ao estado em
+  // ESTADO_COLOR (app/admin/servicos/estados.ts) — só extrai o token
+  // text-*-400 já existente para o aplicar via border-current, sem criar
+  // um segundo mapa de cores (mesmo padrão já usado em EventoResumo, na
+  // Agenda).
+  const corDestaque = (ESTADO_COLOR[s.estado] ?? "").split(" ").find((c) => c.startsWith("text-")) ?? "text-neutral-700";
+
   return (
     <Link
       href={`/tecnico/servico/${s.id}`}
-      className="block rounded-xl border border-neutral-800 bg-neutral-900 p-4 shadow-sm active:bg-neutral-800"
+      className={`block rounded-xl border border-neutral-800 border-l-4 border-l-current bg-neutral-900 p-4 shadow-sm active:bg-neutral-800 ${corDestaque}`}
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="font-mono text-sm font-bold text-neutral-100">{s.hora_agendada?.slice(0, 5) ?? "—"}</span>
@@ -92,11 +90,16 @@ function ServicoCard({ s, hoje }: { s: any; hoje: string }) {
           {s.data_agendada === hoje && (
             <span className="rounded bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-400">Hoje</span>
           )}
-          <Badge estado={s.estado} />
+          {/* "Rejeitado" só aqui, na interface do Técnico — não altera
+              ESTADO_LABEL (partilhado com Admin/Finance). */}
+          {rejeitado ? <Badge tone="danger">Rejeitado</Badge> : <Badge estado={s.estado} />}
         </div>
       </div>
-      <div className="text-base font-semibold text-neutral-100">{s.cliente_nome}</div>
-      {s.estado === "correcao_necessaria" && s.motivo_correcao ? (
+      <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-base font-semibold text-neutral-100">{s.cliente_nome}</span>
+        <span className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-300">{s.tipo}</span>
+      </div>
+      {rejeitado && s.motivo_correcao ? (
         <div className="flex items-center gap-1.5 text-sm font-medium text-red-400">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> Correção: {s.motivo_correcao}
         </div>
