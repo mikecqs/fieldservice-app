@@ -48,23 +48,24 @@ export default async function PedidosPage() {
 
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white">Pedidos</h1>
-          <p className="mt-0.5 text-sm text-neutral-400">
-            Pedidos recebidos de clientes, antes de se tornarem orçamento ou serviço.
-          </p>
-        </div>
-        {/* Auditoria "Centralizar criação" — este é agora o único ponto de
-            entrada visual para trabalho novo (Serviços e Orçamentos já não
-            têm botão de criação próprio). Maior e com ícone, sem inventar
-            uma cor nova — continua o branco já usado como "ação principal"
-            em toda a app, só mais destacado. */}
+      <div className="mb-5 text-center">
+        <h1 className="text-xl font-bold text-white">Pedidos</h1>
+        <p className="mt-0.5 text-sm text-neutral-400">
+          Pedidos recebidos de clientes, antes de se tornarem orçamento ou serviço.
+        </p>
+      </div>
+
+      {/* Auditoria "Centralizar criação" — este é agora o único ponto de
+          entrada visual para trabalho novo (Serviços e Orçamentos já não
+          têm botão de criação próprio). Centrado e bem maior do que o resto
+          da UI, para nunca passar despercebido; continua o branco já usado
+          como "ação principal" em toda a app, sem inventar uma cor nova. */}
+      <div className="mb-8 flex justify-center">
         <Link
           href="/admin/pedidos/novo"
-          className="flex items-center gap-1.5 rounded-md bg-white px-5 py-2.5 text-sm font-semibold text-neutral-950 shadow-sm hover:bg-neutral-200"
+          className="flex items-center gap-2 rounded-xl bg-white px-10 py-5 text-xl font-bold text-neutral-950 shadow-lg hover:bg-neutral-200"
         >
-          <Plus className="h-4 w-4" aria-hidden="true" /> Novo Pedido
+          <Plus className="h-6 w-6" aria-hidden="true" /> Novo Pedido
         </Link>
       </div>
 
