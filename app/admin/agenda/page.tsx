@@ -38,7 +38,7 @@ export default async function AgendaPage({
 
   const organizationId = await getOrgId();
 
-  const [{ data: servicos }, { data: pendentes }, { data: comprasPendentes }, { data: tecnicos }] = await Promise.all([
+  const [{ data: servicos }, { data: pendentes }, { data: tecnicos }] = await Promise.all([
     supabase
       .from("services")
       .select(
@@ -61,12 +61,12 @@ export default async function AgendaPage({
       // isto só passa a excluir dados históricos anteriores a essa remoção.
       .or("request_id.not.is.null,budget_id.not.is.null")
       .order("created_at", { ascending: false }),
-    supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
   ]);
 
-  const materialPendentePorServico = new Set((comprasPendentes ?? []).map((c: any) => c.service_id));
-
+  // Compras ocultado por decisão de produto (temporário) — sinal de
+  // "material bloqueando" desligado, os restantes critérios de preparação
+  // continuam ativos.
   const servicosPorDia = new Map<string, Servico[]>();
   for (const s of (servicos ?? []) as any[]) {
     const preparacaoNivel = calcularPreparacao({
@@ -76,7 +76,7 @@ export default async function AgendaPage({
       descricao: s.descricao,
       dataAgendada: s.data_agendada,
       horaAgendada: s.hora_agendada,
-      materialBloqueando: materialPendentePorServico.has(s.id),
+      materialBloqueando: false,
     }).nivel;
     const servico: Servico = { ...s, preparacaoNivel };
     const lista = servicosPorDia.get(s.data_agendada) ?? [];

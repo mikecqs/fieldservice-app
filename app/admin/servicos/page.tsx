@@ -4,18 +4,16 @@ import { ServicosLista } from "./ServicosLista";
 
 export default async function ServicosPage() {
   const supabase = createClient();
-  const [{ data: servicos }, { data: comprasPendentes }] = await Promise.all([
-    supabase
-      .from("services")
-      .select(
-        "id, tipo, descricao, prioridade, estado, data_agendada, hora_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id)"
-      )
-      .order("created_at", { ascending: false }),
-    supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
-  ]);
+  const { data: servicos } = await supabase
+    .from("services")
+    .select(
+      "id, tipo, descricao, prioridade, estado, data_agendada, hora_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id)"
+    )
+    .order("created_at", { ascending: false });
 
-  const materialPendentePorServico = new Set((comprasPendentes ?? []).map((c: any) => c.service_id));
-
+  // Compras ocultado por decisão de produto (temporário) — sinal de
+  // "material bloqueando" desligado, os restantes critérios de preparação
+  // continuam ativos.
   const servicosComPreparacao = (servicos ?? []).map((s: any) => {
     const prep = calcularPreparacao({
       temTecnico: (s.service_technicians ?? []).length > 0,
@@ -24,7 +22,7 @@ export default async function ServicosPage() {
       descricao: s.descricao,
       dataAgendada: s.data_agendada,
       horaAgendada: s.hora_agendada,
-      materialBloqueando: materialPendentePorServico.has(s.id),
+      materialBloqueando: false,
     });
     return { ...s, preparacaoNivel: prep.nivel, preparacaoMotivos: prep.motivos };
   });

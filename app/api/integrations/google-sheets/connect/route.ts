@@ -10,6 +10,7 @@ import { buildAuthUrl } from "@/lib/google-sheets/sheets-api";
 export async function GET(request: Request) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   const organizationId = await getOrgId();
+  const origin = new URL(request.url).origin;
 
   const nonce = crypto.randomBytes(16).toString("hex");
   const state = Buffer.from(JSON.stringify({ organizationId, nonce })).toString("base64url");
@@ -22,6 +23,15 @@ export async function GET(request: Request) {
     path: "/",
   });
 
-  const redirectUri = `${new URL(request.url).origin}/api/integrations/google-sheets/callback`;
-  return NextResponse.redirect(buildAuthUrl(redirectUri, state));
+  const redirectUri = `${origin}/api/integrations/google-sheets/callback`;
+  try {
+    return NextResponse.redirect(buildAuthUrl(redirectUri, state));
+  } catch (err: any) {
+    // Antes disto, uma variável de ambiente em falta (GOOGLE_SHEETS_CLIENT_ID/
+    // SECRET) fazia esta rota rebentar com um 500 em branco, em vez de mostrar
+    // o erro amigável que /admin/configuracoes já sabe apresentar.
+    return NextResponse.redirect(
+      `${origin}/admin/configuracoes?sheets_erro=${encodeURIComponent(err.message || "Não foi possível iniciar a ligação ao Google Sheets.")}`
+    );
+  }
 }

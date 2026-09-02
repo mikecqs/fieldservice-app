@@ -50,9 +50,7 @@ export default async function DashboardPage() {
     { data: servicosAtrasadosPassado },
     { data: visitasAbertasAntigas },
     { data: correcoesNecessarias },
-    { data: comprasBloqueando },
     { data: servicosProximosDias },
-    { data: comprasPendentesTodas },
   ] = await Promise.all([
     supabase
       .from("services")
@@ -114,10 +112,6 @@ export default async function DashboardPage() {
       .lt("data", hoje),
     supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "correcao_necessaria"),
     supabase
-      .from("purchases")
-      .select("id, descricao, estado, service_id, services(data_agendada, clients(nome))")
-      .in("estado", ["por_encomendar", "encomendada", "parcial"]),
-    supabase
       .from("services")
       .select(
         "id, tipo, descricao, data_agendada, hora_agendada, clients(nome, telefone, email), client_addresses(endereco), service_technicians(user_id)"
@@ -125,7 +119,6 @@ export default async function DashboardPage() {
       .gt("data_agendada", hoje)
       .lte("data_agendada", em3Dias)
       .not("estado", "in", "(cancelado,concluido,nao_realizado)"),
-    supabase.from("purchases").select("service_id").in("estado", ["por_encomendar", "encomendada", "parcial"]),
   ]);
 
   const servicosHoje = (servicosHojeRaw ?? []) as any[];
@@ -159,14 +152,12 @@ export default async function DashboardPage() {
 
   // --- Grupos que vinham só da antiga Central de Atenção — mesma lógica,
   // agora só aqui (a página /admin/atencao foi eliminada). ---
-  const comprasUrgentes = (comprasBloqueando ?? []).filter((c: any) => {
-    const data = c.services?.data_agendada;
-    return data && data <= em3Dias;
-  });
   const servicosAbertosAntigos = (visitasAbertasAntigas ?? [])
     .filter((v: any) => v.services?.estado === "em_curso")
     .map((v: any) => v.services);
-  const materialPendentePorServico = new Set((comprasPendentesTodas ?? []).map((c: any) => c.service_id));
+  // Compras ocultado por decisão de produto (temporário) — sinal de
+  // "material bloqueando" desligado, os restantes critérios de preparação
+  // continuam ativos.
   const naoPreparados = (servicosProximosDias ?? [])
     .map((s: any) => ({
       ...s,
@@ -177,7 +168,7 @@ export default async function DashboardPage() {
         descricao: s.descricao,
         dataAgendada: s.data_agendada,
         horaAgendada: s.hora_agendada,
-        materialBloqueando: materialPendentePorServico.has(s.id),
+        materialBloqueando: false,
       }),
     }))
     .filter((s: any) => s.preparacao.nivel !== "preparada");
@@ -276,14 +267,6 @@ export default async function DashboardPage() {
         id: s.id,
         texto: `${s.clients?.nome} — ${s.descricao}`,
         href: `/admin/servicos/${s.id}`,
-      })),
-    },
-    {
-      titulo: "Material a bloquear serviço",
-      itens: comprasUrgentes.map((c: any) => ({
-        id: c.id,
-        texto: `${c.descricao} — para ${c.services?.clients?.nome} em ${c.services?.data_agendada}`,
-        href: "/admin/compras",
       })),
     },
     {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Lock, CheckCircle2, Circle } from "lucide-react";
+import { Lock, Circle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import {
@@ -13,7 +13,6 @@ import {
   cancelarServico,
   criarOrcamentoDeVisita,
 } from "../actions";
-import { criarCompraRapida } from "../../compras/actions";
 import { ESTADO_LABEL, ESTADO_COLOR } from "../estados";
 import { AgendamentoForm } from "./AgendamentoForm";
 import { ReativarServicoForm } from "./ReativarServicoForm";
@@ -50,7 +49,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
   const supabase = createClient();
   const organizationId = await getOrgId();
 
-  const [{ data: servico }, { data: tecnicos }, { data: visitas }, { data: validacoes }, { data: eventos }, { data: comprasPendentes }] = await Promise.all([
+  const [{ data: servico }, { data: tecnicos }, { data: visitas }, { data: validacoes }, { data: eventos }] = await Promise.all([
     supabase
       .from("services")
       .select("*, clients(nome, telefone, email), client_addresses(label, endereco), service_technicians(user_id, profiles(nome)), service_materials_planned(*)")
@@ -72,21 +71,9 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
       .select("tipo, descricao, created_at, profiles(nome)")
       .eq("service_id", params.id)
       .order("created_at", { ascending: false }),
-    supabase
-      .from("purchases")
-      .select("id, purchase_items(nome)")
-      .eq("service_id", params.id)
-      .in("estado", ["por_encomendar", "encomendada", "parcial"]),
   ]);
 
   if (!servico) notFound();
-
-  // Nomes de materiais planeados que já têm uma compra em aberto — mesmo
-  // critério que existia na página /admin/materiais (agora eliminada, sem
-  // funcionalidade exclusiva: isto é o único uso real que tinha).
-  const materiaisComCompraPendente = new Set(
-    (comprasPendentes ?? []).flatMap((c: any) => (c.purchase_items ?? []).map((i: any) => i.nome))
-  );
 
   const { data: equipamentosCliente } = await supabase
     .from("client_equipment")
@@ -104,7 +91,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
     descricao: servico.descricao,
     dataAgendada: servico.data_agendada,
     horaAgendada: servico.hora_agendada,
-    materialBloqueando: (comprasPendentes ?? []).length > 0,
+    materialBloqueando: false,
   });
   const badgePreparacao = PREPARACAO_BADGE[preparacao.nivel];
   const previstoMap = new Map<string, number>(
@@ -315,18 +302,6 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
                 )}
               </span>
               <div className="flex items-center gap-2">
-                {materiaisComCompraPendente.has(m.nome) ? (
-                  <span className="flex items-center gap-1 text-xs text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Compra criada
-                  </span>
-                ) : (
-                  <form action={criarCompraRapida}>
-                    <input type="hidden" name="nome" value={m.nome} />
-                    <input type="hidden" name="qtd" value={m.qtd} />
-                    <input type="hidden" name="service_id" value={servico.id} />
-                    <button className="text-xs text-neutral-300 underline hover:text-white">criar compra</button>
-                  </form>
-                )}
                 {podeReagendarServico(servico) && (
                   <form action={removerMaterialPlaneado}>
                     <input type="hidden" name="id" value={m.id} />

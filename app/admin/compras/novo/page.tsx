@@ -1,10 +1,14 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { criarCompra } from "../actions";
 import { ItemRows } from "../ItemRows";
 import { rotuloTipoServico } from "@/lib/servico-estado";
 
 export default async function NovaCompraPage() {
+  // Ocultado por decisão de produto (temporário) — ver app/admin/compras/page.tsx.
+  redirect("/admin/servicos");
+
   const supabase = createClient();
   const { data: servicos } = await supabase
     .from("services")

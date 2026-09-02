@@ -6,9 +6,10 @@ import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
 import { NexiaMark } from "@/components/NexiaMark";
 
-// Onda 3 (Etapa 6) — os mesmos 13 itens, agora agrupados por frequência de
-// uso na operação diária (auditoria Onda 3, ponto 6). Nenhuma rota mudou —
-// só a organização visual do menu.
+// Onda 3 (Etapa 6) — agrupados por frequência de uso na operação diária
+// (auditoria Onda 3, ponto 6). "Compras" ocultado por decisão de produto
+// (temporário) — rota, RLS e ações continuam intactas, só sem entrada
+// visual no menu.
 const NAV_GROUPS: { titulo: string; itens: { href: string; label: string }[] }[] = [
   {
     titulo: "Operação",
@@ -24,10 +25,9 @@ const NAV_GROUPS: { titulo: string; itens: { href: string; label: string }[] }[]
     titulo: "Negócio",
     itens: [
       { href: "/admin/orcamentos", label: "Orçamentos" },
-      { href: "/admin/compras", label: "Compras" },
       { href: "/admin/catalogo", label: "Catálogo" },
-      { href: "/admin/financeiro", label: "Financeiro" },
-      { href: "/admin/faturacao", label: "Faturação" },
+      { href: "/admin/faturacao", label: "Financeiro" },
+      { href: "/admin/financeiro", label: "Relatórios Financeiros" },
       { href: "/admin/relatorios", label: "Relatórios" },
     ],
   },

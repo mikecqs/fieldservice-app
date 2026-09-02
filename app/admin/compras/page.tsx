@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { avancarEstadoCompra } from "./actions";
 import { rotuloTipoServico } from "@/lib/servico-estado";
@@ -18,6 +19,11 @@ const PROXIMO_ESTADO: Record<string, string> = {
 };
 
 export default async function ComprasPage() {
+  // Ocultado por decisão de produto (temporário, pedido explícito) — rota,
+  // ações e schema continuam intactos; só o acesso está desligado. Reverter
+  // basta remover este redirect.
+  redirect("/admin/servicos");
+
   const supabase = createClient();
   const { data: compras } = await supabase
     .from("purchases")

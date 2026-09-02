@@ -14,17 +14,19 @@ export function DashboardFinanceiro({
   preset,
   range,
   stats,
+  titulo = "Dashboard financeiro",
 }: {
   basePath: string;
   preset: string;
   range: FinanceiroRange;
   stats: Awaited<ReturnType<typeof import("@/lib/financeiro").getFinanceiroStats>>;
+  titulo?: string;
 }) {
   return (
     <div>
       <div className="mb-5 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white">Dashboard financeiro</h1>
+          <h1 className="text-xl font-bold text-white">{titulo}</h1>
           <p className="mt-0.5 text-sm text-neutral-400">
             {range.label} · {range.desde} a {range.ate}
           </p>

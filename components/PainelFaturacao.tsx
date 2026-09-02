@@ -8,7 +8,15 @@ import { VerPdfFechoLink } from "@/components/VerPdfFechoLink";
 // Partilhado entre /admin/faturacao (Admin) e /financeiro/faturacao (role
 // FINANCE) — mesma consulta, mesmas ações (as RPCs finance_* já validam a
 // permissão certa consoante quem chama), só muda quem consegue lá chegar.
-export async function PainelFaturacao({ q }: { q?: string }) {
+export async function PainelFaturacao({
+  q,
+  titulo = "Faturação",
+  subtitulo = "Serviços concluídos, por faturar ou já faturados.",
+}: {
+  q?: string;
+  titulo?: string;
+  subtitulo?: string;
+}) {
   const supabase = createClient();
 
   const { data: aguardamValidacao } = await supabase
@@ -43,8 +51,8 @@ export async function PainelFaturacao({ q }: { q?: string }) {
   return (
     <div>
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-white">Faturação</h1>
-        <p className="mt-0.5 text-sm text-neutral-400">Serviços concluídos, por faturar ou já faturados.</p>
+        <h1 className="text-xl font-bold text-white">{titulo}</h1>
+        <p className="mt-0.5 text-sm text-neutral-400">{subtitulo}</p>
       </div>
 
       <form method="get" className="mb-6">
