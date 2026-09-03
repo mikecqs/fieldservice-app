@@ -31,8 +31,12 @@ faturação. Cada empresa (tenant) só vê os seus próprios dados.
   `SECURITY DEFINER` (RPCs).
 - **pdf-lib** (PDF de orçamentos), **xlsx/SheetJS** (exportações Excel).
 - **Deploy**: Vercel (serverless, sem servidor sempre ligado) + GitHub.
-  Vercel **não** está ligado ao GitHub para deploy automático — deploy é
-  manual (`git push` + `vercel --prod`).
+  Desde 2026-09-03 a Vercel **está** ligada ao GitHub — push para `master`
+  dispara deploy automático. Antes disso o deploy era manual (`git push` +
+  `vercel --prod`); essa afirmação anterior desta secção ficou desatualizada
+  e foi corrigida. Continua a confirmar no dashboard da Vercel se ficaste
+  com dúvidas, em vez de assumir — não há forma de verificar isto por
+  ferramenta a partir de uma sessão Claude Code (sem acesso à conta Vercel).
 - Sincronização assíncrona orientada a eventos (Google Sheets) via triggers
   Postgres + `pg_net`/`pg_cron`, não polling. Web Push (ver secção 10) é
   diferente: `pg_cron` faz polling a cada minuto a uma condição de estado,
@@ -411,8 +415,13 @@ Todo o percurso é gravado em `service_events`/`budget_events`/
 - **Datas/horas em UTC fora de Dashboard/Atenção/Agenda** — ver nota no
   fim da secção 5 (não uniformizado em todo o código, só nesses três
   módulos).
-- Sem testes automatizados (unit/integration/e2e) no repositório.
-- Sem CI/CD; Vercel não ligado ao GitHub para deploy automático.
+- Sem testes automatizados (unit/integration/e2e) no repositório. Isto
+  importa mais agora que a Vercel está ligada ao GitHub (ver secção 2): um
+  push para `master` vai para produção sem nenhum portão de testes/lint a
+  travar primeiro.
+- Sem CI/CD (nenhum workflow GitHub Actions no repositório, confirmado
+  2026-09-03) — só o deploy automático da Vercel ao fazer push para
+  `master`, sem testes/lint a correr antes.
 - Vulnerabilidades de dependências conhecidas por corrigir (`next@14.2.15`
   crítica, `postcss`, `xlsx`) — atualização do Next.js adiada por ser
   breaking change fora do âmbito pedido até agora.
