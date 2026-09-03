@@ -4,18 +4,19 @@ const EVENTO_LABEL: Record<string, string> = {
   validado: "Validado",
   correcao_pedida: "Correção pedida",
   faturado: "Faturado",
+  liquidado: "Liquidado",
 };
 
 // Histórico financeiro: só os eventos do pipeline de faturação (validação,
-// correção, faturação) — não o histórico operacional completo (esse é só
-// para Admin, em /admin/servicos/[id]).
+// correção, faturação, liquidação) — não o histórico operacional completo
+// (esse é só para Admin, em /admin/servicos/[id]).
 export default async function HistoricoFinanceiroPage() {
   const supabase = createClient();
 
   const { data: eventos } = await supabase
     .from("service_events")
     .select("tipo, descricao, created_at, services(descricao, clients(nome)), profiles(nome)")
-    .in("tipo", ["validado", "correcao_pedida", "faturado"])
+    .in("tipo", ["validado", "correcao_pedida", "faturado", "liquidado"])
     .order("created_at", { ascending: false })
     .limit(200);
 

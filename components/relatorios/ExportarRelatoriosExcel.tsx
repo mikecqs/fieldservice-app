@@ -32,6 +32,8 @@ function sheetResumo(range: FinanceiroRange, stats: Stats) {
     ["Serviços concluídos", stats.producao.concluidos],
     ["Total faturado", formatEuros(stats.faturacao.totalFaturado)],
     ["Total por faturar", formatEuros(stats.faturacao.totalPorFaturar)],
+    ["Faturado por receber", formatEuros(stats.faturacao.totalPorReceber)],
+    ["Total recebido", formatEuros(stats.faturacao.totalRecebido)],
     ["Tempo médio (início → fecho)", formatDuracao(stats.tempos.inicioConclusaoHoras)],
     ["Novas visitas", stats.producao.novasVisitas],
   ];

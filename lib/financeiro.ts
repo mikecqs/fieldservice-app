@@ -66,7 +66,9 @@ export async function getFinanceiroStats(
     withOrg(
       supabase
         .from("services")
-        .select("id, tipo, estado, valor, faturacao_estado, faturacao_valor, faturacao_data, request_id, created_at")
+        .select(
+          "id, tipo, estado, valor, faturacao_estado, faturacao_valor, faturacao_data, faturacao_liquidado_data, request_id, created_at"
+        )
     ),
     withOrg(supabase.from("service_events").select("service_id, tipo, created_at")).order("created_at", { ascending: true }),
     withOrg(supabase.from("requests").select("id, created_at")),
@@ -77,15 +79,32 @@ export async function getFinanceiroStats(
   const requestPorId = new Map((requestsData ?? []).map((r) => [r.id, r]));
 
   // --- Faturação ---
+  // "Faturado" (regime de acréscimo, âncora faturacao_data) inclui sempre
+  // 'liquidado' — liquidar não desfaz o facto de ter sido faturado, só
+  // acrescenta que já foi recebido. "Recebido" (regime de caixa, âncora
+  // faturacao_liquidado_data) é um número à parte, nunca subtraído de
+  // totalFaturado — os dois convivem (Faturado vs Recebido).
   const faturados = (servicos ?? []).filter(
-    (s) => s.faturacao_estado === "faturado" && s.faturacao_data && emRange(s.faturacao_data)
+    (s) =>
+      (s.faturacao_estado === "faturado" || s.faturacao_estado === "liquidado") &&
+      s.faturacao_data &&
+      emRange(s.faturacao_data)
   );
   const totalFaturado = faturados.reduce((acc, s) => acc + Number(s.faturacao_valor ?? 0), 0);
   const totalPorFaturar = (servicos ?? [])
     .filter((s) => s.estado === "concluido" && s.faturacao_estado === "por_faturar")
     .reduce((acc, s) => acc + Number(s.valor ?? 0), 0);
+  const totalPorReceber = faturados
+    .filter((s) => s.faturacao_estado === "faturado")
+    .reduce((acc, s) => acc + Number(s.faturacao_valor ?? 0), 0);
   const nFaturados = faturados.length;
   const valorMedio = nFaturados ? totalFaturado / nFaturados : 0;
+
+  const liquidados = (servicos ?? []).filter(
+    (s) => s.faturacao_estado === "liquidado" && s.faturacao_liquidado_data && emRange(s.faturacao_liquidado_data)
+  );
+  const totalRecebido = liquidados.reduce((acc, s) => acc + Number(s.faturacao_valor ?? 0), 0);
+  const nLiquidados = liquidados.length;
 
   // --- Produção ---
   const eventosNoRange = (eventos ?? []).filter((e) => emRange(e.created_at));
@@ -126,6 +145,7 @@ export async function getFinanceiroStats(
   const temposFechoValidacao: number[] = [];
   const temposValidacaoFaturacao: number[] = [];
   const temposPedidoFaturacao: number[] = [];
+  const temposFaturacaoLiquidacao: number[] = [];
   const temposPorTipo = new Map<string, number[]>();
 
   for (const [serviceId, m] of primeiroEvento) {
@@ -134,6 +154,7 @@ export async function getFinanceiroStats(
     const pedido = servico?.request_id ? requestPorId.get(servico.request_id) : null;
     const validadoAt = m.get("validado");
     const faturadoAt = m.get("faturado");
+    const liquidadoAt = m.get("liquidado");
     const agendadoAt = m.get("agendado");
 
     if (agendadoAt && emRange(agendadoAt) && pedido?.created_at) {
@@ -161,6 +182,9 @@ export async function getFinanceiroStats(
       if (validadoAt) temposValidacaoFaturacao.push(diffHoras(validadoAt, faturadoAt));
       if (pedido?.created_at) temposPedidoFaturacao.push(diffHoras(pedido.created_at, faturadoAt));
     }
+    if (liquidadoAt && emRange(liquidadoAt) && faturadoAt) {
+      temposFaturacaoLiquidacao.push(diffHoras(faturadoAt, liquidadoAt));
+    }
   }
 
   // Pedido → orçamento: independente de o serviço já ter sido concluído —
@@ -187,7 +211,7 @@ export async function getFinanceiroStats(
   }
 
   return {
-    faturacao: { totalFaturado, totalPorFaturar, nFaturados, valorMedio },
+    faturacao: { totalFaturado, totalPorFaturar, totalPorReceber, totalRecebido, nFaturados, nLiquidados, valorMedio },
     producao: {
       concluidos: concluidosNoRange.length,
       pendentes,
@@ -206,6 +230,7 @@ export async function getFinanceiroStats(
       fechoValidacaoHoras: media(temposFechoValidacao),
       validacaoFaturacaoHoras: media(temposValidacaoFaturacao),
       pedidoFaturacaoHoras: media(temposPedidoFaturacao),
+      faturacaoLiquidacaoHoras: media(temposFaturacaoLiquidacao),
       porTipoHoras: Object.fromEntries([...temposPorTipo].map(([k, v]) => [k, media(v)])),
     },
     valores,

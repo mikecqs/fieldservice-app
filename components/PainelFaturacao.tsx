@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { marcarFaturado } from "@/app/admin/faturacao/actions";
+import { marcarFaturado, marcarLiquidado } from "@/app/admin/faturacao/actions";
 import { validarServico, enviarParaCorrecao } from "@/app/admin/servicos/actions";
 import { PedidoCodigoBadge } from "@/components/pedidos/PedidoCodigoBadge";
 import { rotuloTipoServico } from "@/lib/servico-estado";
+import { METODOS_PAGAMENTO } from "@/lib/faturacao-opcoes";
 import { VerPdfFechoLink } from "@/components/VerPdfFechoLink";
 
 // Partilhado entre /admin/faturacao (Admin) e /financeiro/faturacao (role
@@ -11,7 +12,7 @@ import { VerPdfFechoLink } from "@/components/VerPdfFechoLink";
 export async function PainelFaturacao({
   q,
   titulo = "Faturação",
-  subtitulo = "Serviços concluídos, por faturar ou já faturados.",
+  subtitulo = "Serviços concluídos, por faturar, faturados ou já liquidados.",
 }: {
   q?: string;
   titulo?: string;
@@ -28,7 +29,7 @@ export async function PainelFaturacao({
   const { data: servicos } = await supabase
     .from("services")
     .select(
-      "id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, clients(nome, codigo), requests(id, codigo)"
+      "id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, faturacao_metodo_pagamento, faturacao_liquidado_data, clients(nome, codigo), requests(id, codigo)"
     )
     .eq("estado", "concluido")
     .order("faturacao_estado")
@@ -45,8 +46,15 @@ export async function PainelFaturacao({
 
   const aguardam = (aguardamValidacao ?? []).filter(bate);
   const porFaturar = (servicos ?? []).filter((s) => s.faturacao_estado === "por_faturar").filter(bate);
+  // 'faturado' aqui é só "emitida, ainda por receber" — assim que é
+  // liquidado passa para a secção/estado seguinte, nunca fica nas duas.
   const faturados = (servicos ?? []).filter((s) => s.faturacao_estado === "faturado").filter(bate);
+  const liquidados = (servicos ?? []).filter((s) => s.faturacao_estado === "liquidado").filter(bate);
   const totalPorFaturar = porFaturar.reduce((acc, s) => acc + Number(s.valor ?? 0), 0);
+  // Faturado vs Recebido: "faturado" (por receber) soma o valor da fatura já
+  // emitida mas ainda não paga; "recebido" soma o que já foi liquidado.
+  const totalFaturadoPorReceber = faturados.reduce((acc, s) => acc + Number(s.faturacao_valor ?? 0), 0);
+  const totalRecebido = liquidados.reduce((acc, s) => acc + Number(s.faturacao_valor ?? 0), 0);
 
   return (
     <div>
@@ -64,10 +72,24 @@ export async function PainelFaturacao({
         />
       </form>
 
-      <div className="mb-6 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-        <div className="text-xs font-medium text-neutral-400">Total por faturar</div>
-        <div className="text-2xl font-bold text-white">
-          {totalPorFaturar.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="text-xs font-medium text-neutral-400">Total por faturar</div>
+          <div className="text-2xl font-bold text-white">
+            {totalPorFaturar.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+          </div>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="text-xs font-medium text-neutral-400">Faturado · por receber</div>
+          <div className="text-2xl font-bold text-white">
+            {totalFaturadoPorReceber.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+          </div>
+        </div>
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <div className="text-xs font-medium text-neutral-400">Recebido · liquidado</div>
+          <div className="text-2xl font-bold text-emerald-400">
+            {totalRecebido.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+          </div>
         </div>
       </div>
 
@@ -163,8 +185,64 @@ export async function PainelFaturacao({
       </div>
 
       <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Faturados · {faturados.length}</h2>
-      <div className="space-y-2">
+      <div className="mb-6 space-y-2">
         {faturados.map((s: any) => (
+          <div key={s.id} className="rounded-lg border border-neutral-800 bg-neutral-800 p-3.5 text-sm">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
+                  {s.requests?.codigo && (
+                    <PedidoCodigoBadge
+                      id={s.requests.id}
+                      codigo={s.requests.codigo}
+                      className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono hover:bg-neutral-800 hover:text-white"
+                    />
+                  )}
+                  {s.clients?.codigo && <span className="rounded bg-neutral-900 px-1.5 py-0.5 font-mono">{s.clients.codigo}</span>}
+                </div>
+                <span className="font-medium text-neutral-200">{s.clients?.nome}</span>
+                <span className="ml-2 text-neutral-500">{s.faturacao_referencia}</span>
+              </div>
+              <div className="flex items-center gap-3 text-neutral-400">
+                <span>{s.faturacao_data}</span>
+                <span className="font-semibold text-neutral-200">
+                  {Number(s.faturacao_valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                </span>
+                <VerPdfFechoLink
+                  servicoId={s.id}
+                  className="flex items-center gap-1 rounded bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700 hover:text-white"
+                />
+              </div>
+            </div>
+            <form action={marcarLiquidado} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="id" value={s.id} />
+              <select
+                name="metodo_pagamento"
+                required
+                defaultValue=""
+                className="rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs"
+              >
+                <option value="" disabled>
+                  — Método de pagamento —
+                </option>
+                {METODOS_PAGAMENTO.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <button className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800">
+                Marcar liquidado
+              </button>
+            </form>
+          </div>
+        ))}
+        {faturados.length === 0 && <p className="py-6 text-center text-sm text-neutral-500">Ainda sem faturas por receber.</p>}
+      </div>
+
+      <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-500">Liquidados · {liquidados.length}</h2>
+      <div className="space-y-2">
+        {liquidados.map((s: any) => (
           <div key={s.id} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-800 p-3.5 text-sm">
             <div>
               <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
@@ -181,7 +259,8 @@ export async function PainelFaturacao({
               <span className="ml-2 text-neutral-500">{s.faturacao_referencia}</span>
             </div>
             <div className="flex items-center gap-3 text-neutral-400">
-              <span>{s.faturacao_data}</span>
+              <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-400">{s.faturacao_metodo_pagamento}</span>
+              <span>{s.faturacao_liquidado_data}</span>
               <span className="font-semibold text-neutral-200">
                 {Number(s.faturacao_valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
               </span>
@@ -192,7 +271,7 @@ export async function PainelFaturacao({
             </div>
           </div>
         ))}
-        {faturados.length === 0 && <p className="py-6 text-center text-sm text-neutral-500">Ainda sem faturas.</p>}
+        {liquidados.length === 0 && <p className="py-6 text-center text-sm text-neutral-500">Ainda sem pagamentos recebidos.</p>}
       </div>
     </div>
   );

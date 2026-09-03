@@ -65,7 +65,7 @@ export async function shapeService(admin: any, organizationId: string, entityId:
   const { data: s } = await admin
     .from("services")
     .select(
-      "id, tipo, descricao, estado, prioridade, valor, data_agendada, hora_agendada, hora_fim_agendada, request_id, budget_id, faturacao_estado, faturacao_valor, faturacao_data, faturacao_referencia, created_at, clients(nome), service_technicians(profiles(nome))"
+      "id, tipo, descricao, estado, prioridade, valor, data_agendada, hora_agendada, hora_fim_agendada, request_id, budget_id, faturacao_estado, faturacao_valor, faturacao_data, faturacao_referencia, faturacao_metodo_pagamento, faturacao_liquidado_data, created_at, clients(nome), service_technicians(profiles(nome))"
     )
     .eq("organization_id", organizationId)
     .eq("id", entityId)
@@ -89,7 +89,10 @@ export async function shapeService(admin: any, organizationId: string, entityId:
     },
     {
       sheet: "Faturação",
-      values: [s.id, cliente, s.faturacao_estado, s.faturacao_valor ?? "", s.faturacao_data ?? "", s.faturacao_referencia ?? ""],
+      values: [
+        s.id, cliente, s.faturacao_estado, s.faturacao_valor ?? "", s.faturacao_data ?? "", s.faturacao_referencia ?? "",
+        s.faturacao_metodo_pagamento ?? "", s.faturacao_liquidado_data ?? "",
+      ],
     },
   ];
 }

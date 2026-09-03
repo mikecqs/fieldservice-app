@@ -274,9 +274,11 @@ export default async function RelatoriosPage({
         <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-neutral-100">
           <Euro className="h-4 w-4" aria-hidden="true" /> Financeiro
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <div><div className="font-bold text-white">{formatEuros(stats.faturacao.totalFaturado)}</div><div className="text-xs text-neutral-400">Faturado</div></div>
           <div><div className="font-bold text-white">{formatEuros(stats.faturacao.totalPorFaturar)}</div><div className="text-xs text-neutral-400">Por faturar</div></div>
+          <div><div className="font-bold text-white">{formatEuros(stats.faturacao.totalPorReceber)}</div><div className="text-xs text-neutral-400">Faturado · por receber</div></div>
+          <div><div className="font-bold text-emerald-400">{formatEuros(stats.faturacao.totalRecebido)}</div><div className="text-xs text-neutral-400">Recebido</div></div>
           <div><div className="font-bold text-white">{formatEuros(stats.valores.mao_obra)}</div><div className="text-xs text-neutral-400">Mão de obra</div></div>
           <div><div className="font-bold text-white">{formatEuros(stats.valores.materiais)}</div><div className="text-xs text-neutral-400">Materiais</div></div>
         </div>

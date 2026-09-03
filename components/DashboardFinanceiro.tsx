@@ -76,7 +76,10 @@ export function DashboardFinanceiro({
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat label="Total faturado" value={formatEuros(stats.faturacao.totalFaturado)} />
         <Stat label="Total por faturar" value={formatEuros(stats.faturacao.totalPorFaturar)} />
+        <Stat label="Faturado por receber" value={formatEuros(stats.faturacao.totalPorReceber)} />
+        <Stat label="Total recebido" value={formatEuros(stats.faturacao.totalRecebido)} />
         <Stat label="Nº serviços faturados" value={String(stats.faturacao.nFaturados)} />
+        <Stat label="Nº serviços liquidados" value={String(stats.faturacao.nLiquidados)} />
         <Stat label="Valor médio" value={formatEuros(stats.faturacao.valorMedio)} />
       </div>
 

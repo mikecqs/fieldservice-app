@@ -147,7 +147,7 @@ export async function cancelarServico(formData: FormData) {
   const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", id).single();
   if (!servico) return;
   if (!podeCancelarServico(servico)) {
-    throw new Error("Este serviço já não pode ser cancelado (já concluído ou já faturado).");
+    throw new Error("Este serviço já não pode ser cancelado (já concluído, já faturado ou liquidado).");
   }
 
   await supabase.from("services").update({ estado: "cancelado" }).eq("id", id);
@@ -199,7 +199,7 @@ export async function reativarServico(formData: FormData) {
   const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", id).single();
   if (!servico) return;
   if (!podeReativarServico(servico)) {
-    throw new Error('Só é possível reativar um serviço que esteja "Não foi possível realizar" e ainda não esteja faturado.');
+    throw new Error('Só é possível reativar um serviço que esteja "Não foi possível realizar" e ainda não esteja faturado nem liquidado.');
   }
 
   await supabase
@@ -265,7 +265,7 @@ export async function atribuirTecnico(formData: FormData) {
 
   const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
   if (!servico || !podeReagendarServico(servico)) {
-    throw new Error("Este serviço já não pode ter técnicos alterados (concluído, cancelado, não realizado ou já faturado).");
+    throw new Error("Este serviço já não pode ter técnicos alterados (concluído, cancelado, não realizado, já faturado ou liquidado).");
   }
 
   await supabase.from("service_technicians").insert({ service_id, user_id });
@@ -280,7 +280,7 @@ export async function removerTecnico(formData: FormData) {
 
   const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
   if (!servico || !podeReagendarServico(servico)) {
-    throw new Error("Este serviço já não pode ter técnicos alterados (concluído, cancelado, não realizado ou já faturado).");
+    throw new Error("Este serviço já não pode ter técnicos alterados (concluído, cancelado, não realizado, já faturado ou liquidado).");
   }
 
   await supabase.from("service_technicians").delete().eq("service_id", service_id).eq("user_id", user_id);
@@ -305,7 +305,7 @@ export async function adicionarMaterialPlaneado(formData: FormData) {
 
   const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
   if (!servico || !podeReagendarServico(servico)) {
-    throw new Error("Este serviço já não pode ter materiais planeados alterados (concluído, cancelado, não realizado ou já faturado).");
+    throw new Error("Este serviço já não pode ter materiais planeados alterados (concluído, cancelado, não realizado, já faturado ou liquidado).");
   }
 
   await supabase.from("service_materials_planned").insert({ service_id, nome, qtd, preco_venda });
@@ -320,7 +320,7 @@ export async function removerMaterialPlaneado(formData: FormData) {
 
   const { data: servico } = await supabase.from("services").select("estado, faturacao_estado").eq("id", service_id).single();
   if (!servico || !podeReagendarServico(servico)) {
-    throw new Error("Este serviço já não pode ter materiais planeados alterados (concluído, cancelado, não realizado ou já faturado).");
+    throw new Error("Este serviço já não pode ter materiais planeados alterados (concluído, cancelado, não realizado, já faturado ou liquidado).");
   }
 
   await supabase.from("service_materials_planned").delete().eq("id", id);
