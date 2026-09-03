@@ -33,7 +33,10 @@ export const HEADERS: Record<DataSheetName, string[]> = {
     "Mão de obra", "Valor calculado", "Técnico",
   ],
   Materiais: ["ID", "Tipo", "Serviço (ID)", "Visita (ID)", "Cliente", "Nome", "Quantidade", "Preço unitário", "Valor", "Eliminado"],
-  Faturação: ["Serviço (ID)", "Cliente", "Estado faturação", "Valor faturado", "Data faturação", "Referência"],
+  Faturação: [
+    "Serviço (ID)", "Cliente", "Estado faturação", "Valor faturado", "Data faturação", "Referência",
+    "Método de pagamento", "Data liquidação",
+  ],
   Técnicos: ["ID", "Nome", "Email", "Eliminado"],
   Histórico: ["ID", "Data/Hora", "Entidade", "Entidade (ID)", "Evento", "Descrição", "Utilizador"],
 };

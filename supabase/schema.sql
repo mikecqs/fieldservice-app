@@ -310,11 +310,17 @@ create table services (
     check (estado in ('por_agendar','agendado','em_curso','concluido','nova_visita','nao_realizado','cancelado','aguarda_validacao','correcao_necessaria')),
   valor numeric not null default 0,
   -- faturação
-  faturacao_estado text not null default 'por_faturar' check (faturacao_estado in ('por_faturar','faturado')),
+  faturacao_estado text not null default 'por_faturar'
+    check (faturacao_estado in ('por_faturar','faturado','liquidado')),
   faturacao_data date,
   faturacao_valor numeric,
   faturacao_referencia text,
   faturacao_utilizador uuid references profiles(id),
+  -- liquidação (pagamento recebido) — só preenchido depois de 'faturado'
+  faturacao_metodo_pagamento text
+    check (faturacao_metodo_pagamento in ('Numerário','Transferência Bancária','Multibanco','Cheque')),
+  faturacao_liquidado_data date,
+  faturacao_liquidado_utilizador uuid references profiles(id),
   created_at timestamptz not null default now()
 );
 
@@ -407,7 +413,7 @@ create table service_events (
   tipo text not null check (tipo in (
     'criado','agendado','reagendado','iniciado','concluido','nova_visita',
     'nao_realizado','correcao_pedida','corrigido','validado','faturado',
-    'cancelado','reativado'
+    'cancelado','reativado','liquidado'
   )),
   descricao text not null,
   utilizador uuid references profiles(id),
@@ -1309,6 +1315,54 @@ begin
 end;
 $$;
 grant execute on function finance_marcar_faturado(uuid, numeric, text) to authenticated;
+
+-- finance_marcar_liquidado — regista o pagamento recebido de um serviço já
+-- faturado. Só avança 'faturado' → 'liquidado' (nunca 'por_faturar' →
+-- 'liquidado' diretamente); método de pagamento sempre obrigatório, também
+-- reforçado pelo CHECK de services.faturacao_metodo_pagamento.
+create or replace function finance_marcar_liquidado(p_service_id uuid, p_metodo_pagamento text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_faturacao_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+  if p_metodo_pagamento is null or length(trim(p_metodo_pagamento)) = 0 then
+    raise exception 'Método de pagamento é obrigatório.';
+  end if;
+
+  select organization_id, faturacao_estado into v_org_id, v_faturacao_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_faturacao_estado != 'faturado' then
+    raise exception 'Este serviço não está pronto para liquidar.';
+  end if;
+
+  update services
+    set faturacao_estado = 'liquidado',
+        faturacao_metodo_pagamento = p_metodo_pagamento,
+        faturacao_liquidado_data = current_date,
+        faturacao_liquidado_utilizador = auth.uid()
+    where id = p_service_id;
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, p_service_id, 'liquidado',
+    'Liquidado — ' || p_metodo_pagamento || '.',
+    auth.uid()
+  );
+end;
+$$;
+grant execute on function finance_marcar_liquidado(uuid, text) to authenticated;
 
 -- =============================================================================
 -- TRIGGER: cria automaticamente um registo em org_settings quando nasce uma

@@ -95,7 +95,8 @@ export default async function DashboardPage() {
     // sempre de getFinanceiroStats abaixo, nunca recalculado aqui.
     supabase.from("services").select("id, descricao, clients(nome)").eq("estado", "concluido").eq("faturacao_estado", "por_faturar"),
     // Única fonte de verdade para valores financeiros (ver lib/financeiro.ts)
-    // — chamado com desde=ate=hoje: totalFaturado fica filtrado a hoje,
+    // — chamado com desde=ate=hoje: totalFaturado/totalRecebido ficam
+    // filtrados a hoje (faturacao_data/faturacao_liquidado_data), enquanto
     // totalPorFaturar é sempre o backlog atual (não depende do intervalo).
     getFinanceiroStats(supabase, hoje, hoje),
     supabase.from("requests").select("id, descricao, clients(nome)").eq("info_falta", true).eq("estado", "novo"),
@@ -454,6 +455,7 @@ export default async function DashboardPage() {
           <StatCard label="Orçamentos em aberto" value={orcamentosAbertos?.length ?? 0} href="/admin/orcamentos" />
           <StatCard label="Faturado hoje" value={formatEuros(financeiroHoje.faturacao.totalFaturado)} href="/admin/faturacao" />
           <StatCard label="Por faturar" value={formatEuros(financeiroHoje.faturacao.totalPorFaturar)} href="/admin/faturacao" />
+          <StatCard label="Recebido hoje" value={formatEuros(financeiroHoje.faturacao.totalRecebido)} href="/admin/faturacao" />
         </div>
       </section>
     </div>

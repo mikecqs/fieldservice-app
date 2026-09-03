@@ -30,7 +30,7 @@ export default async function ClienteDetalhePage({ params }: { params: { id: str
   ]);
 
   const faturado = (services ?? [])
-    .filter((s) => s.faturacao_estado === "faturado")
+    .filter((s) => s.faturacao_estado === "faturado" || s.faturacao_estado === "liquidado")
     .reduce((a, s) => a + (s.faturacao_valor ?? 0), 0);
 
   const intervencoesPorEquipamento = new Map<string, any[]>();

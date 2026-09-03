@@ -22,7 +22,11 @@ export function AgendamentoForm({ servico }: { servico: any }) {
         <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <span>
           Este serviço já não pode ser reagendado (
-          {servico.faturacao_estado === "faturado" ? "já faturado" : "concluído, cancelado ou não realizado"}
+          {servico.faturacao_estado === "liquidado"
+            ? "já liquidado"
+            : servico.faturacao_estado === "faturado"
+              ? "já faturado"
+              : "concluído, cancelado ou não realizado"}
           ). Data: {servico.data_agendada ?? "—"} {servico.hora_agendada?.slice(0, 5) ?? ""}
           {servico.hora_fim_agendada ? `–${servico.hora_fim_agendada.slice(0, 5)}` : ""}
         </span>

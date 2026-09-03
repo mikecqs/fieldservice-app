@@ -17,7 +17,10 @@ export function ExportarFinanceiroExcel({ stats, range }: { stats: Stats; range:
       [],
       ["Total faturado", formatEuros(stats.faturacao.totalFaturado)],
       ["Total por faturar", formatEuros(stats.faturacao.totalPorFaturar)],
+      ["Faturado por receber", formatEuros(stats.faturacao.totalPorReceber)],
+      ["Total recebido", formatEuros(stats.faturacao.totalRecebido)],
       ["Nº serviços faturados", stats.faturacao.nFaturados],
+      ["Nº serviços liquidados", stats.faturacao.nLiquidados],
       ["Valor médio por serviço", formatEuros(stats.faturacao.valorMedio)],
       [],
       ["Concluídos no período", stats.producao.concluidos],
@@ -32,7 +35,10 @@ export function ExportarFinanceiroExcel({ stats, range }: { stats: Stats; range:
       ["Indicador", "Valor"],
       ["Total faturado", stats.faturacao.totalFaturado],
       ["Total por faturar", stats.faturacao.totalPorFaturar],
+      ["Faturado por receber", stats.faturacao.totalPorReceber],
+      ["Total recebido", stats.faturacao.totalRecebido],
       ["Nº serviços faturados", stats.faturacao.nFaturados],
+      ["Nº serviços liquidados", stats.faturacao.nLiquidados],
       ["Valor médio por serviço", stats.faturacao.valorMedio],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(faturacao), "Faturação");

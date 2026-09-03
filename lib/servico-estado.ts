@@ -9,9 +9,14 @@
 // já estar faturado mesmo antes de mudar de estado outra vez.
 export const ESTADOS_SERVICO_BLOQUEADOS_PARA_REAGENDAR = ["concluido", "cancelado", "nao_realizado"] as const;
 
+// 'faturado' e 'liquidado' bloqueiam da mesma forma — 'liquidado' é sempre
+// posterior a 'faturado' no ciclo de vida (nunca o contrário), por isso
+// qualquer regra que já bloqueava em 'faturado' bloqueia também aqui.
+export const ESTADOS_FATURACAO_BLOQUEADOS = ["faturado", "liquidado"] as const;
+
 export function podeReagendarServico(servico: { estado: string; faturacao_estado?: string | null }): boolean {
   if ((ESTADOS_SERVICO_BLOQUEADOS_PARA_REAGENDAR as readonly string[]).includes(servico.estado)) return false;
-  if (servico.faturacao_estado === "faturado") return false;
+  if ((ESTADOS_FATURACAO_BLOQUEADOS as readonly string[]).includes(servico.faturacao_estado ?? "")) return false;
   return true;
 }
 
@@ -29,7 +34,7 @@ export function deveTransicionarParaAgendado(estadoAtual: string): boolean {
 // negócio e apagaria valor real já faturado do radar operacional.
 export function podeCancelarServico(servico: { estado: string; faturacao_estado?: string | null }): boolean {
   if (servico.estado === "concluido" || servico.estado === "cancelado") return false;
-  if (servico.faturacao_estado === "faturado") return false;
+  if ((ESTADOS_FATURACAO_BLOQUEADOS as readonly string[]).includes(servico.faturacao_estado ?? "")) return false;
   return true;
 }
 
@@ -40,7 +45,7 @@ export function podeCancelarServico(servico: { estado: string; faturacao_estado?
 // se já estiver faturado.
 export function podeReativarServico(servico: { estado: string; faturacao_estado?: string | null }): boolean {
   if (servico.estado !== "nao_realizado") return false;
-  if (servico.faturacao_estado === "faturado") return false;
+  if ((ESTADOS_FATURACAO_BLOQUEADOS as readonly string[]).includes(servico.faturacao_estado ?? "")) return false;
   return true;
 }
 

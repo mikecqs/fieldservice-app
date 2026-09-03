@@ -671,6 +671,82 @@ $$;
 grant execute on function finance_marcar_faturado(uuid, numeric, text) to authenticated;
 
 -- =============================================================================
+-- Liquidação de serviços faturados (local, ainda por commitar) — novo estado
+-- 'liquidado' em services.faturacao_estado (só alcançável a partir de
+-- 'faturado', nunca diretamente de 'por_faturar') + método de pagamento
+-- obrigatório (Numerário/Transferência Bancária/Multibanco/Cheque), mesmo
+-- padrão de colunas faturacao_* já existentes (faturacao_data/
+-- faturacao_utilizador viram faturacao_liquidado_data/
+-- faturacao_liquidado_utilizador, para não confundir a data/utilizador da
+-- fatura com a data/utilizador do pagamento). Novo tipo 'liquidado' em
+-- service_events.tipo, aditivo (histórico continua append-only). Nova RPC
+-- finance_marcar_liquidado, mesma role gate (ADMIN/SUPER_ADMIN/FINANCE) e
+-- mesmo padrão de finance_marcar_faturado.
+-- =============================================================================
+alter table services drop constraint if exists services_faturacao_estado_check;
+alter table services add constraint services_faturacao_estado_check
+  check (faturacao_estado in ('por_faturar','faturado','liquidado'));
+
+alter table services add column if not exists faturacao_metodo_pagamento text;
+alter table services drop constraint if exists services_faturacao_metodo_pagamento_check;
+alter table services add constraint services_faturacao_metodo_pagamento_check
+  check (faturacao_metodo_pagamento in ('Numerário','Transferência Bancária','Multibanco','Cheque'));
+alter table services add column if not exists faturacao_liquidado_data date;
+alter table services add column if not exists faturacao_liquidado_utilizador uuid references profiles(id);
+
+alter table service_events drop constraint if exists service_events_tipo_check;
+alter table service_events add constraint service_events_tipo_check
+  check (tipo in (
+    'criado','agendado','reagendado','iniciado','concluido','nova_visita',
+    'nao_realizado','correcao_pedida','corrigido','validado','faturado',
+    'cancelado','reativado','liquidado'
+  ));
+
+create or replace function finance_marcar_liquidado(p_service_id uuid, p_metodo_pagamento text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_faturacao_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+  if p_metodo_pagamento is null or length(trim(p_metodo_pagamento)) = 0 then
+    raise exception 'Método de pagamento é obrigatório.';
+  end if;
+
+  select organization_id, faturacao_estado into v_org_id, v_faturacao_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_faturacao_estado != 'faturado' then
+    raise exception 'Este serviço não está pronto para liquidar.';
+  end if;
+
+  update services
+    set faturacao_estado = 'liquidado',
+        faturacao_metodo_pagamento = p_metodo_pagamento,
+        faturacao_liquidado_data = current_date,
+        faturacao_liquidado_utilizador = auth.uid()
+    where id = p_service_id;
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, p_service_id, 'liquidado',
+    'Liquidado — ' || p_metodo_pagamento || '.',
+    auth.uid()
+  );
+end;
+$$;
+grant execute on function finance_marcar_liquidado(uuid, text) to authenticated;
+
+-- =============================================================================
 -- Fotos no fecho de serviço (local, ainda por commitar) — bucket de Storage
 -- novo, "visitas", para o Técnico poder enviar fotografias opcionais ao
 -- fechar uma visita. visit_photos (tabela) e o parâmetro p_fotos de
@@ -784,4 +860,10 @@ commit;
 --   - Falta ainda, fora deste ficheiro: configurar as 4 env vars de Web
 --     Push no Vercel e agendar manualmente o job pg_cron acima — sem isso,
 --     as tabelas/policies existem mas a funcionalidade não envia nada.
+--   - Liquidação de serviços faturados (estado 'liquidado' + método de
+--     pagamento): só as colunas/CHECKs de services/service_events + a RPC
+--     finance_marcar_liquidado acima — sem tabela/bucket novo. O resto
+--     (lib/faturacao-opcoes.ts, a Server Action marcarLiquidado, a secção
+--     "Liquidados" do PainelFaturacao, e as estatísticas Faturado vs
+--     Recebido em lib/financeiro.ts) é só código.
 -- =============================================================================

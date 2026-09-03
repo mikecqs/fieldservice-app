@@ -53,10 +53,13 @@ export async function getEvolucao(supabase: SB, desde: string, ate: string, orga
     withOrg(supabase.from("service_events").select("tipo, created_at, service_id")),
     withOrg(supabase.from("budgets").select("id, criado_em")),
   ]);
+  // 'liquidado' inclui-se aqui também — mesma semântica de totalFaturado em
+  // lib/financeiro.ts (faturado é sempre um sobreconjunto de liquidado,
+  // nunca o oposto).
   const { data: servicosFaturados } = await (organizationId
     ? supabase.from("services").select("faturacao_data, faturacao_valor").eq("organization_id", organizationId)
     : supabase.from("services").select("faturacao_data, faturacao_valor")
-  ).eq("faturacao_estado", "faturado");
+  ).in("faturacao_estado", ["faturado", "liquidado"]);
 
   const dias: string[] = [];
   for (let d = new Date(desde); toISO(d) <= ate; d.setDate(d.getDate() + 1)) dias.push(toISO(d));

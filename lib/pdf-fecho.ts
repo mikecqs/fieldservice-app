@@ -123,6 +123,7 @@ const EVENTO_LABEL: Record<string, string> = {
   faturado: "Faturado",
   cancelado: "Cancelado",
   reativado: "Reativado",
+  liquidado: "Liquidado",
 };
 
 const RESULTADO_VISITA_LABEL: Record<string, string> = {
@@ -155,7 +156,8 @@ export async function gerarPdfFecho(serviceId: string): Promise<{ ok: true } | {
       .from("services")
       .select(
         `id, codigo, organization_id, tipo, descricao, notas, estado, faturacao_estado,
-         faturacao_data, faturacao_valor, faturacao_referencia, data_agendada, hora_agendada, hora_fim_agendada,
+         faturacao_data, faturacao_valor, faturacao_referencia, faturacao_metodo_pagamento, faturacao_liquidado_data,
+         data_agendada, hora_agendada, hora_fim_agendada,
          valor, client_id, address_id, request_id, budget_id,
          clients(nome, nif, telefone, email),
          client_addresses(label, endereco),
@@ -273,10 +275,13 @@ export async function gerarPdfFecho(serviceId: string): Promise<{ ok: true } | {
     cursor.y -= 55;
 
     texto(cursor, `FECHO DE SERVIÇO — ${servico.codigo}`, { size: 16, bold: true });
-    texto(cursor, `Gerado em ${new Date().toLocaleString("pt-PT")} · Estado atual: ${servico.estado}${servico.faturacao_estado === "faturado" ? " · Faturado" : ""}`, {
-      size: 9,
-      cor: COR_LEVE,
-    });
+    texto(
+      cursor,
+      `Gerado em ${new Date().toLocaleString("pt-PT")} · Estado atual: ${servico.estado}${
+        servico.faturacao_estado === "faturado" ? " · Faturado" : servico.faturacao_estado === "liquidado" ? " · Liquidado" : ""
+      }`,
+      { size: 9, cor: COR_LEVE }
+    );
 
     // Pedido / origem
     secao(cursor, "Pedido / Origem");
@@ -428,13 +433,21 @@ export async function gerarPdfFecho(serviceId: string): Promise<{ ok: true } | {
     for (const v of validacoes ?? []) {
       texto(cursor, `${new Date(v.created_at).toLocaleString("pt-PT")} — ${v.acao === "validado" ? "Validado" : "Devolvido para correção"}${v.motivo ? `: ${v.motivo}` : ""}`, { cor: COR_LEVE });
     }
-    if (servico.faturacao_estado === "faturado") {
+    if (servico.faturacao_estado === "faturado" || servico.faturacao_estado === "liquidado") {
       texto(
         cursor,
         `Faturado em ${servico.faturacao_data ?? "—"} · Referência: ${servico.faturacao_referencia ?? "—"} · Valor: ${
           servico.faturacao_valor != null ? Number(servico.faturacao_valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" }) : "—"
         }`
       );
+      if (servico.faturacao_estado === "liquidado") {
+        texto(
+          cursor,
+          `Liquidado em ${servico.faturacao_liquidado_data ?? "—"} · Método de pagamento: ${servico.faturacao_metodo_pagamento ?? "—"}`
+        );
+      } else {
+        texto(cursor, "Ainda não liquidado (pagamento por receber).", { cor: COR_LEVE });
+      }
     } else {
       texto(cursor, "Ainda não faturado.", { cor: COR_LEVE });
     }

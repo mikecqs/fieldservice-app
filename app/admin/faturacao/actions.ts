@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { gerarPdfFechoSemBloquear } from "@/lib/pdf-fecho";
+import { METODOS_PAGAMENTO } from "@/lib/faturacao-opcoes";
 
 // Admin e Financeiro (role FINANCE) partilham a mesma RPC — ver
 // finance_marcar_faturado em schema.sql, que valida permissão e estado
@@ -33,6 +34,33 @@ export async function marcarFaturado(formData: FormData) {
   // PDF do Fecho (Ponto 5) — regenera para incluir a referência/valor/data
   // de faturação; nunca bloqueia a faturação em si (já teve sucesso na RPC).
   await gerarPdfFechoSemBloquear(id, "finance_marcar_faturado");
+
+  revalidatePath("/admin/faturacao");
+}
+
+// Liquidação — registo do pagamento recebido de um serviço já faturado.
+// Mesma partilha Admin/Financeiro que marcarFaturado; a RPC
+// finance_marcar_liquidado valida permissão e que faturacao_estado já é
+// 'faturado' sempre no próprio Postgres, nunca só no frontend.
+export async function marcarLiquidado(formData: FormData) {
+  const supabase = createClient();
+
+  const id = String(formData.get("id") || "");
+  const metodo_pagamento = String(formData.get("metodo_pagamento") || "");
+  if (!id) return;
+  if (!METODOS_PAGAMENTO.includes(metodo_pagamento)) {
+    throw new Error("Método de pagamento inválido.");
+  }
+
+  const { error } = await supabase.rpc("finance_marcar_liquidado", {
+    p_service_id: id,
+    p_metodo_pagamento: metodo_pagamento,
+  });
+  if (error) throw new Error(error.message);
+
+  // PDF do Fecho — regenera para incluir o método de pagamento/data de
+  // liquidação; nunca bloqueia a liquidação em si (já teve sucesso na RPC).
+  await gerarPdfFechoSemBloquear(id, "finance_marcar_liquidado");
 
   revalidatePath("/admin/faturacao");
 }

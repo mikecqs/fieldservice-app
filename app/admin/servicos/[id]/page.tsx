@@ -269,7 +269,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
         {!podeReagendarServico(servico) ? (
           <p className="flex items-start gap-1.5 text-xs text-neutral-500">
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Técnicos já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
+            Técnicos já não podem ser alterados neste serviço (concluído, cancelado, não realizado, já faturado ou liquidado).
           </p>
         ) : (
           disponiveis.length > 0 && (
@@ -319,7 +319,7 @@ export default async function ServicoDetalhePage({ params }: { params: { id: str
         {!podeReagendarServico(servico) ? (
           <p className="flex items-start gap-1.5 text-xs text-neutral-500">
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Materiais planeados já não podem ser alterados neste serviço (concluído, cancelado, não realizado ou já faturado).
+            Materiais planeados já não podem ser alterados neste serviço (concluído, cancelado, não realizado, já faturado ou liquidado).
           </p>
         ) : (
           <MaterialPlaneadoForm serviceId={servico.id} />
