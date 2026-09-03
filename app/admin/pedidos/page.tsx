@@ -15,12 +15,37 @@ export default async function PedidosPage() {
   const [{ data: budgets }, { data: services }] =
     pedidoIds.length > 0
       ? await Promise.all([
-          supabase.from("budgets").select("estado, request_id").in("request_id", pedidoIds),
-          supabase.from("services").select("estado, tipo, request_id").in("request_id", pedidoIds),
+          supabase.from("budgets").select("id, estado, request_id").in("request_id", pedidoIds),
+          supabase.from("services").select("id, estado, tipo, request_id").in("request_id", pedidoIds),
         ])
       : [{ data: [] }, { data: [] }];
 
-  const budgetPorPedido = new Map((budgets ?? []).map((b: any) => [b.request_id, b]));
+  // "Data do estado atual" de cada Pedido = data do ÚLTIMO evento (nunca
+  // recalculada por outra via) da entidade que já decide o rótulo/grupo em
+  // estadoOperacionalPedido — histórico sempre aditivo, por isso o evento
+  // mais recente é sempre o momento exato da transição para o estado atual.
+  const budgetIds = (budgets ?? []).map((b: any) => b.id);
+  const serviceIds = (services ?? []).map((s: any) => s.id);
+  const [{ data: budgetEventos }, { data: servicoEventos }] = await Promise.all([
+    budgetIds.length > 0
+      ? supabase.from("budget_events").select("budget_id, created_at").in("budget_id", budgetIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
+    serviceIds.length > 0
+      ? supabase.from("service_events").select("service_id, created_at").in("service_id", serviceIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const ultimoEventoBudget = new Map<string, string>();
+  for (const e of (budgetEventos ?? []) as any[]) {
+    if (!ultimoEventoBudget.has(e.budget_id)) ultimoEventoBudget.set(e.budget_id, e.created_at);
+  }
+  const ultimoEventoServico = new Map<string, string>();
+  for (const e of (servicoEventos ?? []) as any[]) {
+    if (!ultimoEventoServico.has(e.service_id)) ultimoEventoServico.set(e.service_id, e.created_at);
+  }
+
+  const budgetPorPedido = new Map(
+    (budgets ?? []).map((b: any) => [b.request_id, { ...b, ultimoEventoEm: ultimoEventoBudget.get(b.id) ?? null }])
+  );
 
   // Agrupado (nunca um Map de "1 serviço por pedido") — a Visita Prévia
   // tornou normal um Pedido ter mais do que um Serviço ao longo do tempo
@@ -28,7 +53,7 @@ export default async function PedidosPage() {
   const servicosPorPedido = new Map<string, any[]>();
   for (const s of (services ?? []) as any[]) {
     const lista = servicosPorPedido.get(s.request_id) ?? [];
-    lista.push(s);
+    lista.push({ ...s, ultimoEventoEm: ultimoEventoServico.get(s.id) ?? null });
     servicosPorPedido.set(s.request_id, lista);
   }
 
