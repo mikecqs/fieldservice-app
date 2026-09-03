@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { arquivarPedido, converterEmOrcamento, resolverInfoPedido } from "./actions";
 import { PedidoModal } from "@/components/pedidos/PedidoModal";
+import type { GrupoPedido } from "@/lib/pedido-estado";
 
 export type PedidoResumo = {
   id: string;
@@ -15,18 +16,10 @@ export type PedidoResumo = {
   created_at: string;
   cliente: { id: string; nome: string; codigo?: string | null } | null;
   morada: string | null;
-  estadoOperacional: { label: string; cls: string };
+  estadoOperacional: { label: string; cls: string; grupo: GrupoPedido };
 };
 
-type Grupo = "acao" | "andamento" | "concluido";
-
-function grupoDe(p: PedidoResumo): Grupo {
-  if (p.info_falta || p.estado === "novo") return "acao";
-  if (p.estado === "orcamento") return "andamento";
-  return "concluido";
-}
-
-const GRUPO_INFO: Record<Grupo, { titulo: string }> = {
+const GRUPO_INFO: Record<GrupoPedido, { titulo: string }> = {
   acao: { titulo: "Exigem ação" },
   andamento: { titulo: "Em andamento" },
   concluido: { titulo: "Concluídos / arquivados" },
@@ -64,8 +57,8 @@ export function PedidosLista({ pedidos }: { pedidos: PedidoResumo[] }) {
   }, [pedidos, busca]);
 
   const grupos = useMemo(() => {
-    const mapa: Record<Grupo, PedidoResumo[]> = { acao: [], andamento: [], concluido: [] };
-    for (const p of filtrados) mapa[grupoDe(p)].push(p);
+    const mapa: Record<GrupoPedido, PedidoResumo[]> = { acao: [], andamento: [], concluido: [] };
+    for (const p of filtrados) mapa[p.estadoOperacional.grupo].push(p);
     return mapa;
   }, [filtrados]);
 
@@ -85,7 +78,7 @@ export function PedidosLista({ pedidos }: { pedidos: PedidoResumo[] }) {
       )}
 
       <div className="space-y-6">
-        {(["acao", "andamento", "concluido"] as Grupo[]).map((g) =>
+        {(["acao", "andamento", "concluido"] as GrupoPedido[]).map((g) =>
           grupos[g].length === 0 ? null : (
             <div key={g}>
               <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">
