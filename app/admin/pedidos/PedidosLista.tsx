@@ -16,7 +16,7 @@ export type PedidoResumo = {
   created_at: string;
   cliente: { id: string; nome: string; codigo?: string | null } | null;
   morada: string | null;
-  estadoOperacional: { label: string; cls: string; grupo: GrupoPedido };
+  estadoOperacional: { label: string; cls: string; grupo: GrupoPedido; data: string | null };
 };
 
 const GRUPO_INFO: Record<GrupoPedido, { titulo: string }> = {
@@ -59,6 +59,21 @@ export function PedidosLista({ pedidos }: { pedidos: PedidoResumo[] }) {
   const grupos = useMemo(() => {
     const mapa: Record<GrupoPedido, PedidoResumo[]> = { acao: [], andamento: [], concluido: [] };
     for (const p of filtrados) mapa[p.estadoOperacional.grupo].push(p);
+    // Mais recente primeiro dentro de cada grupo, pela data em que o pedido
+    // entrou no estado atual (nunca a data de criação do pedido) — assim a
+    // ordem acompanha sempre a última movimentação real, em vez de ficar
+    // presa à ordem de chegada. Sem data (raro: sem nenhum evento e sem
+    // created_at) fica sempre no fim do grupo.
+    for (const g of Object.keys(mapa) as GrupoPedido[]) {
+      mapa[g].sort((a, b) => {
+        const da = a.estadoOperacional.data;
+        const db = b.estadoOperacional.data;
+        if (!da && !db) return 0;
+        if (!da) return 1;
+        if (!db) return -1;
+        return db.localeCompare(da);
+      });
+    }
     return mapa;
   }, [filtrados]);
 
@@ -119,7 +134,12 @@ function PedidoCard({ pedido: p, onAbrir }: { pedido: PedidoResumo; onAbrir: () 
             {p.morada ? ` · ${p.morada}` : ""} · {new Date(p.created_at).toLocaleDateString("pt-PT")}
           </p>
         </div>
-        <span className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${p.estadoOperacional.cls}`}>{p.estadoOperacional.label}</span>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className={`rounded px-2 py-0.5 text-xs font-medium ${p.estadoOperacional.cls}`}>{p.estadoOperacional.label}</span>
+          {p.estadoOperacional.data && (
+            <span className="text-[10px] text-neutral-500">{new Date(p.estadoOperacional.data).toLocaleDateString("pt-PT")}</span>
+          )}
+        </div>
       </button>
 
       {p.info_falta && (

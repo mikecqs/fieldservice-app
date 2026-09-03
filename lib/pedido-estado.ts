@@ -47,6 +47,19 @@ export type GrupoPedido = "acao" | "andamento" | "concluido";
 const SERVICO_ESTADOS_CONCLUIDOS = new Set(["concluido", "cancelado", "nao_realizado"]);
 const ORCAMENTO_ESTADOS_CONCLUIDOS = new Set(["recusado", "cancelado"]);
 
+// "Data do estado atual" — a data-hora do ÚLTIMO evento (service_events/
+// budget_events) da entidade que decide o rótulo/grupo acima (nunca uma
+// segunda leitura independente): como o histórico é sempre aditivo e cada
+// transição regista sempre um evento, o evento mais recente da entidade É,
+// por definição, o momento em que ela entrou no estado atual — por isso
+// esta data atualiza sozinha sempre que o pedido muda de estado, sem
+// precisar de nenhuma coluna "atualizado_em". `ultimoEventoEm` é opcional
+// e calculado à parte (fora desta função pura, que não faz queries) só
+// pelos chamadores que já têm acesso a service_events/budget_events — ver
+// app/admin/pedidos/page.tsx. Sem isso (ex: ATENDIMENTO, que não tem
+// policy nenhuma nessas tabelas — ver secção 4 do CLAUDE.md), cai sempre
+// no fallback `pedido.created_at`.
+
 // Estado operacional REAL de um pedido — nunca um valor novo gravado na BD,
 // só a leitura, por esta ordem de prioridade, do que já existe em
 // budgets/services (que são a fonte da verdade de cada etapa). Assim o
@@ -63,14 +76,15 @@ const ORCAMENTO_ESTADOS_CONCLUIDOS = new Set(["recusado", "cancelado"]);
 // Visita Prévia já resolvida; só na ausência de um Serviço real é que o
 // Orçamento, e depois a própria Visita Prévia, decidem o rótulo.
 export function estadoOperacionalPedido(
-  pedido: { estado: string; info_falta: boolean },
-  budget: { estado: string } | undefined,
-  services: { estado: string; tipo?: string }[]
-): { label: string; cls: string; grupo: GrupoPedido } {
+  pedido: { estado: string; info_falta: boolean; created_at?: string },
+  budget: { estado: string; ultimoEventoEm?: string | null } | undefined,
+  services: { estado: string; tipo?: string; ultimoEventoEm?: string | null }[]
+): { label: string; cls: string; grupo: GrupoPedido; data: string | null } {
   // 'info_falta' pede sempre ação, seja qual for o progresso já feito a
   // jusante (mesmo caso arquivado/concluído) — só o AGRUPAMENTO é forçado
   // para "acao", o rótulo continua sempre a refletir o progresso real.
   const grupo = (g: GrupoPedido): GrupoPedido => (pedido.info_falta ? "acao" : g);
+  const fallback = pedido.created_at ?? null;
 
   const servicoReal = services.find((s) => s.tipo !== TIPO_VISITA_ORCAMENTO);
   if (servicoReal) {
@@ -78,6 +92,7 @@ export function estadoOperacionalPedido(
       label: SERVICO_LABEL[servicoReal.estado] ?? servicoReal.estado,
       cls: SERVICO_COLOR[servicoReal.estado] ?? "bg-neutral-800 text-neutral-300",
       grupo: grupo(SERVICO_ESTADOS_CONCLUIDOS.has(servicoReal.estado) ? "concluido" : "andamento"),
+      data: servicoReal.ultimoEventoEm ?? fallback,
     };
   }
   if (budget) {
@@ -85,6 +100,7 @@ export function estadoOperacionalPedido(
       label: ORCAMENTO_LABEL[budget.estado] ?? budget.estado,
       cls: ORCAMENTO_COLOR[budget.estado] ?? "bg-neutral-800 text-neutral-300",
       grupo: grupo(ORCAMENTO_ESTADOS_CONCLUIDOS.has(budget.estado) ? "concluido" : "andamento"),
+      data: budget.ultimoEventoEm ?? fallback,
     };
   }
   const visita = services[0];
@@ -93,15 +109,18 @@ export function estadoOperacionalPedido(
       label: SERVICO_LABEL[visita.estado] ?? visita.estado,
       cls: SERVICO_COLOR[visita.estado] ?? "bg-neutral-800 text-neutral-300",
       grupo: grupo(SERVICO_ESTADOS_CONCLUIDOS.has(visita.estado) ? "concluido" : "andamento"),
+      data: visita.ultimoEventoEm ?? fallback,
     };
   }
   if (pedido.estado === "arquivado") {
-    return { label: "Arquivado", cls: "bg-neutral-800 text-neutral-400", grupo: grupo("concluido") };
+    // Sem histórico de eventos ao nível do Pedido (arquivarPedido não
+    // regista nenhum) — fallback é sempre a data de criação, aproximada.
+    return { label: "Arquivado", cls: "bg-neutral-800 text-neutral-400", grupo: grupo("concluido"), data: fallback };
   }
   if (pedido.info_falta) {
-    return { label: "Informação em falta", cls: "bg-amber-500/15 text-amber-400", grupo: "acao" };
+    return { label: "Informação em falta", cls: "bg-amber-500/15 text-amber-400", grupo: "acao", data: fallback };
   }
-  return { label: "Novo", cls: "bg-neutral-800 text-neutral-200", grupo: "acao" };
+  return { label: "Novo", cls: "bg-neutral-800 text-neutral-200", grupo: "acao", data: fallback };
 }
 
 // Um pedido só pode ser decidido (arquivado, ou convertido em orçamento/
