@@ -2,14 +2,17 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { estadoOperacionalPedido } from "@/lib/pedido-estado";
 
-const ESTADOS_CONCLUIDOS = ["convertido", "arquivado"];
-
 // ATENDIMENTO só lê a própria tabela `requests` (ver policy "atendimento
 // reads requests" em schema.sql) mais a view segura
 // `requests_status_atendimento_view`, que devolve só o `estado` (texto) do
 // orçamento/serviço ligado a cada pedido — nunca valor, iva, materiais ou
-// faturação. O rótulo mostrado reutiliza a mesma função do Admin
-// (estadoOperacionalPedido), nunca um segundo sistema de estado.
+// faturação. O rótulo E o agrupamento (para ordenar concluídos para o fim)
+// reutilizam sempre a mesma função do Admin (estadoOperacionalPedido) —
+// antes esta página ordenava por requests.estado diretamente ('convertido'/
+// 'arquivado'), que não reflete o progresso real do Orçamento/Serviço
+// ligado (um pedido em 'orcamento' cujo Serviço já está concluído ficava
+// preso no topo; um pedido já 'convertido' mas ainda por agendar caía logo
+// para o fim) — mesmo bug já corrigido em PedidosLista.tsx (Admin).
 export default async function AtendimentoPedidosPage() {
   const supabase = createClient();
   const { data: pedidos } = await supabase
@@ -28,9 +31,20 @@ export default async function AtendimentoPedidosPage() {
 
   const estadoPorPedido = new Map((estados ?? []).map((e: any) => [e.request_id, e]));
 
-  const pedidosOrdenados = [...(pedidos ?? [])].sort((a: any, b: any) => {
-    const aConcluido = ESTADOS_CONCLUIDOS.includes(a.estado);
-    const bConcluido = ESTADOS_CONCLUIDOS.includes(b.estado);
+  const comEstado = (pedidos ?? []).map((p: any) => {
+    const e = estadoPorPedido.get(p.id);
+    const budget = e?.orcamento_estado ? { estado: e.orcamento_estado } : undefined;
+    // A view já devolve no máximo um Serviço por pedido (ver
+    // requests_status_atendimento_view em schema.sql); envolve-se num
+    // array só para bater certo com a assinatura partilhada com o Admin,
+    // que já lida com mais do que um.
+    const services = e?.servico_estado ? [{ estado: e.servico_estado }] : [];
+    return { pedido: p, estado: estadoOperacionalPedido(p, budget, services) };
+  });
+
+  const pedidosOrdenados = [...comEstado].sort((a, b) => {
+    const aConcluido = a.estado.grupo === "concluido";
+    const bConcluido = b.estado.grupo === "concluido";
     if (aConcluido === bConcluido) return 0;
     return aConcluido ? 1 : -1;
   });
@@ -51,15 +65,7 @@ export default async function AtendimentoPedidosPage() {
       </div>
 
       <div className="space-y-3">
-        {pedidosOrdenados.map((p: any) => {
-          const e = estadoPorPedido.get(p.id);
-          const budget = e?.orcamento_estado ? { estado: e.orcamento_estado } : undefined;
-          // A view já devolve no máximo um Serviço por pedido (ver
-          // requests_status_atendimento_view em schema.sql); envolve-se num
-          // array só para bater certo com a assinatura partilhada com o
-          // Admin, que já lida com mais do que um.
-          const services = e?.servico_estado ? [{ estado: e.servico_estado }] : [];
-          const estado = estadoOperacionalPedido(p, budget, services);
+        {pedidosOrdenados.map(({ pedido: p, estado }) => {
           return (
             <Link
               key={p.id}

@@ -31,6 +31,22 @@ const ORCAMENTO_LABEL: Record<string, string> = {
   cancelado: "Orçamento cancelado",
 };
 
+// Agrupamento operacional para as listas de Pedidos (Admin e ATENDIMENTO) —
+// única fonte de verdade, calculada sempre na MESMA passagem que o rótulo
+// abaixo (nunca uma segunda leitura em separado de requests.estado, que é
+// só um estado grosseiro do pedido em si e nunca reflete o progresso real
+// do Orçamento/Serviço ligado a ele: fica em 'orcamento' para sempre depois
+// de criado o orçamento, mesmo já o Serviço resultante estando concluído;
+// e passa a 'convertido' logo que o Serviço é criado, mesmo ainda por
+// agendar). Duas listas (PedidosLista.tsx e app/atendimento/pedidos/
+// page.tsx) já tinham cada uma a sua própria regra de agrupamento shallow
+// baseada em requests.estado, que divergia deste rótulo — corrigido para
+// as duas usarem sempre este único campo.
+export type GrupoPedido = "acao" | "andamento" | "concluido";
+
+const SERVICO_ESTADOS_CONCLUIDOS = new Set(["concluido", "cancelado", "nao_realizado"]);
+const ORCAMENTO_ESTADOS_CONCLUIDOS = new Set(["recusado", "cancelado"]);
+
 // Estado operacional REAL de um pedido — nunca um valor novo gravado na BD,
 // só a leitura, por esta ordem de prioridade, do que já existe em
 // budgets/services (que são a fonte da verdade de cada etapa). Assim o
@@ -50,25 +66,42 @@ export function estadoOperacionalPedido(
   pedido: { estado: string; info_falta: boolean },
   budget: { estado: string } | undefined,
   services: { estado: string; tipo?: string }[]
-): { label: string; cls: string } {
+): { label: string; cls: string; grupo: GrupoPedido } {
+  // 'info_falta' pede sempre ação, seja qual for o progresso já feito a
+  // jusante (mesmo caso arquivado/concluído) — só o AGRUPAMENTO é forçado
+  // para "acao", o rótulo continua sempre a refletir o progresso real.
+  const grupo = (g: GrupoPedido): GrupoPedido => (pedido.info_falta ? "acao" : g);
+
   const servicoReal = services.find((s) => s.tipo !== TIPO_VISITA_ORCAMENTO);
   if (servicoReal) {
-    return { label: SERVICO_LABEL[servicoReal.estado] ?? servicoReal.estado, cls: SERVICO_COLOR[servicoReal.estado] ?? "bg-neutral-800 text-neutral-300" };
+    return {
+      label: SERVICO_LABEL[servicoReal.estado] ?? servicoReal.estado,
+      cls: SERVICO_COLOR[servicoReal.estado] ?? "bg-neutral-800 text-neutral-300",
+      grupo: grupo(SERVICO_ESTADOS_CONCLUIDOS.has(servicoReal.estado) ? "concluido" : "andamento"),
+    };
   }
   if (budget) {
-    return { label: ORCAMENTO_LABEL[budget.estado] ?? budget.estado, cls: ORCAMENTO_COLOR[budget.estado] ?? "bg-neutral-800 text-neutral-300" };
+    return {
+      label: ORCAMENTO_LABEL[budget.estado] ?? budget.estado,
+      cls: ORCAMENTO_COLOR[budget.estado] ?? "bg-neutral-800 text-neutral-300",
+      grupo: grupo(ORCAMENTO_ESTADOS_CONCLUIDOS.has(budget.estado) ? "concluido" : "andamento"),
+    };
   }
   const visita = services[0];
   if (visita) {
-    return { label: SERVICO_LABEL[visita.estado] ?? visita.estado, cls: SERVICO_COLOR[visita.estado] ?? "bg-neutral-800 text-neutral-300" };
+    return {
+      label: SERVICO_LABEL[visita.estado] ?? visita.estado,
+      cls: SERVICO_COLOR[visita.estado] ?? "bg-neutral-800 text-neutral-300",
+      grupo: grupo(SERVICO_ESTADOS_CONCLUIDOS.has(visita.estado) ? "concluido" : "andamento"),
+    };
   }
   if (pedido.estado === "arquivado") {
-    return { label: "Arquivado", cls: "bg-neutral-800 text-neutral-400" };
+    return { label: "Arquivado", cls: "bg-neutral-800 text-neutral-400", grupo: grupo("concluido") };
   }
   if (pedido.info_falta) {
-    return { label: "Informação em falta", cls: "bg-amber-500/15 text-amber-400" };
+    return { label: "Informação em falta", cls: "bg-amber-500/15 text-amber-400", grupo: "acao" };
   }
-  return { label: "Novo", cls: "bg-neutral-800 text-neutral-200" };
+  return { label: "Novo", cls: "bg-neutral-800 text-neutral-200", grupo: "acao" };
 }
 
 // Um pedido só pode ser decidido (arquivado, ou convertido em orçamento/
