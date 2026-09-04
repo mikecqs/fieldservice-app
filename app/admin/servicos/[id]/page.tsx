@@ -386,7 +386,29 @@ export default async function ServicoDetalhePage(props: { params: Promise<{ id: 
                   <span>{v.data}</span>
                   <span>{v.resultado ?? "em curso"}</span>
                 </div>
+                {v.apos_correcao && (
+                  <span className="mb-1 inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                    Reabertura após correção
+                  </span>
+                )}
                 {v.trabalho_realizado && <p className="text-neutral-200">{v.trabalho_realizado}</p>}
+                {v.justificacao_correcao && (
+                  <p className="mt-1 text-xs text-amber-300">
+                    <span className="font-semibold">Justificação da correção:</span> {v.justificacao_correcao}
+                  </p>
+                )}
+                {(v.cliente_pagou != null || v.fatura_com_nif != null) && (
+                  <div className="mt-2 space-y-0.5 border-t border-neutral-800 pt-2 text-xs text-neutral-400">
+                    {v.cliente_pagou != null && (
+                      <p>
+                        Pagamento reportado pelo técnico: {v.cliente_pagou ? `Sim — ${v.meio_pagamento ?? "—"}` : "Não"}
+                      </p>
+                    )}
+                    {v.fatura_com_nif != null && (
+                      <p>Fatura com NIF: {v.fatura_com_nif ? `Sim — ${v.nif ?? "—"}` : "Não"}</p>
+                    )}
+                  </div>
+                )}
                 {(v.visit_materials_used ?? []).length > 0 && (
                   <div className="mt-2 space-y-1 border-t border-neutral-800 pt-2">
                     {(v.visit_materials_used ?? []).map((m: any, i: number) => {

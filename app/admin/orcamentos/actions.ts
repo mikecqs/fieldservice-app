@@ -9,6 +9,7 @@ import { registarEventoServico } from "@/lib/service-events";
 import { registarEventoOrcamento } from "@/lib/budget-events";
 import { podeEditarItensOrcamento, podeMarcarEnviado, podeAceitarOrcamento, podeAvancarParaEstado } from "@/lib/orcamento-estado";
 import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
+import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
 
 export async function criarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -373,6 +374,21 @@ export async function aceitarOrcamento(formData: FormData) {
     throw new Error("Este orçamento já foi decidido (aceite, recusado ou cancelado) e não pode ser aceite outra vez.");
   }
 
+  // Agendar já na aceitação é opcional — sem estes 3 campos o serviço fica
+  // "por_agendar" como sempre (agenda-se depois, na Agenda ou na ficha do
+  // Serviço). Validado antes de criar nada, para nunca ficar um serviço
+  // criado com um agendamento inválido a meio.
+  const data_agendada = String(formData.get("data_agendada") || "") || null;
+  const hora_agendada = String(formData.get("hora_agendada") || "") || null;
+  const hora_fim_agendada = String(formData.get("hora_fim_agendada") || "") || null;
+  const tecnico_id = String(formData.get("tecnico_id") || "") || null;
+  if (data_agendada && (!hora_agendada || !hora_fim_agendada)) {
+    throw new Error("Hora de início e hora de fim são ambas obrigatórias para agendar.");
+  }
+  if (hora_agendada && hora_fim_agendada && hora_fim_agendada <= hora_agendada) {
+    throw new Error("A hora de término deve ser depois da hora de início.");
+  }
+
   const { total: valor } = calcularOrcamento(budget.budget_items ?? [], budget.iva_percent);
 
   // Quando o orçamento veio de um pedido, a morada escolhida nesse pedido
@@ -425,6 +441,29 @@ export async function aceitarOrcamento(formData: FormData) {
     tipo: "aceite",
     descricao: "Orçamento aceite — serviço criado.",
   });
+
+  // Reaproveita exatamente a mesma escrita/regra de transição de
+  // atualizarAgendamento (ficha do Serviço) e criarOuAgendarNoPopup
+  // (Agenda) — nunca uma terceira versão da mesma lógica. Sem data, o
+  // serviço fica "por_agendar" (já aparece em "Serviços por agendar" no
+  // Dashboard).
+  if (data_agendada && hora_agendada && hora_fim_agendada) {
+    await escreverAgendamentoServico(supabase, {
+      serviceId: service.id,
+      dataAgendada: data_agendada,
+      horaAgendada: hora_agendada,
+      horaFimAgendada: hora_fim_agendada,
+    });
+    if (tecnico_id) {
+      await supabase.from("service_technicians").insert({ service_id: service.id, user_id: tecnico_id });
+    }
+    await registarEventoServico(supabase, {
+      organizationId,
+      serviceId: service.id,
+      tipo: "agendado",
+      descricao: `Agendado para ${data_agendada} ${hora_agendada}–${hora_fim_agendada}.`,
+    });
+  }
 
   revalidatePath("/admin/orcamentos");
   redirect(`/admin/servicos/${service.id}`);

@@ -28,7 +28,7 @@ export function PedidoDetalheConteudo({
   // leitura, com um link para "abrir página completa" para quem quiser agir.
   acoes?: React.ReactNode;
 }) {
-  const { pedido, budget, budgetEvents, services, serviceEventsByServiceId } = detalhe;
+  const { pedido, budget, budgetEvents, services, serviceEventsByServiceId, requestEvents } = detalhe;
   const listaServicos: any[] = services ?? [];
   const estadoOperacional = estadoOperacionalPedido(pedido, budget ?? undefined, listaServicos);
 
@@ -70,6 +70,13 @@ export function PedidoDetalheConteudo({
         Origem: {pedido.origem} · Estado do pedido: {ESTADO_PEDIDO_LABEL[pedido.estado] ?? pedido.estado} · Criado em{" "}
         {new Date(pedido.created_at).toLocaleString("pt-PT")}
       </p>
+
+      {requestEvents && (
+        <div className="mb-4 rounded-lg border border-neutral-800 p-3">
+          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-400">Histórico de edições</h4>
+          <HistoricoEventos eventos={requestEvents} />
+        </div>
+      )}
 
       {acoes && <div className="mb-4">{acoes}</div>}
 

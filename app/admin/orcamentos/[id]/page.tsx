@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FileText, MessageCircle, Mail, Copy } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getOrgId } from "@/lib/auth";
 import { calcularOrcamento } from "@/lib/orcamento";
-import { removerItem, marcarEnviado, avancarEstado, aceitarOrcamento, duplicarOrcamento } from "../actions";
+import { removerItem, marcarEnviado, avancarEstado, duplicarOrcamento } from "../actions";
 import { AgendarVisitaPreviaButton } from "./AgendarVisitaPreviaButton";
+import { AceitarOrcamentoForm } from "./AceitarOrcamentoForm";
 import { AdicionarItemForm } from "./AdicionarItemForm";
 import { ESTADOS_ORCAMENTO_TERMINAIS } from "@/lib/orcamento-estado";
 import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_COLOR_FALLBACK } from "@/lib/orcamento-visual";
@@ -13,7 +15,8 @@ import { TIPO_LABEL } from "@/lib/orcamento-item-tipo";
 export default async function OrcamentoDetalhePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const supabase = await createClient();
-  const [{ data: orcamento }, { data: catalogo }, { data: eventos }] = await Promise.all([
+  const organizationId = await getOrgId();
+  const [{ data: orcamento }, { data: catalogo }, { data: eventos }, { data: tecnicos }] = await Promise.all([
     supabase
       .from("budgets")
       .select("*, clients(nome, telefone, email), budget_items(*)")
@@ -25,9 +28,20 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
       .select("tipo, descricao, created_at, profiles(nome)")
       .eq("budget_id", params.id)
       .order("created_at", { ascending: false }),
+    supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
   ]);
 
   if (!orcamento) notFound();
+
+  // budgets.service_id nunca teve foreign key a services (é preenchido só
+  // depois de aceite) — um serviço apagado por fora da app deixaria este id
+  // órfão e o link "Ver serviço criado" dava 404. Confirma sempre que o
+  // serviço ainda existe antes de mostrar o link.
+  let servicoCriadoExiste = false;
+  if (orcamento.service_id) {
+    const { data: servicoCriado } = await supabase.from("services").select("id").eq("id", orcamento.service_id).maybeSingle();
+    servicoCriadoExiste = !!servicoCriado;
+  }
 
   const items = orcamento.budget_items ?? [];
   const { subtotal, ivaValor, total } = calcularOrcamento(items, orcamento.iva_percent);
@@ -116,12 +130,7 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
                 </button>
               </form>
             )}
-            <form action={aceitarOrcamento}>
-              <input type="hidden" name="id" value={orcamento.id} />
-              <button className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-800">
-                Aceite → criar serviço
-              </button>
-            </form>
+            <AceitarOrcamentoForm orcamentoId={orcamento.id} tecnicos={tecnicos ?? []} />
             {/* Alternativa ao "Aceite → criar serviço": para quando o cliente
                 concorda com o valor preliminar mas ainda falta confirmar
                 cablagens/acessos/medidas no local antes de fechar. Nunca
@@ -145,12 +154,16 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
         )}
 
         {orcamento.estado === "aceite" && orcamento.service_id && (
-          <Link
-            href={`/admin/servicos/${orcamento.service_id}`}
-            className="mt-4 inline-block text-sm text-neutral-200 underline"
-          >
-            Ver serviço criado →
-          </Link>
+          servicoCriadoExiste ? (
+            <Link
+              href={`/admin/servicos/${orcamento.service_id}`}
+              className="mt-4 inline-block text-sm text-neutral-200 underline"
+            >
+              Ver serviço criado →
+            </Link>
+          ) : (
+            <p className="mt-4 text-sm text-neutral-500">O serviço criado a partir deste orçamento já não existe.</p>
+          )
         )}
       </div>
 

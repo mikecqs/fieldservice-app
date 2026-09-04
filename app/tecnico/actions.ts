@@ -77,6 +77,11 @@ export async function concluirVisita(input: {
   equipamentoInstalado?: string | null;
   quantidadeInstalada?: number | null;
   testesRealizados?: string | null;
+  clientePagou?: boolean | null;
+  meioPagamento?: string | null;
+  faturaComNif?: boolean | null;
+  nif?: string | null;
+  justificacaoCorrecao?: string | null;
 }) {
   const supabase = await createClient();
 
@@ -102,6 +107,11 @@ export async function concluirVisita(input: {
     p_equipamento_instalado: input.equipamentoInstalado ?? null,
     p_quantidade_instalada: input.quantidadeInstalada ?? null,
     p_testes_realizados: input.testesRealizados ?? null,
+    p_cliente_pagou: input.clientePagou ?? null,
+    p_meio_pagamento: input.meioPagamento ?? null,
+    p_fatura_com_nif: input.faturaComNif ?? null,
+    p_nif: input.nif ?? null,
+    p_justificacao_correcao: input.justificacaoCorrecao ?? null,
   });
   if (error) throw new Error(error.message);
   revalidatePath(`/tecnico/servico/${input.serviceId}`);
