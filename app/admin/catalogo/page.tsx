@@ -60,10 +60,19 @@ export default async function CatalogoPage(props: { searchParams: Promise<{ q?: 
                 <span className="font-medium text-neutral-200">
                   {Number(i.preco_venda).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </span>
-                <form action={removerItemCatalogo}>
-                  <input type="hidden" name="id" value={i.id} />
-                  <button className="text-xs text-red-400 hover:underline">remover</button>
-                </form>
+                <details className="relative">
+                  <summary className="list-none cursor-pointer text-xs text-red-400 hover:underline">remover</summary>
+                  <form
+                    action={removerItemCatalogo}
+                    className="absolute right-0 z-10 mt-1 w-56 rounded-lg border border-neutral-800 bg-neutral-900 p-3 shadow-lg"
+                  >
+                    <input type="hidden" name="id" value={i.id} />
+                    <p className="mb-2 text-xs text-neutral-300">Remover "{i.referencia}" do catálogo?</p>
+                    <button className="w-full rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
+                      Confirmar remoção
+                    </button>
+                  </form>
+                </details>
               </div>
             </div>
           ))}

@@ -41,15 +41,18 @@ export async function criarEquipamento(formData: FormData) {
   revalidatePath(`/admin/clientes/${client_id}`);
 }
 
+// Soft delete (auditoria de segurança) — antes apagava a linha E a
+// fotografia do Storage de imediato, sem confirmação nem forma de
+// recuperar um clique em engano. Agora só marca "eliminado" (mesmo espírito
+// de profiles.ativo): desaparece da ficha do cliente (a query em page.tsx
+// filtra eliminado=false), mas a fotografia e o registo continuam
+// recuperáveis à mão na BD, nunca destruídos por esta ação.
 export async function removerEquipamento(formData: FormData) {
   const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const client_id = String(formData.get("client_id") || "");
   if (!id) return;
 
-  const { data: equip } = await supabase.from("client_equipment").select("foto_path").eq("id", id).single();
-  if (equip?.foto_path) await supabase.storage.from("equipamentos").remove([equip.foto_path]);
-
-  await supabase.from("client_equipment").delete().eq("id", id);
+  await supabase.from("client_equipment").update({ eliminado: true }).eq("id", id);
   revalidatePath(`/admin/clientes/${client_id}`);
 }

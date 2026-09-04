@@ -889,6 +889,131 @@ drop policy if exists "finance reads fechos storage" on storage.objects;
 create policy "finance reads fechos storage" on storage.objects for select
   using (bucket_id = 'fechos' and (storage.foldername(name))[1] = my_org()::text and my_role() = 'FINANCE');
 
+-- =============================================================================
+-- Auditoria de segurança — soft delete de client_equipment (nunca apagar a
+-- linha nem a fotografia do Storage de imediato ao clicar "remover" — sem
+-- confirmação nem forma de recuperar um clique em engano antes disto).
+-- =============================================================================
+alter table client_equipment add column if not exists eliminado boolean not null default false;
+
+-- =============================================================================
+-- Auditoria de segurança — trigger que regista sempre um evento em
+-- service_events quando services.faturacao_estado muda para 'faturado' ou
+-- 'liquidado', seja qual for o caminho do UPDATE (RPC ou direto). Antes,
+-- só as RPCs finance_marcar_faturado/finance_marcar_liquidado inseriam
+-- esse evento; um ADMIN podia sempre fazer UPDATE direto a
+-- faturacao_estado (RLS `for all` em services, decisão deliberada) sem
+-- deixar nenhum rasto. CREATE OR REPLACE das duas RPCs abaixo remove o
+-- insert manual duplicado (fica só a cargo do trigger, nunca duas fontes
+-- do mesmo evento).
+-- =============================================================================
+create or replace function finance_marcar_faturado(p_service_id uuid, p_valor numeric, p_referencia text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_estado text;
+  v_faturacao_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+  if p_referencia is null or length(trim(p_referencia)) = 0 then
+    raise exception 'Referência da fatura é obrigatória.';
+  end if;
+
+  select organization_id, estado, faturacao_estado into v_org_id, v_estado, v_faturacao_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_estado != 'concluido' or v_faturacao_estado != 'por_faturar' then
+    raise exception 'Este serviço não está pronto para faturar.';
+  end if;
+
+  update services
+    set faturacao_estado = 'faturado',
+        faturacao_valor = p_valor,
+        faturacao_referencia = p_referencia,
+        faturacao_data = current_date,
+        faturacao_utilizador = auth.uid()
+    where id = p_service_id;
+end;
+$$;
+grant execute on function finance_marcar_faturado(uuid, numeric, text) to authenticated;
+
+create or replace function finance_marcar_liquidado(p_service_id uuid, p_metodo_pagamento text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_faturacao_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+  if p_metodo_pagamento is null or length(trim(p_metodo_pagamento)) = 0 then
+    raise exception 'Método de pagamento é obrigatório.';
+  end if;
+
+  select organization_id, faturacao_estado into v_org_id, v_faturacao_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_faturacao_estado != 'faturado' then
+    raise exception 'Este serviço não está pronto para liquidar.';
+  end if;
+
+  update services
+    set faturacao_estado = 'liquidado',
+        faturacao_metodo_pagamento = p_metodo_pagamento,
+        faturacao_liquidado_data = current_date,
+        faturacao_liquidado_utilizador = auth.uid()
+    where id = p_service_id;
+end;
+$$;
+grant execute on function finance_marcar_liquidado(uuid, text) to authenticated;
+
+create or replace function log_faturacao_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.faturacao_estado is distinct from old.faturacao_estado
+     and new.faturacao_estado in ('faturado', 'liquidado') then
+    insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+    values (
+      new.organization_id, new.id, new.faturacao_estado,
+      case
+        when new.faturacao_estado = 'faturado' then
+          'Faturado — ref. ' || coalesce(new.faturacao_referencia, '—') || ', valor ' || coalesce(new.faturacao_valor::text, '—') || '€.'
+        else
+          'Liquidado — ' || coalesce(new.faturacao_metodo_pagamento, '—') || '.'
+      end,
+      auth.uid()
+    );
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists services_log_faturacao_change on services;
+create trigger services_log_faturacao_change
+  after update on services
+  for each row
+  execute function log_faturacao_change();
+
 commit;
 
 -- =============================================================================
@@ -933,4 +1058,12 @@ commit;
 --     (a fila continua a guardar tudo, só o envio em tempo quase real é
 --     que não dispara; o cron de recuperação também não consegue nada sem
 --     o segredo configurado).
+--   - Auditoria de segurança — soft delete de client_equipment: só a
+--     coluna acima (ver bloco antes do "commit;"), sem tabela nova. O
+--     resto (Server Action removerEquipamento a marcar em vez de apagar, a
+--     query da ficha do cliente a filtrar eliminado=false, a confirmação
+--     nos 3 botões "remover" da app) é só código.
+--   - Auditoria de segurança — trigger services_log_faturacao_change: só
+--     o CREATE OR REPLACE das duas RPCs de faturação (sem o insert manual
+--     duplicado) + a função/trigger novos acima — sem tabela nova.
 -- =============================================================================
