@@ -25,8 +25,8 @@ export async function GET(request: Request) {
     return fail("Estado de autorização inválido.");
   }
 
-  const nonceCookie = cookies().get("google_sheets_oauth_nonce")?.value;
-  cookies().delete("google_sheets_oauth_nonce");
+  const nonceCookie = (await cookies()).get("google_sheets_oauth_nonce")?.value;
+  (await cookies()).delete("google_sheets_oauth_nonce");
   if (!nonceCookie || nonceCookie !== parsed.nonce || parsed.organizationId !== organizationId) {
     return fail("Não foi possível confirmar o pedido de autorização.");
   }
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     }
     const email = await fetchGoogleUserEmail(tokens.access_token);
 
-    const supabase = createClient();
+    const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();

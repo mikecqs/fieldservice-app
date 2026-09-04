@@ -2,12 +2,13 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { criarOrcamento } from "../actions";
 
-export default async function NovoOrcamentoPage({
-  searchParams,
-}: {
-  searchParams: { client_id?: string };
-}) {
-  const supabase = createClient();
+export default async function NovoOrcamentoPage(
+  props: {
+    searchParams: Promise<{ client_id?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const { data: clients } = await supabase.from("clients").select("id, nome").order("nome");
 
   return (

@@ -19,7 +19,7 @@ export async function agendarServicoExistente(input: {
   tecnicoId?: string | null;
 }) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   if (!input.existingServiceId) {
     throw new Error("Seleciona o serviço a agendar.");

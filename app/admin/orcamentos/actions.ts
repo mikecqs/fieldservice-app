@@ -12,7 +12,7 @@ import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
 
 export async function criarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return;
 
@@ -48,7 +48,7 @@ export async function criarOrcamento(formData: FormData) {
 // createAdminClient().
 export async function duplicarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -103,7 +103,7 @@ type NovoItemOrcamento = { tipo: string; descricao: string; qtd: number; valor_u
 // versões diferentes da mesma regra: quantidade/valor têm de ser >= 0 (BLOCO
 // 14/15) e o orçamento só pode ser editado em 'rascunho' (podeEditarItensOrcamento).
 async function inserirItensOrcamento(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
   budgetId: string,
   itens: NovoItemOrcamento[]
@@ -134,7 +134,7 @@ async function inserirItensOrcamento(
 
 export async function adicionarItem(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const budget_id = String(formData.get("budget_id") || "");
   const tipo = String(formData.get("tipo") || "");
   const descricao = String(formData.get("descricao") || "");
@@ -155,7 +155,7 @@ export async function adicionarItem(formData: FormData) {
 // exatamente como qualquer outra (removerItem já cobre isso, sem alteração).
 export async function adicionarItensCatalogo(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const budget_id = String(formData.get("budget_id") || "");
   const catalogIds = formData.getAll("catalog_item_id").map(String).filter(Boolean);
   if (!budget_id || catalogIds.length === 0) return;
@@ -178,7 +178,7 @@ export async function adicionarItensCatalogo(formData: FormData) {
 }
 
 export async function removerItem(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const budget_id = String(formData.get("budget_id") || "");
   if (!id) return;
@@ -201,7 +201,7 @@ export async function removerItem(formData: FormData) {
 // não só escondida atrás do botão.
 export async function marcarEnviado(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -245,7 +245,7 @@ const AVANCAR_ESTADO_EVENTO: Record<string, "followup" | "recusado" | "cancelado
 // aqui também, não só pelo botão estar ou não visível.
 export async function avancarEstado(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const estado = String(formData.get("estado") || "");
   if (!id || !estado) return;
@@ -288,7 +288,7 @@ export async function avancarEstado(formData: FormData) {
 // já aceite, recusado ou cancelado.
 export async function agendarVisitaPreviaDoOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -356,7 +356,7 @@ export async function agendarVisitaPreviaDoOrcamento(formData: FormData) {
 // orçamento.
 export async function aceitarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 

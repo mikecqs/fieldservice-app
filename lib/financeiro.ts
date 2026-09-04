@@ -50,7 +50,7 @@ export function formatEuros(v: number) {
 // aplicado explicitamente a cada query. Com o cliente normal (sessão do
 // utilizador), a RLS já trata disto e o parâmetro pode ser omitido.
 export async function getFinanceiroStats(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   desde: string,
   ate: string,
   organizationId?: string

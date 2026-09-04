@@ -6,7 +6,7 @@ import { getOrgId } from "@/lib/auth";
 
 export async function criarEquipamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const client_id = String(formData.get("client_id") || "");
   const address_id = String(formData.get("address_id") || "") || null;
   const equipamento = String(formData.get("equipamento") || "").trim();
@@ -42,7 +42,7 @@ export async function criarEquipamento(formData: FormData) {
 }
 
 export async function removerEquipamento(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const client_id = String(formData.get("client_id") || "");
   if (!id) return;

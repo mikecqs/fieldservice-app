@@ -13,7 +13,7 @@ import { gerarPdfFechoSemBloquear } from "@/lib/pdf-fecho";
 // id da visita passado por prop estivesse desatualizado/nulo, submeter()
 // saía em silêncio sem gravar nem avisar o técnico de nada).
 export async function obterVisitaAberta(serviceId: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("visits")
     .select("id")
@@ -37,7 +37,7 @@ export async function obterVisitaAberta(serviceId: string) {
 // tech_finish_visit a partir da opção que ficar selecionada no momento de
 // confirmar — nunca a partir deste cálculo.
 export async function sugerirMaoObraDaVisita(visitId: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("visits")
     .select("hora_inicio_real")
@@ -55,7 +55,7 @@ export async function sugerirMaoObraDaVisita(visitId: string) {
 }
 
 export async function iniciarServico(serviceId: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("tech_start_service", { p_service_id: serviceId });
   if (error) throw new Error(error.message);
   revalidatePath(`/tecnico/servico/${serviceId}`);
@@ -78,7 +78,7 @@ export async function concluirVisita(input: {
   quantidadeInstalada?: number | null;
   testesRealizados?: string | null;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Materiais chegam de um formulário do técnico como objeto tipado (não
   // FormData), mas continuam a ser input do cliente — qtd/precoUnit

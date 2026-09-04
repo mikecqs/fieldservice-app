@@ -24,7 +24,7 @@ export default async function ComprasPage() {
   // basta remover este redirect.
   redirect("/admin/servicos");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: compras } = await supabase
     .from("purchases")
     .select("id, descricao, fornecedor, estado, data_prevista, service_id, purchase_items(nome, qtd), services(id, tipo, descricao, clients(nome))")

@@ -18,7 +18,7 @@ import { requireRole } from "@/lib/auth";
 // acima ser verdade em vez de uma suposição.
 export async function criarEmpresa(formData: FormData) {
   await requireRole(["SUPER_ADMIN"]);
-  const supabase = createClient();
+  const supabase = await createClient();
   const nome = String(formData.get("nome") || "");
   const nif = String(formData.get("nif") || "");
   if (!nome) return;
@@ -51,7 +51,7 @@ export async function criarAdminDaEmpresa(formData: FormData) {
     throw new Error(authError?.message || "Não foi possível criar o utilizador.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error: profileError } = await supabase.from("profiles").insert({
     id: authUser.user.id,
     organization_id: organizationId,
@@ -92,7 +92,7 @@ export async function criarAtendimentoDaEmpresa(formData: FormData) {
     throw new Error(authError?.message || "Não foi possível criar o utilizador.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error: profileError } = await supabase.from("profiles").insert({
     id: authUser.user.id,
     organization_id: organizationId,
@@ -116,7 +116,7 @@ export async function criarAtendimentoDaEmpresa(formData: FormData) {
 // for false — nunca apaga a empresa nem os dados, só bloqueia o acesso.
 export async function alterarEstadoEmpresa(formData: FormData) {
   await requireRole(["SUPER_ADMIN"]);
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const ativa = formData.get("ativa") === "true";
   if (!id) return;
@@ -130,7 +130,7 @@ export async function alterarEstadoEmpresa(formData: FormData) {
 // limitado à própria empresa do chamador (o Super Admin gere todas).
 export async function alterarEstadoUtilizador(formData: FormData) {
   await requireRole(["SUPER_ADMIN"]);
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const ativo = formData.get("ativo") === "true";
   if (!id) return;

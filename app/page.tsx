@@ -5,7 +5,7 @@ import { homeForRole } from "@/lib/auth";
 // A raiz do site só decide para onde mandar o utilizador — o middleware
 // já trata da proteção real; isto é só uma conveniência de navegação.
 export default async function Home() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

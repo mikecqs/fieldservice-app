@@ -35,7 +35,7 @@ function mesmosItensCompra(a: { nome: string; qtd: number }[], b: { nome: string
 
 export async function criarCompra(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const descricao = String(formData.get("descricao") || "");
   const fornecedor = String(formData.get("fornecedor") || "");
@@ -95,7 +95,7 @@ export async function criarCompra(formData: FormData) {
 // encomendada → recebida), agora também validadas aqui, não só pelo botão
 // que a página mostra.
 export async function avancarEstadoCompra(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const estado = String(formData.get("estado") || "");
   if (!id || !estado) return;
@@ -121,7 +121,7 @@ export async function avancarEstadoCompra(formData: FormData) {
 // podem ambos passar este SELECT antes de qualquer um gravar.
 export async function criarCompraRapida(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const nome = String(formData.get("nome") || "");
   const qtd = Number(formData.get("qtd") || 1);
   const service_id = String(formData.get("service_id") || "") || null;

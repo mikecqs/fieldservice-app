@@ -3,7 +3,7 @@ import { calcularOrcamento } from "@/lib/orcamento";
 import { OrcamentosLista } from "./OrcamentosLista";
 
 export default async function OrcamentosPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: orcamentos } = await supabase
     .from("budgets")
     .select("id, numero, estado, criado_em, enviado_em, iva_percent, clients(nome), budget_items(qtd, valor_unit)")

@@ -14,7 +14,7 @@ import { estadoOperacionalPedido } from "@/lib/pedido-estado";
 // preso no topo; um pedido já 'convertido' mas ainda por agendar caía logo
 // para o fim) — mesmo bug já corrigido em PedidosLista.tsx (Admin).
 export default async function AtendimentoPedidosPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pedidos } = await supabase
     .from("requests")
     .select("id, codigo, tipo, descricao, origem, estado, info_falta, created_at, clients(nome), client_addresses(label, endereco)")

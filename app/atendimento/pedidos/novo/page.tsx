@@ -4,7 +4,7 @@ import { NovoPedidoForm } from "@/components/pedidos/NovoPedidoForm";
 import { TIPOS_SERVICO as TIPOS, ORIGENS_PEDIDO as ORIGENS } from "@/lib/pedido-opcoes";
 
 export default async function AtendimentoNovoPedidoPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: clients } = await supabase
     .from("clients")

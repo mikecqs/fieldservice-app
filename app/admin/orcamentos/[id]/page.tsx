@@ -10,8 +10,9 @@ import { ESTADOS_ORCAMENTO_TERMINAIS } from "@/lib/orcamento-estado";
 import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_COLOR_FALLBACK } from "@/lib/orcamento-visual";
 import { TIPO_LABEL } from "@/lib/orcamento-item-tipo";
 
-export default async function OrcamentoDetalhePage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function OrcamentoDetalhePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const [{ data: orcamento }, { data: catalogo }, { data: eventos }] = await Promise.all([
     supabase
       .from("budgets")

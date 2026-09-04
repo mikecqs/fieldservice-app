@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 
 export async function subscreverPush(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const organizationId = await getOrgId();
   const {
     data: { user },
@@ -24,6 +24,6 @@ export async function subscreverPush(subscription: { endpoint: string; keys: { p
 }
 
 export async function cancelarSubscricaoPush(endpoint: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
 }

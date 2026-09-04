@@ -17,7 +17,7 @@ import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
 // sempre associado ao orçamento (request_id), e o próprio estado do pedido
 // reflete o que aconteceu — nunca fica por atualizar à mão.
 export async function criarOrcamentoDePedido(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
   requestId: string,
   clientId: string
@@ -40,7 +40,7 @@ export async function criarOrcamentoDePedido(
 // sempre o serviço (address_id), revalidada aqui contra o cliente do pedido
 // — nunca só confiada no que já foi validado na criação do pedido.
 async function criarServicoDePedido(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
   pedido: { id: string; client_id: string; address_id: string; tipo: string; descricao: string },
   // Onda 3 (Etapa 9) — só o caminho "Agendamento" (dentro de criarPedido,
@@ -95,7 +95,7 @@ async function criarServicoDePedido(
 // "concluido" é que a ficha do Serviço oferece gerar o Orçamento a partir
 // dela (podeGerarOrcamentoDeVisita, lib/servico-estado.ts).
 async function criarVisitaOrcamentoDePedido(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   organizationId: string,
   pedido: { id: string; client_id: string; address_id: string; descricao: string }
 ) {
@@ -141,7 +141,7 @@ async function criarVisitaOrcamentoDePedido(
 // acesso a orçamentos nem a nenhuma página /admin/*.
 export async function criarPedido(formData: FormData) {
   const { organizationId, role } = await getOrgIdAndRole();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const client_id = String(formData.get("client_id") || "");
   const address_id = String(formData.get("address_id") || "");
@@ -241,7 +241,7 @@ export async function criarPedido(formData: FormData) {
 // Resposta "Sim" à pergunta "é necessário orçamento?".
 export async function decidirComOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const requestId = String(formData.get("id") || "");
   const clientId = String(formData.get("client_id") || "");
   if (!requestId || !clientId) return;
@@ -264,7 +264,7 @@ export async function decidirComOrcamento(formData: FormData) {
 // associado ao serviço através de request_id.
 export async function decidirSemOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const requestId = String(formData.get("id") || "");
   if (!requestId) return;
 
@@ -288,7 +288,7 @@ export async function decidirSemOrcamento(formData: FormData) {
 // Deixa o Admin acrescentar a informação que faltava ao pedido e limpa o
 // alerta (info_falta) — é o que faz o pedido sair de "Atenção".
 export async function resolverInfoPedido(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const infoAdicional = String(formData.get("info_adicional") || "").trim();
   if (!id) return;
@@ -305,7 +305,7 @@ export async function resolverInfoPedido(formData: FormData) {
 }
 
 export async function arquivarPedido(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -335,7 +335,7 @@ export async function arquivarPedido(formData: FormData) {
 // depois dela). Ordenada por `created_at` ascendente para a página mostrar
 // sempre o percurso pela ordem em que aconteceu, sem esconder nada.
 export async function obterDetalhePedido(id: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: pedido } = await supabase
     .from("requests")
@@ -390,7 +390,7 @@ export async function obterDetalhePedido(id: string) {
 // mostra este botão manual como rede de segurança.
 export async function converterEmOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const requestId = String(formData.get("id") || "");
   const clientId = String(formData.get("client_id") || "");
   if (!requestId || !clientId) return;

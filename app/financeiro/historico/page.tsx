@@ -11,7 +11,7 @@ const EVENTO_LABEL: Record<string, string> = {
 // correção, faturação, liquidação) — não o histórico operacional completo
 // (esse é só para Admin, em /admin/servicos/[id]).
 export default async function HistoricoFinanceiroPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: eventos } = await supabase
     .from("service_events")

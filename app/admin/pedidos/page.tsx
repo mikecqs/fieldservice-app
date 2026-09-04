@@ -5,7 +5,7 @@ import { estadoOperacionalPedido } from "@/lib/pedido-estado";
 import { PedidosLista, type PedidoResumo } from "./PedidosLista";
 
 export default async function PedidosPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pedidos } = await supabase
     .from("requests")
     .select("id, codigo, tipo, descricao, origem, info_falta, estado, created_at, clients(id, nome, codigo), client_addresses(label, endereco)")

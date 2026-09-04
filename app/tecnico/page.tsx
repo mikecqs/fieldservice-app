@@ -11,7 +11,7 @@ import { rotuloTipoServico } from "@/lib/servico-estado";
 // esta página fosse alterada por engano para ler de "services" diretamente,
 // a query simplesmente devolveria zero linhas, nunca dados de mais.
 export default async function AgendaTecnicoPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const hoje = new Date().toISOString().slice(0, 10);
 
   const { data: servicos } = await supabase

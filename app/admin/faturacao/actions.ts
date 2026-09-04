@@ -9,7 +9,7 @@ import { METODOS_PAGAMENTO } from "@/lib/faturacao-opcoes";
 // finance_marcar_faturado em schema.sql, que valida permissão e estado
 // sempre no próprio Postgres, nunca só no frontend.
 export async function marcarFaturado(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const id = String(formData.get("id") || "");
   const faturacao_valor = Number(formData.get("faturacao_valor") || 0);
@@ -43,7 +43,7 @@ export async function marcarFaturado(formData: FormData) {
 // finance_marcar_liquidado valida permissão e que faturacao_estado já é
 // 'faturado' sempre no próprio Postgres, nunca só no frontend.
 export async function marcarLiquidado(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const id = String(formData.get("id") || "");
   const metodo_pagamento = String(formData.get("metodo_pagamento") || "");

@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { NovoPedidoForm } from "@/components/pedidos/NovoPedidoForm";
 import { TIPOS_SERVICO as TIPOS, ORIGENS_PEDIDO as ORIGENS } from "@/lib/pedido-opcoes";
 
-export default async function NovoPedidoPage({ searchParams }: { searchParams: { clientId?: string } }) {
-  const supabase = createClient();
+export default async function NovoPedidoPage(props: { searchParams: Promise<{ clientId?: string }> }) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
 
   const { data: clients } = await supabase
     .from("clients")
