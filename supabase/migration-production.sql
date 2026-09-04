@@ -1025,6 +1025,419 @@ update storage.buckets
   set allowed_mime_types = array['image/jpeg','image/png','image/webp','image/heic','image/heif']
   where id = 'equipamentos';
 
+-- =============================================================================
+-- Pedido do utilizador (04-05/09): pagamento reportado pelo técnico no fecho
+-- (+ "fatura com NIF"), MB Way como novo meio de pagamento, e correção de
+-- serviço rejeitado sem perda de dados (apos_correcao/justificacao_correcao
+-- em visits — o fecho anterior serve de base para tudo o que o técnico
+-- deixar em branco no refecho; só a justificação passa a obrigatória).
+-- =============================================================================
+alter table visits add column if not exists cliente_pagou boolean;
+alter table visits add column if not exists meio_pagamento text;
+alter table visits drop constraint if exists visits_meio_pagamento_check;
+alter table visits add constraint visits_meio_pagamento_check
+  check (meio_pagamento in ('Numerário','Transferência Bancária','Multibanco','Cheque','MB Way'));
+alter table visits add column if not exists fatura_com_nif boolean;
+alter table visits add column if not exists nif text;
+alter table visits add column if not exists apos_correcao boolean not null default false;
+alter table visits add column if not exists justificacao_correcao text;
+
+alter table services drop constraint if exists services_faturacao_metodo_pagamento_check;
+alter table services add constraint services_faturacao_metodo_pagamento_check
+  check (faturacao_metodo_pagamento in ('Numerário','Transferência Bancária','Multibanco','Cheque','MB Way'));
+
+-- Faltava SELECT para o técnico no bucket "visitas" (só tinha INSERT) —
+-- necessário para mostrar as fotos do fecho anterior "congeladas" ao
+-- reabrir um serviço em correção (createSignedUrl precisa de SELECT).
+drop policy if exists "technician selects own visit photos storage" on storage.objects;
+create policy "technician selects own visit photos storage" on storage.objects for select
+  using (
+    bucket_id = 'visitas'
+    and (storage.foldername(name))[1] = my_org()::text
+    and exists (
+      select 1 from visits v
+      where v.id::text = (storage.foldername(name))[2]
+        and v.created_by = auth.uid()
+    )
+  );
+
+create or replace function tech_start_service(p_service_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_visit_id uuid;
+  v_org_id uuid;
+  v_estado_anterior text;
+begin
+  if not exists (
+    select 1 from service_technicians
+    where service_id = p_service_id and user_id = auth.uid()
+  ) then
+    raise exception 'Serviço não atribuído a este técnico.';
+  end if;
+
+  select organization_id, estado into v_org_id, v_estado_anterior
+  from services where id = p_service_id;
+
+  -- 'nova_visita' tem de poder reabrir (é o estado que pede uma visita extra);
+  -- sem esta condição a visita era sempre criada mesmo fora destes estados,
+  -- podendo duplicar visitas em cliques repetidos.
+  if v_estado_anterior not in ('agendado', 'por_agendar', 'nova_visita', 'correcao_necessaria') then
+    raise exception 'Este serviço não está num estado que permita iniciar uma visita.';
+  end if;
+
+  if not tech_service_desbloqueado(p_service_id) then
+    raise exception 'Tens um serviço anterior por concluir. Fecha-o antes de iniciares este.';
+  end if;
+
+  update services
+    set estado = 'em_curso'
+    where id = p_service_id;
+
+  insert into visits (organization_id, service_id, data, hora_inicio_real, created_by, apos_correcao)
+  values (v_org_id, p_service_id, current_date, current_time, auth.uid(), v_estado_anterior = 'correcao_necessaria')
+  returning id into v_visit_id;
+
+  -- histórico: distingue reabertura após correção de um início normal.
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, p_service_id,
+    case when v_estado_anterior = 'correcao_necessaria' then 'corrigido' else 'iniciado' end,
+    case when v_estado_anterior = 'correcao_necessaria'
+      then 'Técnico reabriu o serviço após pedido de correção.'
+      else 'Técnico iniciou o serviço.'
+    end,
+    auth.uid()
+  );
+
+  return v_visit_id;
+end;
+$$;
+
+grant execute on function tech_start_service(uuid) to authenticated;
+
+create or replace function tech_finish_visit(
+  p_visit_id uuid,
+  p_resultado text,
+  p_trabalho_realizado text,
+  p_materiais jsonb default '[]'::jsonb,
+  p_fotos text[] default '{}'::text[],
+  p_mao_obra_tipo text default null,
+  p_mao_obra_detalhe text default null,
+  p_nova_data_agendada date default null,
+  p_nova_hora_agendada time default null,
+  p_problema_identificado text default null,
+  p_equipamento_instalado text default null,
+  p_quantidade_instalada numeric default null,
+  p_testes_realizados text default null,
+  p_cliente_pagou boolean default null,
+  p_meio_pagamento text default null,
+  p_fatura_com_nif boolean default null,
+  p_nif text default null,
+  p_justificacao_correcao text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_service_id uuid;
+  v_org_id uuid;
+  v_tipo text;
+  v_estado_servico text;
+  v_novo_estado text;
+  v_valor_primeira_hora numeric;
+  v_valor_hora_adicional numeric;
+  v_valor_dia_completo numeric;
+  v_valor_2_dias numeric;
+  v_valor_visita_orcamento numeric;
+  v_valor_taxa_deslocacao numeric;
+  v_valor_materiais numeric;
+  v_valor_mao_obra numeric;
+  v_apos_correcao boolean;
+  v_visita_anterior_id uuid;
+  v_prev_trabalho text;
+  v_prev_problema text;
+  v_prev_equipamento text;
+  v_prev_quantidade numeric;
+  v_prev_testes text;
+  v_prev_mao_obra_tipo text;
+  v_prev_mao_obra_detalhe text;
+  v_efetivo_mao_obra_tipo text;
+begin
+  if p_resultado not in ('concluido', 'nova_visita', 'nao_realizado') then
+    raise exception 'Resultado inválido.';
+  end if;
+
+  -- 'hora_fim_real is null' garante que a visita ainda está aberta — uma
+  -- segunda chamada (retry de rede, duplo clique fora do disabled do
+  -- botão, ou uma chamada direta à RPC) já não encontra a visita e aborta
+  -- aqui, antes de duplicar materiais/fotos/eventos ou reabrir um serviço
+  -- já validado/faturado.
+  select service_id, apos_correcao into v_service_id, v_apos_correcao from visits
+  where id = p_visit_id and created_by = auth.uid() and hora_fim_real is null;
+
+  if v_service_id is null then
+    raise exception 'Visita não encontrada, já fechada, ou não pertence a este técnico.';
+  end if;
+
+  select organization_id, tipo, estado into v_org_id, v_tipo, v_estado_servico from services where id = v_service_id;
+
+  -- Reforço adicional: o serviço tem mesmo de estar 'em_curso' (só chega lá
+  -- via tech_start_service). Cobre o caso raro de o serviço ter mudado de
+  -- estado por outra via entre o início e o fecho da visita.
+  if v_estado_servico != 'em_curso' then
+    raise exception 'Este serviço já não está em curso — não é possível fechar esta visita.';
+  end if;
+
+  -- Correção (apos_correcao=true, marcado por tech_start_service ao reabrir
+  -- a partir de 'correcao_necessaria'): nada do fecho anterior desaparece —
+  -- vai servir de base para tudo o que o técnico deixar em branco agora.
+  -- Nenhum campo passa a obrigatório aqui além da justificação (pedido
+  -- explícito): o técnico só precisa de explicar a correção, não repetir
+  -- tudo o que já preencheu.
+  if v_apos_correcao then
+    select id, trabalho_realizado, problema_identificado, equipamento_instalado, quantidade_instalada, testes_realizados, mao_obra_tipo, mao_obra_detalhe
+      into v_visita_anterior_id, v_prev_trabalho, v_prev_problema, v_prev_equipamento, v_prev_quantidade, v_prev_testes, v_prev_mao_obra_tipo, v_prev_mao_obra_detalhe
+      from visits
+      where service_id = v_service_id and id != p_visit_id and hora_fim_real is not null
+      order by created_at desc
+      limit 1;
+
+    if length(trim(coalesce(p_justificacao_correcao, ''))) = 0 then
+      raise exception 'Justificação da correção é obrigatória.';
+    end if;
+  else
+    -- 'trabalho realizado' serve de notas em qualquer resultado —
+    -- obrigatório em todos os casos (antes só era exigido para 'concluido').
+    if length(trim(coalesce(p_trabalho_realizado, ''))) = 0 then
+      if p_resultado = 'concluido' then
+        raise exception 'Trabalho realizado é obrigatório para concluir o serviço.';
+      else
+        raise exception 'Notas são obrigatórias.';
+      end if;
+    end if;
+  end if;
+
+  if p_resultado = 'concluido' then
+    if not v_apos_correcao and (p_mao_obra_tipo is null or length(trim(p_mao_obra_tipo)) = 0) then
+      raise exception 'Mão de obra é obrigatória para concluir o serviço.';
+    end if;
+    if p_mao_obra_tipo is not null and p_mao_obra_tipo not in ('visita_orcamento','taxa_deslocacao','1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro') then
+      raise exception 'Tipo de mão de obra inválido.';
+    end if;
+    if p_mao_obra_tipo = 'outro' and length(trim(coalesce(p_mao_obra_detalhe, ''))) = 0 then
+      raise exception 'Descreve a mão de obra em "Outro".';
+    end if;
+
+    -- checklist de fecho: campos obrigatórios diferentes consoante o tipo
+    -- do serviço, validados sempre aqui (nunca só na UI) — dispensado numa
+    -- correção, onde o valor anterior serve de base quando não preenchido.
+    if not v_apos_correcao then
+      if v_tipo = 'Instalação' then
+        if length(trim(coalesce(p_equipamento_instalado, ''))) = 0 then
+          raise exception 'Equipamento instalado é obrigatório.';
+        end if;
+        if p_quantidade_instalada is null or p_quantidade_instalada <= 0 then
+          raise exception 'Quantidade instalada é obrigatória.';
+        end if;
+        if length(trim(coalesce(p_testes_realizados, ''))) = 0 then
+          raise exception 'Testes realizados são obrigatórios.';
+        end if;
+      else
+        if length(trim(coalesce(p_problema_identificado, ''))) = 0 then
+          raise exception 'Problema identificado é obrigatório.';
+        end if;
+      end if;
+    end if;
+
+    if p_cliente_pagou is true and (p_meio_pagamento is null or p_meio_pagamento not in ('Numerário','Transferência Bancária','Multibanco','Cheque','MB Way')) then
+      raise exception 'Indica o meio de pagamento.';
+    end if;
+    if p_fatura_com_nif is true and length(trim(coalesce(p_nif, ''))) = 0 then
+      raise exception 'Indica o NIF do cliente.';
+    end if;
+  end if;
+
+  update visits
+    set hora_fim_real = current_time,
+        trabalho_realizado = case
+          when length(trim(coalesce(p_trabalho_realizado, ''))) > 0 then p_trabalho_realizado
+          when v_apos_correcao then v_prev_trabalho
+          else p_trabalho_realizado
+        end,
+        resultado = p_resultado,
+        mao_obra_tipo = case
+          when p_resultado != 'concluido' then null
+          when p_mao_obra_tipo is not null then p_mao_obra_tipo
+          when v_apos_correcao then v_prev_mao_obra_tipo
+          else null
+        end,
+        mao_obra_detalhe = case
+          when p_resultado != 'concluido' then null
+          when p_mao_obra_detalhe is not null then p_mao_obra_detalhe
+          when v_apos_correcao then v_prev_mao_obra_detalhe
+          else null
+        end,
+        problema_identificado = case
+          when p_resultado != 'concluido' or v_tipo = 'Instalação' then null
+          when length(trim(coalesce(p_problema_identificado, ''))) > 0 then p_problema_identificado
+          when v_apos_correcao then v_prev_problema
+          else null
+        end,
+        equipamento_instalado = case
+          when p_resultado != 'concluido' or v_tipo != 'Instalação' then null
+          when length(trim(coalesce(p_equipamento_instalado, ''))) > 0 then p_equipamento_instalado
+          when v_apos_correcao then v_prev_equipamento
+          else null
+        end,
+        quantidade_instalada = case
+          when p_resultado != 'concluido' or v_tipo != 'Instalação' then null
+          when p_quantidade_instalada is not null then p_quantidade_instalada
+          when v_apos_correcao then v_prev_quantidade
+          else null
+        end,
+        testes_realizados = case
+          when p_resultado != 'concluido' or v_tipo != 'Instalação' then null
+          when length(trim(coalesce(p_testes_realizados, ''))) > 0 then p_testes_realizados
+          when v_apos_correcao then v_prev_testes
+          else null
+        end,
+        cliente_pagou = case when p_resultado = 'concluido' then p_cliente_pagou else null end,
+        meio_pagamento = case when p_resultado = 'concluido' and p_cliente_pagou is true then p_meio_pagamento else null end,
+        fatura_com_nif = case when p_resultado = 'concluido' then p_fatura_com_nif else null end,
+        nif = case when p_resultado = 'concluido' and p_fatura_com_nif is true then p_nif else null end,
+        justificacao_correcao = p_justificacao_correcao
+    where id = p_visit_id;
+
+  insert into visit_materials_used (visit_id, nome, qtd, preco_unit)
+  select p_visit_id, item->>'nome', coalesce((item->>'qtd')::numeric, 1), coalesce((item->>'preco_unit')::numeric, 0)
+  from jsonb_array_elements(p_materiais) as item;
+
+  insert into visit_photos (visit_id, storage_path)
+  select p_visit_id, unnest(p_fotos);
+
+  -- Duplica materiais/fotos da visita rejeitada anterior para esta — somam
+  -- aos que o técnico tenha acrescentado acima, nunca substituem (histórico
+  -- da visita anterior continua intacto, isto só garante que nada
+  -- "desaparece" da nova visita).
+  if v_apos_correcao and v_visita_anterior_id is not null then
+    insert into visit_materials_used (visit_id, nome, qtd, preco_unit)
+    select p_visit_id, nome, qtd, preco_unit
+    from visit_materials_used
+    where visit_id = v_visita_anterior_id;
+
+    insert into visit_photos (visit_id, storage_path)
+    select p_visit_id, storage_path
+    from visit_photos
+    where visit_id = v_visita_anterior_id;
+  end if;
+
+  if p_resultado = 'concluido' then
+    select coalesce(sum(qtd * preco_unit), 0)
+      into v_valor_materiais
+      from visit_materials_used
+      where visit_id = p_visit_id;
+
+    v_efetivo_mao_obra_tipo := case
+      when p_mao_obra_tipo is not null then p_mao_obra_tipo
+      when v_apos_correcao then v_prev_mao_obra_tipo
+      else null
+    end;
+
+    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias,
+           valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao
+      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias,
+           v_valor_visita_orcamento, v_valor_taxa_deslocacao
+      from org_settings where organization_id = v_org_id;
+
+    v_valor_mao_obra := case v_efetivo_mao_obra_tipo
+      when 'visita_orcamento' then coalesce(v_valor_visita_orcamento, 0)
+      when 'taxa_deslocacao' then coalesce(v_valor_taxa_deslocacao, 0)
+      when '1h' then coalesce(v_valor_primeira_hora, 0)
+      when '2h' then coalesce(v_valor_primeira_hora, 0) + 1 * coalesce(v_valor_hora_adicional, 0)
+      when '3h' then coalesce(v_valor_primeira_hora, 0) + 2 * coalesce(v_valor_hora_adicional, 0)
+      when '4h' then coalesce(v_valor_primeira_hora, 0) + 3 * coalesce(v_valor_hora_adicional, 0)
+      when '5h' then coalesce(v_valor_primeira_hora, 0) + 4 * coalesce(v_valor_hora_adicional, 0)
+      when '6h' then coalesce(v_valor_primeira_hora, 0) + 5 * coalesce(v_valor_hora_adicional, 0)
+      when '7h' then coalesce(v_valor_primeira_hora, 0) + 6 * coalesce(v_valor_hora_adicional, 0)
+      when '8h' then coalesce(v_valor_dia_completo, 0)
+      when 'dia_completo' then coalesce(v_valor_dia_completo, 0)
+      when '2dias' then coalesce(v_valor_2_dias, 0)
+      else 0
+    end;
+
+    update visits set valor_calculado = v_valor_materiais + v_valor_mao_obra where id = p_visit_id;
+
+    update services
+      set valor = v_valor_materiais + v_valor_mao_obra
+      where id = v_service_id and valor = 0;
+  end if;
+
+  v_novo_estado := case when p_resultado = 'concluido' then 'aguarda_validacao' else p_resultado end;
+
+  if p_resultado = 'nova_visita' then
+    update services
+      set estado = v_novo_estado,
+          data_agendada = p_nova_data_agendada,
+          hora_agendada = p_nova_hora_agendada
+      where id = v_service_id;
+  else
+    update services
+      set estado = v_novo_estado
+      where id = v_service_id;
+  end if;
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, v_service_id,
+    p_resultado,
+    case
+      when p_resultado = 'concluido' and v_apos_correcao
+        then 'Técnico marcou como concluído após correção — aguarda validação do Admin. Justificação: ' || p_justificacao_correcao
+      when p_resultado = 'concluido' then 'Técnico marcou como concluído — aguarda validação do Admin.'
+      when p_resultado = 'nova_visita' and p_nova_data_agendada is not null
+        then 'Técnico pediu nova visita — já agendada com o cliente para ' || p_nova_data_agendada || ' ' || coalesce(p_nova_hora_agendada::text, '') || '.'
+      when p_resultado = 'nova_visita' then 'Técnico pediu nova visita — cliente ainda não combinou data.'
+      else 'Técnico marcou como não foi possível realizar.'
+    end,
+    auth.uid()
+  );
+end;
+$$;
+
+grant execute on function tech_finish_visit(uuid, text, text, jsonb, text[], text, text, date, time, text, text, numeric, text, boolean, text, boolean, text, text) to authenticated;
+
+-- =============================================================================
+-- Edição de Pedido (descrição/morada) com log de alterações — única edição
+-- de campos livres que existe em toda a app; request_events é o histórico
+-- aditivo correspondente (mesmo espírito de service_events/budget_events).
+-- =============================================================================
+create table if not exists request_events (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references organizations(id) on delete cascade,
+  request_id uuid not null references requests(id) on delete cascade,
+  tipo text not null check (tipo in ('editado')),
+  descricao text not null,
+  utilizador uuid references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table request_events enable row level security;
+
+drop policy if exists "admin reads request_events" on request_events;
+create policy "admin reads request_events" on request_events for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+drop policy if exists "admin inserts request_events" on request_events;
+create policy "admin inserts request_events" on request_events for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+grant select, insert on request_events to authenticated;
+
 commit;
 
 -- =============================================================================
@@ -1082,4 +1495,19 @@ commit;
 --     corrigido em app/admin/utilizadores/actions.ts e nas rotas do Google
 --     Sheets (novo lib/app-url.ts), e cabeçalhos de segurança/CSP em
 --     next.config.mjs — tudo só código, sem alteração à BD.
+--   - Pagamento no fecho técnico + "fatura com NIF" + MB Way + correção sem
+--     perda de dados: só as colunas novas de visits + o CHECK atualizado de
+--     services.faturacao_metodo_pagamento + a policy de SELECT em falta no
+--     bucket "visitas" para o técnico + tech_start_service/tech_finish_visit
+--     substituídas acima — sem tabela nova. O resto (lib/faturacao-opcoes.ts,
+--     o formulário do Técnico, a Server Action concluirVisita, e a exibição
+--     no histórico de visitas da ficha do Serviço) é só código.
+--   - Agendar na aceitação do orçamento + link "Ver serviço criado" mais
+--     defensivo: nenhuma alteração à BD — reaproveita escreverAgendamentoServico
+--     e verificarConflitoAgenda já existentes, e o fix do link é só uma
+--     verificação extra na query da página.
+--   - Edição de Pedido (descrição/morada) com log: só a tabela request_events
+--     + as suas 2 policies acima. O resto (editarPedido, EditarPedidoForm.tsx,
+--     e a secção "Histórico de edições" em PedidoDetalheConteudo.tsx) é só
+--     código.
 -- =============================================================================

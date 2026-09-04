@@ -16,7 +16,7 @@ export default async function ServicoTecnicoPage(props: { params: Promise<{ id: 
 
   if (!servico) notFound();
 
-  const [{ data: materiaisPrevistos }, { data: catalogo }, { data: settings }, { data: visitaAberta }] = await Promise.all([
+  const [{ data: materiaisPrevistos }, { data: catalogo }, { data: settings }, { data: visitaAberta }, { data: visitaAnteriorRaw }] = await Promise.all([
     servico.detalhes_visiveis
       ? supabase.from("service_materials_planned").select("nome, qtd, preco_venda").eq("service_id", params.id)
       : Promise.resolve({ data: [] as { nome: string; qtd: number; preco_venda: number }[] }),
@@ -36,7 +36,43 @@ export default async function ServicoTecnicoPage(props: { params: Promise<{ id: 
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Fecho anterior (rejeitado) — só faz sentido ir buscar quando existe
+    // motivo de correção; usado para mostrar tudo "congelado" ao técnico ao
+    // reabrir (nada desaparece), nunca para pré-preencher o novo fecho.
+    servico.motivo_correcao
+      ? supabase
+          .from("visits")
+          .select(
+            "trabalho_realizado, problema_identificado, equipamento_instalado, quantidade_instalada, testes_realizados, mao_obra_tipo, mao_obra_detalhe, visit_materials_used(nome, qtd, preco_unit), visit_photos(storage_path)"
+          )
+          .eq("service_id", params.id)
+          .not("hora_fim_real", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null as any }),
   ]);
+
+  let fotosAnterioresUrls: string[] = [];
+  if (visitaAnteriorRaw?.visit_photos?.length) {
+    const paths = visitaAnteriorRaw.visit_photos.map((p: any) => p.storage_path);
+    const { data: assinadas } = await supabase.storage.from("visitas").createSignedUrls(paths, 3600);
+    fotosAnterioresUrls = (assinadas ?? []).map((s: any) => s.signedUrl).filter(Boolean);
+  }
+
+  const visitaAnterior = visitaAnteriorRaw
+    ? {
+        trabalhoRealizado: visitaAnteriorRaw.trabalho_realizado as string | null,
+        problemaIdentificado: visitaAnteriorRaw.problema_identificado as string | null,
+        equipamentoInstalado: visitaAnteriorRaw.equipamento_instalado as string | null,
+        quantidadeInstalada: visitaAnteriorRaw.quantidade_instalada as number | null,
+        testesRealizados: visitaAnteriorRaw.testes_realizados as string | null,
+        maoObraTipo: visitaAnteriorRaw.mao_obra_tipo as string | null,
+        maoObraDetalhe: visitaAnteriorRaw.mao_obra_detalhe as string | null,
+        materiais: (visitaAnteriorRaw.visit_materials_used ?? []) as { nome: string; qtd: number; preco_unit: number }[],
+        fotosUrls: fotosAnterioresUrls,
+      }
+    : null;
 
   return (
     <ServicoDetalheClient
@@ -53,6 +89,7 @@ export default async function ServicoTecnicoPage(props: { params: Promise<{ id: 
       }}
       visitaAbertaId={visitaAberta?.id ?? null}
       organizationId={organizationId}
+      visitaAnterior={visitaAnterior}
     />
   );
 }

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId, getOrgIdAndRole } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
+import { registarEventoPedido } from "@/lib/request-events";
 import { podeDecidirPedido } from "@/lib/pedido-estado";
 import { ORIGENS_PEDIDO as ORIGENS_VALIDAS } from "@/lib/pedido-opcoes";
 import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
@@ -320,6 +321,72 @@ export async function arquivarPedido(formData: FormData) {
   revalidatePath("/admin/pedidos");
 }
 
+// Único caminho para editar um pedido já criado — restrito a ADMIN/
+// SUPER_ADMIN (o layout de /admin/* já filtra isto, mas a Server Action
+// nunca confia só nisso, mesmo padrão de criarUtilizador/
+// resetPasswordUtilizador). Só descrição e morada são editáveis — nunca
+// tipo/origem/cliente (mudar o cliente de um pedido já criado não faz
+// sentido de negócio, e tipo/origem são decisões tomadas na criação). A
+// morada nunca é texto livre: só pode ser trocada por outra morada já
+// associada ao mesmo cliente (mesma validação já usada em criarPedido/
+// aceitarOrcamento, nunca confiada cegamente ao valor submetido). Cada
+// edição fica registada em request_events — histórico aditivo, nunca
+// apagado — só quando algo realmente mudou.
+export async function editarPedido(formData: FormData) {
+  const { organizationId, role } = await getOrgIdAndRole();
+  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+    throw new Error("Sem permissão para editar pedidos.");
+  }
+  const supabase = await createClient();
+  const id = String(formData.get("id") || "");
+  const descricao = String(formData.get("descricao") || "").trim();
+  const address_id = String(formData.get("address_id") || "");
+  if (!id || !descricao || !address_id) {
+    throw new Error("Descrição e morada são obrigatórias.");
+  }
+
+  const { data: pedido } = await supabase
+    .from("requests")
+    .select("descricao, address_id, client_id, client_addresses(label, endereco)")
+    .eq("id", id)
+    .single();
+  if (!pedido) return;
+
+  if (address_id !== pedido.address_id) {
+    const { data: morada } = await supabase
+      .from("client_addresses")
+      .select("id, label, endereco")
+      .eq("id", address_id)
+      .eq("client_id", pedido.client_id)
+      .single();
+    if (!morada) {
+      throw new Error("Escolhe uma morada já associada a este cliente.");
+    }
+  }
+
+  const alteracoes: string[] = [];
+  if (descricao !== pedido.descricao) alteracoes.push(`Descrição alterada.`);
+  if (address_id !== pedido.address_id) {
+    const { data: novaMorada } = await supabase.from("client_addresses").select("label, endereco").eq("id", address_id).single();
+    const moradaAnterior = (pedido.client_addresses as any)?.endereco ?? "—";
+    alteracoes.push(`Morada alterada de "${moradaAnterior}" para "${novaMorada?.endereco ?? "—"}".`);
+  }
+
+  if (alteracoes.length === 0) return;
+
+  await supabase.from("requests").update({ descricao, address_id }).eq("id", id);
+
+  await registarEventoPedido(supabase, {
+    organizationId,
+    requestId: id,
+    tipo: "editado",
+    descricao: alteracoes.join(" "),
+  });
+
+  revalidatePath(`/admin/pedidos/${id}`);
+  revalidatePath("/admin/pedidos");
+}
+
 // Única fonte do "percurso completo" de um pedido (Pedido → Orçamento →
 // Serviço(s), com o histórico de eventos de cada um) — usada tanto pela
 // página completa (/admin/pedidos/[id]) como pelo popup de consulta rápida
@@ -340,19 +407,25 @@ export async function obterDetalhePedido(id: string) {
   const { data: pedido } = await supabase
     .from("requests")
     .select(
-      "id, codigo, tipo, descricao, origem, info_falta, estado, created_at, client_id, clients(id, nome, codigo, telefone, email), client_addresses(label, endereco)"
+      "id, codigo, tipo, descricao, origem, info_falta, estado, created_at, client_id, address_id, clients(id, nome, codigo, telefone, email), client_addresses(label, endereco)"
     )
     .eq("id", id)
     .single();
   if (!pedido) return null;
 
-  const [{ data: budget }, { data: services }] = await Promise.all([
+  const [{ data: budget }, { data: services }, { data: requestEvents }, { data: enderecosCliente }] = await Promise.all([
     supabase.from("budgets").select("id, estado, numero").eq("request_id", id).maybeSingle(),
     supabase
       .from("services")
       .select("id, estado, tipo, budget_id")
       .eq("request_id", id)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("request_events")
+      .select("id, tipo, descricao, created_at, profiles(nome)")
+      .eq("request_id", id)
+      .order("created_at", { ascending: false }),
+    supabase.from("client_addresses").select("id, label, endereco").eq("client_id", pedido.client_id).order("label"),
   ]);
 
   const serviceIds = (services ?? []).map((s) => s.id);
@@ -382,6 +455,8 @@ export async function obterDetalhePedido(id: string) {
     budgetEvents: budgetEvents ?? [],
     services: services ?? [],
     serviceEventsByServiceId,
+    requestEvents: requestEvents ?? [],
+    enderecosCliente: enderecosCliente ?? [],
   };
 }
 

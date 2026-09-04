@@ -8,4 +8,5 @@ export const METODOS_PAGAMENTO: string[] = [
   "Transferência Bancária",
   "Multibanco",
   "Cheque",
+  "MB Way",
 ];

@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { obterDetalhePedido, arquivarPedido, converterEmOrcamento, resolverInfoPedido } from "../actions";
 import { PedidoDetalheConteudo } from "@/components/pedidos/PedidoDetalheConteudo";
+import { EditarPedidoForm } from "./EditarPedidoForm";
 
 export default async function PedidoDetalhePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const detalhe = await obterDetalhePedido(params.id);
   if (!detalhe) notFound();
-  const { pedido } = detalhe;
+  const { pedido, enderecosCliente } = detalhe;
   const temAcoes = pedido.info_falta || pedido.estado === "novo";
 
   return (
@@ -57,6 +58,15 @@ export default async function PedidoDetalhePage(props: { params: Promise<{ id: s
             )
           }
         />
+
+        <div className="mt-4 border-t border-neutral-800 pt-4">
+          <EditarPedidoForm
+            pedidoId={pedido.id}
+            descricaoAtual={pedido.descricao}
+            addressIdAtual={pedido.address_id}
+            moradas={enderecosCliente}
+          />
+        </div>
       </div>
     </div>
   );

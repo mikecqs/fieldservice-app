@@ -8,6 +8,7 @@ import { iniciarServico, concluirVisita, obterVisitaAberta, sugerirMaoObraDaVisi
 import { Badge } from "@/components/ui/Badge";
 import { MAO_OBRA_OPCOES, calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib/mao-obra";
 import { rotuloTipoServico } from "@/lib/servico-estado";
+import { METODOS_PAGAMENTO } from "@/lib/faturacao-opcoes";
 import { createClient } from "@/lib/supabase/client";
 
 function formatEuros(v: number) {
@@ -17,6 +18,17 @@ function formatEuros(v: number) {
 type LinhaMaterial = { nome: string; qtd: string; precoUnit: string };
 type FotoSelecionada = { file: File; previewUrl: string };
 type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
+type VisitaAnterior = {
+  trabalhoRealizado: string | null;
+  problemaIdentificado: string | null;
+  equipamentoInstalado: string | null;
+  quantidadeInstalada: number | null;
+  testesRealizados: string | null;
+  maoObraTipo: string | null;
+  maoObraDetalhe: string | null;
+  materiais: { nome: string; qtd: number; preco_unit: number }[];
+  fotosUrls: string[];
+};
 
 export function ServicoDetalheClient({
   servico,
@@ -25,6 +37,7 @@ export function ServicoDetalheClient({
   precosMaoObra,
   visitaAbertaId,
   organizationId,
+  visitaAnterior,
 }: {
   servico: any;
   materiaisPrevistos: { nome: string; qtd: number; preco_venda: number }[];
@@ -32,17 +45,25 @@ export function ServicoDetalheClient({
   precosMaoObra: PrecosMaoObra;
   visitaAbertaId: string | null;
   organizationId: string;
+  visitaAnterior: VisitaAnterior | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
+  // Só há mesmo uma correção em curso quando existe fecho anterior + motivo
+  // de rejeição — nunca confundir com o primeiro fecho de sempre.
+  const isCorrecao = !!visitaAnterior && !!servico.motivo_correcao;
+  const isInstalacao = servico.tipo === "Instalação";
   const [visitaId, setVisitaId] = useState<string | null>(visitaAbertaId);
   const [aFinalizar, setAFinalizar] = useState(false);
   const [aAbrirFinalizar, setAAbrirFinalizar] = useState(false);
   const [aGuardar, setAGuardar] = useState(false);
   const [resultado, setResultado] = useState<"concluido" | "nova_visita" | "nao_realizado">("concluido");
   const [trabalho, setTrabalho] = useState("");
+  // Numa correção começa vazia de propósito: os materiais do fecho anterior
+  // já ficam gravados na visita nova pelo servidor (tech_finish_visit),
+  // sem precisar de serem repetidos aqui — só o que for realmente novo.
   const [materiaisLinhas, setMateriaisLinhas] = useState<LinhaMaterial[]>(() =>
-    materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
+    isCorrecao ? [] : materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
   );
   const [maoObraTipo, setMaoObraTipo] = useState("");
   const [maoObraDetalhe, setMaoObraDetalhe] = useState("");
@@ -52,14 +73,18 @@ export function ServicoDetalheClient({
   const [problemaIdentificado, setProblemaIdentificado] = useState("");
   const [equipamentoInstalado, setEquipamentoInstalado] = useState("");
   // Onda 2: pré-preenchida com "1" quando o serviço é Instalação — é o caso
-  // mais comum, e continua totalmente editável.
-  const [quantidadeInstalada, setQuantidadeInstalada] = useState(servico.tipo === "Instalação" ? "1" : "");
+  // mais comum, e continua totalmente editável. Numa correção fica vazia:
+  // se o técnico não mexer, o servidor reaproveita a quantidade anterior.
+  const [quantidadeInstalada, setQuantidadeInstalada] = useState(isInstalacao && !isCorrecao ? "1" : "");
   const [testesRealizados, setTestesRealizados] = useState("");
   const [fotos, setFotos] = useState<FotoSelecionada[]>([]);
+  const [justificacaoCorrecao, setJustificacaoCorrecao] = useState("");
+  const [clientePagou, setClientePagou] = useState<"sim" | "nao" | null>(null);
+  const [meioPagamento, setMeioPagamento] = useState("");
+  const [faturaComNif, setFaturaComNif] = useState<"sim" | "nao" | null>(null);
+  const [nif, setNif] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
-
-  const isInstalacao = servico.tipo === "Instalação";
 
   const atualizarLinha = (i: number, patch: Partial<LinhaMaterial>) => {
     setMateriaisLinhas((linhas) => linhas.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -165,7 +190,14 @@ export function ServicoDetalheClient({
       setVisitaId(idParaSubmeter);
     }
 
-    if (resultado === "concluido") {
+    if (isCorrecao) {
+      // Pedido explícito: nenhum campo além da justificação é obrigatório
+      // numa correção — o fecho anterior já serve de base no servidor.
+      if (!justificacaoCorrecao.trim()) {
+        setErro("Descreve a justificação da correção.");
+        return;
+      }
+    } else if (resultado === "concluido") {
       if (isInstalacao) {
         if (!equipamentoInstalado.trim()) {
           setErro("Indica o equipamento instalado.");
@@ -214,6 +246,17 @@ export function ServicoDetalheClient({
       }
     }
 
+    if (resultado === "concluido") {
+      if (clientePagou === "sim" && !meioPagamento) {
+        setErro("Indica o meio de pagamento.");
+        return;
+      }
+      if (faturaComNif === "sim" && !nif.trim()) {
+        setErro("Indica o NIF do cliente.");
+        return;
+      }
+    }
+
     setAGuardar(true);
     setErro(null);
     try {
@@ -249,8 +292,13 @@ export function ServicoDetalheClient({
         novaHoraAgendada: resultado === "nova_visita" && agendouNovaData === "sim" ? novaHora : null,
         problemaIdentificado: resultado === "concluido" && !isInstalacao ? problemaIdentificado : null,
         equipamentoInstalado: resultado === "concluido" && isInstalacao ? equipamentoInstalado : null,
-        quantidadeInstalada: resultado === "concluido" && isInstalacao ? Number(quantidadeInstalada) : null,
+        quantidadeInstalada: resultado === "concluido" && isInstalacao && quantidadeInstalada ? Number(quantidadeInstalada) : null,
         testesRealizados: resultado === "concluido" && isInstalacao ? testesRealizados : null,
+        clientePagou: resultado === "concluido" && clientePagou ? clientePagou === "sim" : null,
+        meioPagamento: resultado === "concluido" && clientePagou === "sim" ? meioPagamento : null,
+        faturaComNif: resultado === "concluido" && faturaComNif ? faturaComNif === "sim" : null,
+        nif: resultado === "concluido" && faturaComNif === "sim" ? nif.trim() : null,
+        justificacaoCorrecao: isCorrecao ? justificacaoCorrecao.trim() : null,
       });
       setSucesso(true);
       setTimeout(() => {
@@ -274,7 +322,7 @@ export function ServicoDetalheClient({
         <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs font-medium text-neutral-200">{rotuloTipoServico(servico.tipo)}</span>
       </div>
 
-      {servico.estado === "correcao_necessaria" && servico.motivo_correcao && (
+      {servico.motivo_correcao && ["correcao_necessaria", "em_curso", "aguarda_validacao"].includes(servico.estado) && (
         <div className="mb-3 flex items-start gap-1.5 rounded-lg bg-red-500/10 p-3 text-sm text-red-400">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>
@@ -385,6 +433,90 @@ export function ServicoDetalheClient({
 
         {aFinalizar && !sucesso && (
           <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            {isCorrecao && visitaAnterior && (
+              <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <p className="text-xs font-semibold text-amber-300">
+                  Fecho anterior (rejeitado) — só para consulta, não é editável
+                </p>
+                {visitaAnterior.trabalhoRealizado && (
+                  <div>
+                    <span className="block text-[11px] font-medium text-neutral-400">Trabalho realizado</span>
+                    <p className="text-sm text-neutral-300">{visitaAnterior.trabalhoRealizado}</p>
+                  </div>
+                )}
+                {visitaAnterior.problemaIdentificado && (
+                  <div>
+                    <span className="block text-[11px] font-medium text-neutral-400">Problema identificado</span>
+                    <p className="text-sm text-neutral-300">{visitaAnterior.problemaIdentificado}</p>
+                  </div>
+                )}
+                {visitaAnterior.equipamentoInstalado && (
+                  <div>
+                    <span className="block text-[11px] font-medium text-neutral-400">Equipamento instalado</span>
+                    <p className="text-sm text-neutral-300">
+                      {visitaAnterior.equipamentoInstalado}
+                      {visitaAnterior.quantidadeInstalada ? ` × ${visitaAnterior.quantidadeInstalada}` : ""}
+                    </p>
+                  </div>
+                )}
+                {visitaAnterior.testesRealizados && (
+                  <div>
+                    <span className="block text-[11px] font-medium text-neutral-400">Testes realizados</span>
+                    <p className="text-sm text-neutral-300">{visitaAnterior.testesRealizados}</p>
+                  </div>
+                )}
+                {visitaAnterior.maoObraTipo && (
+                  <div>
+                    <span className="block text-[11px] font-medium text-neutral-400">Mão de obra</span>
+                    <p className="text-sm text-neutral-300">
+                      {MAO_OBRA_OPCOES.find(([v]) => v === visitaAnterior.maoObraTipo)?.[1] ?? visitaAnterior.maoObraTipo}
+                      {visitaAnterior.maoObraDetalhe ? ` — ${visitaAnterior.maoObraDetalhe}` : ""}
+                    </p>
+                  </div>
+                )}
+                {visitaAnterior.materiais.length > 0 && (
+                  <div>
+                    <span className="block text-[11px] font-medium text-neutral-400">Materiais utilizados</span>
+                    <ul className="list-disc pl-4 text-sm text-neutral-300">
+                      {visitaAnterior.materiais.map((m, i) => (
+                        <li key={i}>
+                          {m.nome} × {m.qtd}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {visitaAnterior.fotosUrls.length > 0 && (
+                  <div>
+                    <span className="block text-[11px] font-medium text-neutral-400">Fotos</span>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {visitaAnterior.fotosUrls.map((url, i) => (
+                        <img key={i} src={url} alt="" className="h-16 w-16 shrink-0 rounded-md border border-neutral-700 object-cover" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="text-[11px] text-neutral-500">
+                  Tudo isto mantém-se associado ao serviço, mesmo depois de corrigires. Só precisas de escrever a
+                  justificação abaixo — os outros campos ficam opcionais, preenche-os apenas se quiseres atualizar
+                  ou acrescentar algo.
+                </p>
+              </div>
+            )}
+
+            {isCorrecao && (
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-neutral-300">Justificação da correção (obrigatório)</span>
+                <textarea
+                  rows={2}
+                  value={justificacaoCorrecao}
+                  onChange={(e) => setJustificacaoCorrecao(e.target.value)}
+                  className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+                  placeholder="Explica o que corrigiste ou o que mudou desde o fecho anterior…"
+                />
+              </label>
+            )}
+
             <div>
               <div className="mb-2 text-sm font-semibold text-neutral-200">Resultado</div>
               <div className="space-y-2">
@@ -419,8 +551,12 @@ export function ServicoDetalheClient({
                         setNovaHora("");
                         setProblemaIdentificado("");
                         setEquipamentoInstalado("");
-                        setQuantidadeInstalada(isInstalacao ? "1" : "");
+                        setQuantidadeInstalada(isInstalacao && !isCorrecao ? "1" : "");
                         setTestesRealizados("");
+                        setClientePagou(null);
+                        setMeioPagamento("");
+                        setFaturaComNif(null);
+                        setNif("");
                         setErro(null);
                       }}
                     />
@@ -432,7 +568,9 @@ export function ServicoDetalheClient({
 
             {resultado === "concluido" && !isInstalacao && (
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-300">Problema identificado (obrigatório)</span>
+                <span className="mb-1 block text-xs font-medium text-neutral-300">
+                  Problema identificado {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                </span>
                 <textarea
                   rows={2}
                   value={problemaIdentificado}
@@ -446,7 +584,9 @@ export function ServicoDetalheClient({
             {resultado === "concluido" && isInstalacao && (
               <div className="grid grid-cols-3 gap-2">
                 <label className="col-span-2 block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">Equipamento instalado (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">
+                    Equipamento instalado {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                  </span>
                   <input
                     value={equipamentoInstalado}
                     onChange={(e) => setEquipamentoInstalado(e.target.value)}
@@ -455,7 +595,7 @@ export function ServicoDetalheClient({
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">Qtd (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">Qtd {isCorrecao ? "(opcional)" : "(obrigatório)"}</span>
                   <input
                     type="number"
                     min="1"
@@ -470,7 +610,11 @@ export function ServicoDetalheClient({
 
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-neutral-300">
-                {resultado === "concluido" ? "Trabalho realizado (obrigatório)" : "Notas (obrigatório)"}
+                {isCorrecao
+                  ? "Trabalho realizado (opcional — atualiza se quiseres)"
+                  : resultado === "concluido"
+                  ? "Trabalho realizado (obrigatório)"
+                  : "Notas (obrigatório)"}
               </span>
               <textarea
                 rows={3}
@@ -592,7 +736,9 @@ export function ServicoDetalheClient({
                 </div>
 
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">Mão de obra (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">
+                    Mão de obra {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                  </span>
                   <select
                     value={maoObraTipo}
                     onChange={(e) => setMaoObraTipo(e.target.value)}
@@ -638,7 +784,9 @@ export function ServicoDetalheClient({
 
                 {isInstalacao && (
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-300">Testes realizados (obrigatório)</span>
+                    <span className="mb-1 block text-xs font-medium text-neutral-300">
+                      Testes realizados {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                    </span>
                     <textarea
                       rows={2}
                       value={testesRealizados}
@@ -649,6 +797,74 @@ export function ServicoDetalheClient({
                   </label>
                 )}
               </>
+            )}
+
+            {resultado === "concluido" && (
+              <div className="space-y-3 rounded-lg border border-neutral-800 p-3">
+                <div>
+                  <span className="mb-2 block text-xs font-medium text-neutral-300">O cliente pagou?</span>
+                  <div className="flex gap-2">
+                    {(["sim", "nao"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => {
+                          setClientePagou(v);
+                          if (v === "nao") setMeioPagamento("");
+                        }}
+                        className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${
+                          clientePagou === v ? "border-white bg-neutral-800 text-neutral-200" : "border-neutral-700 text-neutral-200"
+                        }`}
+                      >
+                        {v === "sim" ? "Sim" : "Não"}
+                      </button>
+                    ))}
+                  </div>
+                  {clientePagou === "sim" && (
+                    <select
+                      value={meioPagamento}
+                      onChange={(e) => setMeioPagamento(e.target.value)}
+                      className="mt-2 w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                    >
+                      <option value="">Meio de pagamento…</option>
+                      {METODOS_PAGAMENTO.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div>
+                  <span className="mb-2 block text-xs font-medium text-neutral-300">Cliente pretende fatura com NIF?</span>
+                  <div className="flex gap-2">
+                    {(["sim", "nao"] as const).map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => {
+                          setFaturaComNif(v);
+                          if (v === "nao") setNif("");
+                        }}
+                        className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${
+                          faturaComNif === v ? "border-white bg-neutral-800 text-neutral-200" : "border-neutral-700 text-neutral-200"
+                        }`}
+                      >
+                        {v === "sim" ? "Sim" : "Não"}
+                      </button>
+                    ))}
+                  </div>
+                  {faturaComNif === "sim" && (
+                    <input
+                      value={nif}
+                      onChange={(e) => setNif(e.target.value)}
+                      placeholder="NIF do cliente"
+                      className="mt-2 w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+                    />
+                  )}
+                </div>
+              </div>
             )}
 
             {resultado === "nova_visita" && (
