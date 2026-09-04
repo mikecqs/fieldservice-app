@@ -1428,9 +1428,12 @@ create trigger on_organization_created
 -- =============================================================================
 -- STORAGE: bucket para fotografias de equipamentos do cliente (opcional).
 -- Caminho sempre "{organization_id}/{...}" — é isso que a policy verifica.
+-- allowed_mime_types (auditoria de superfície de ataque) — antes aceitava
+-- qualquer tipo de ficheiro; agora restrito a imagens, mesmo critério já
+-- usado no bucket "visitas".
 -- =============================================================================
-insert into storage.buckets (id, name, public, file_size_limit)
-values ('equipamentos', 'equipamentos', false, 5242880)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('equipamentos', 'equipamentos', false, 5242880, array['image/jpeg','image/png','image/webp','image/heic','image/heif'])
 on conflict (id) do nothing;
 
 create policy "admin manages equipamentos storage" on storage.objects for all

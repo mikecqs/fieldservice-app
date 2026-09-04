@@ -1014,6 +1014,17 @@ create trigger services_log_faturacao_change
   for each row
   execute function log_faturacao_change();
 
+-- =============================================================================
+-- Auditoria de superfície de ataque — bucket "equipamentos" aceitava
+-- qualquer tipo de ficheiro (sem allowed_mime_types, ao contrário de
+-- "visitas"/"fechos"). O INSERT ... ON CONFLICT DO NOTHING original nunca
+-- atualizaria isto num bucket já existente em produção — por isso o UPDATE
+-- explícito abaixo.
+-- =============================================================================
+update storage.buckets
+  set allowed_mime_types = array['image/jpeg','image/png','image/webp','image/heic','image/heif']
+  where id = 'equipamentos';
+
 commit;
 
 -- =============================================================================
@@ -1066,4 +1077,9 @@ commit;
 --   - Auditoria de segurança — trigger services_log_faturacao_change: só
 --     o CREATE OR REPLACE das duas RPCs de faturação (sem o insert manual
 --     duplicado) + a função/trigger novos acima — sem tabela nova.
+--   - Auditoria de superfície de ataque — bucket "equipamentos" restrito a
+--     imagens (UPDATE acima) + fora deste ficheiro: Host Header Injection
+--     corrigido em app/admin/utilizadores/actions.ts e nas rotas do Google
+--     Sheets (novo lib/app-url.ts), e cabeçalhos de segurança/CSP em
+--     next.config.mjs — tudo só código, sem alteração à BD.
 -- =============================================================================

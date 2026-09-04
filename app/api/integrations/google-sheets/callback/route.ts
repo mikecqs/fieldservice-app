@@ -4,13 +4,19 @@ import { requireRole, getOrgId } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens, fetchGoogleUserEmail } from "@/lib/google-sheets/sheets-api";
 import { buildCompanySpreadsheet } from "@/lib/google-sheets/build";
+import { appUrl } from "@/lib/app-url";
 
 export async function GET(request: Request) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   const organizationId = await getOrgId();
   const url = new URL(request.url);
+  // Auditoria de segurança — origem de confiança fixa (nunca url.origin,
+  // que reflete o Host do pedido) para os redirects internos e para o
+  // redirect_uri da troca do código OAuth, que tem de bater sempre certo
+  // com o usado em /connect (ver nota lá).
+  const origin = appUrl();
   const fail = (msg: string) =>
-    NextResponse.redirect(`${url.origin}/admin/configuracoes?sheets_erro=${encodeURIComponent(msg)}`);
+    NextResponse.redirect(`${origin}/admin/configuracoes?sheets_erro=${encodeURIComponent(msg)}`);
 
   const error = url.searchParams.get("error");
   const code = url.searchParams.get("code");
@@ -32,7 +38,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const redirectUri = `${url.origin}/api/integrations/google-sheets/callback`;
+    const redirectUri = `${origin}/api/integrations/google-sheets/callback`;
     const tokens = await exchangeCodeForTokens(code, redirectUri);
     if (!tokens.refresh_token) {
       return fail(
@@ -68,7 +74,7 @@ export async function GET(request: Request) {
       updated_at: new Date().toISOString(),
     });
 
-    return NextResponse.redirect(`${url.origin}/admin/configuracoes?sheets=conectado`);
+    return NextResponse.redirect(`${origin}/admin/configuracoes?sheets=conectado`);
   } catch (err: any) {
     return fail(err.message || "Não foi possível criar o Google Sheet.");
   }

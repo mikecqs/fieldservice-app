@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getOrgId, getOrgIdAndRole, requireRole } from "@/lib/auth";
+import { appUrl } from "@/lib/app-url";
 
 // BLOCO 19 — antes desta verificação, criarAdminClient().auth.admin.createUser()
 // (que cria mesmo uma conta de Auth real, com custo/quota) corria para
@@ -115,11 +115,12 @@ export async function resetPasswordUtilizador(formData: FormData) {
     throw new Error("Não é possível repor a password de um Super Admin por aqui.");
   }
 
-  const host = (await headers()).get("host");
-  const origin = host ? `https://${host}` : `https://${process.env.VERCEL_URL ?? "localhost:3000"}`;
-
+  // Auditoria de segurança — nunca construir este link a partir do
+  // cabeçalho Host do pedido (Host Header Injection: permitiria a alguém
+  // manipular o link de reset enviado à vítima). appUrl() é sempre uma
+  // origem de confiança (env var fixa, nunca vinda do pedido).
   const { error } = await supabase.auth.resetPasswordForEmail(alvo.email, {
-    redirectTo: `${origin}/redefinir-password`,
+    redirectTo: `${appUrl()}/redefinir-password`,
   });
   if (error) throw new Error(error.message);
 }
