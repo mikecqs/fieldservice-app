@@ -1508,12 +1508,41 @@ create table google_sheets_row_map (
 );
 alter table google_sheets_row_map enable row level security;
 
+-- =============================================================================
+-- SEGREDOS DE APLICAÇÃO (só para uso interno de funções SECURITY DEFINER)
+--
+-- Auditoria de segurança — antes, o segredo do webhook do Google Sheets
+-- estava escrito em texto simples diretamente dentro de enqueue_sheets_sync
+-- (abaixo), porque o Postgres gerido do Supabase não permite
+-- `ALTER DATABASE ... SET` (permissão negada ao role "postgres" da pooler
+-- connection) para o guardar como configuração. Isso deixava o segredo real
+-- commitado no repositório Git — visível a quem tivesse acesso ao repo, e
+-- permanente no histórico mesmo depois de removido do ficheiro atual.
+--
+-- Esta tabela substitui isso: RLS ativa e ZERO policies (mesmo padrão já
+-- usado em google_sheets_sync_queue/google_sheets_row_map/
+-- tech_delay_notifications acima) — invisível a "authenticated"/"anon" por
+-- completo, mas continua legível por dentro de uma função SECURITY DEFINER
+-- (que corre com o privilégio do dono, não do chamador). O VALOR do
+-- segredo nunca fica neste ficheiro nem em nenhum ficheiro versionado — é
+-- inserido/atualizado só por um INSERT/UPDATE manual no SQL Editor, fora de
+-- git (ver instruções no fim do ficheiro).
+-- =============================================================================
+create table if not exists app_secrets (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table app_secrets enable row level security;
+
 create or replace function enqueue_sheets_sync(p_org_id uuid, p_entity_type text, p_entity_id uuid, p_action text)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_secret text;
 begin
   if p_org_id is null then return; end if;
   if not exists (select 1 from google_sheets_integrations where organization_id = p_org_id and status = 'ativo') then
@@ -1523,14 +1552,19 @@ begin
   insert into google_sheets_sync_queue (organization_id, entity_type, entity_id, action)
   values (p_org_id, p_entity_type, p_entity_id, p_action);
 
-  -- URL/segredo do webhook embutidos diretamente (não dá para usar
-  -- ALTER DATABASE ... SET no Postgres gerido do Supabase — permissão
-  -- negada ao role "postgres" da pooler connection). Se o domínio de
-  -- produção mudar, atualizar aqui.
+  select value into v_secret from app_secrets where key = 'sheets_sync_secret';
+  -- Sem segredo configurado (ex: ambiente novo, antes do INSERT manual em
+  -- app_secrets) — nunca envia um pedido sem segredo nenhum; a fila acima já
+  -- guardou o registo, o cron de recuperação apanha isto mais tarde de
+  -- qualquer forma, mesmo sem o pg_net funcionar agora.
+  if v_secret is null then return; end if;
+
+  -- URL do webhook embutida diretamente (não é segredo, só o domínio
+  -- público de produção) — se mudar, atualizar aqui.
   begin
     perform net.http_post(
       url := 'https://fieldservice-app-nine.vercel.app/api/integrations/google-sheets/process',
-      headers := jsonb_build_object('Content-Type', 'application/json', 'x-sync-secret', '9dc301211a7b37c8a6bf827d1e042628330efcbc35792ec08e18640561340c6c'),
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-sync-secret', v_secret),
       body := jsonb_build_object('organization_id', p_org_id)
     );
   exception when others then
@@ -1689,6 +1723,19 @@ alter table tech_delay_notifications enable row level security;
 --       body := '{}'::jsonb
 --     );
 --   $$);
+
+-- =============================================================================
+-- SEGREDO DO WEBHOOK GOOGLE SHEETS — nunca escrito neste ficheiro (ver
+-- app_secrets acima). Corre isto UMA VEZ no SQL Editor, fora de git, depois
+-- de gerares um valor aleatório forte (ex: `openssl rand -hex 32` no teu
+-- terminal) e de o teres posto também na env var SHEETS_SYNC_SECRET da
+-- Vercel — os dois valores têm de ser exatamente iguais:
+--
+--   insert into app_secrets (key, value) values ('sheets_sync_secret', 'COLA-AQUI-O-VALOR-GERADO')
+--   on conflict (key) do update set value = excluded.value, updated_at = now();
+--
+-- Nunca commitar este INSERT com o valor real preenchido — corre-o e
+-- descarta, tal como o INSERT do utilizador SUPER_ADMIN abaixo.
 
 -- =============================================================================
 -- PRÓXIMO PASSO: criar o teu utilizador SUPER_ADMIN

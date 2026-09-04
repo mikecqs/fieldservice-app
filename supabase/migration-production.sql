@@ -747,6 +747,65 @@ $$;
 grant execute on function finance_marcar_liquidado(uuid, text) to authenticated;
 
 -- =============================================================================
+-- Auditoria de segurança — remove o segredo do webhook do Google Sheets de
+-- dentro de enqueue_sheets_sync (estava em texto simples no SQL, commitado
+-- em git). Nova tabela app_secrets (RLS ativa, ZERO policies — mesmo padrão
+-- já usado em google_sheets_sync_queue/tech_delay_notifications: invisível
+-- a authenticated/anon, só legível por uma função SECURITY DEFINER, que
+-- corre com o privilégio do dono). enqueue_sheets_sync substituída
+-- (CREATE OR REPLACE) para ler o segredo dali; se ainda não estiver
+-- configurado, não envia o pedido HTTP (a fila já guardou o registo, o cron
+-- de recuperação trata disto mais tarde de qualquer forma).
+--
+-- DEPOIS de correr este bloco, faz UMA VEZ, à parte, fora de git:
+--   1. Gera um valor aleatório forte (ex: `openssl rand -hex 32`).
+--   2. Atualiza a env var SHEETS_SYNC_SECRET na Vercel para esse valor
+--      (isto invalida o valor antigo, que ficou exposto no histórico do
+--      Git — é o que realmente resolve a exposição, não só o código).
+--   3. Corre no SQL Editor (com o mesmo valor do passo 1):
+--        insert into app_secrets (key, value) values ('sheets_sync_secret', 'COLA-AQUI-O-VALOR-GERADO')
+--        on conflict (key) do update set value = excluded.value, updated_at = now();
+-- =============================================================================
+create table if not exists app_secrets (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table app_secrets enable row level security;
+
+create or replace function enqueue_sheets_sync(p_org_id uuid, p_entity_type text, p_entity_id uuid, p_action text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_secret text;
+begin
+  if p_org_id is null then return; end if;
+  if not exists (select 1 from google_sheets_integrations where organization_id = p_org_id and status = 'ativo') then
+    return;
+  end if;
+
+  insert into google_sheets_sync_queue (organization_id, entity_type, entity_id, action)
+  values (p_org_id, p_entity_type, p_entity_id, p_action);
+
+  select value into v_secret from app_secrets where key = 'sheets_sync_secret';
+  if v_secret is null then return; end if;
+
+  begin
+    perform net.http_post(
+      url := 'https://fieldservice-app-nine.vercel.app/api/integrations/google-sheets/process',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-sync-secret', v_secret),
+      body := jsonb_build_object('organization_id', p_org_id)
+    );
+  exception when others then
+    null; -- a fila garante que nada se perde mesmo que o pg_net falhe
+  end;
+end;
+$$;
+
+-- =============================================================================
 -- Fotos no fecho de serviço (local, ainda por commitar) — bucket de Storage
 -- novo, "visitas", para o Técnico poder enviar fotografias opcionais ao
 -- fechar uma visita. visit_photos (tabela) e o parâmetro p_fotos de
@@ -866,4 +925,12 @@ commit;
 --     (lib/faturacao-opcoes.ts, a Server Action marcarLiquidado, a secção
 --     "Liquidados" do PainelFaturacao, e as estatísticas Faturado vs
 --     Recebido em lib/financeiro.ts) é só código.
+--   - Auditoria de segurança — remoção do segredo hardcoded de
+--     enqueue_sheets_sync: depois de correr o bloco acima, FALTA MESMO
+--     fazer os 3 passos manuais descritos nesse bloco (gerar valor novo,
+--     atualizar SHEETS_SYNC_SECRET na Vercel, inserir em app_secrets) —
+--     sem isso a sincronização Google Sheets fica silenciosamente parada
+--     (a fila continua a guardar tudo, só o envio em tempo quase real é
+--     que não dispara; o cron de recuperação também não consegue nada sem
+--     o segredo configurado).
 -- =============================================================================
