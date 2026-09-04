@@ -149,7 +149,7 @@ alter table service_events add constraint service_events_tipo_check
   check (tipo in (
     'criado','agendado','reagendado','iniciado','concluido','nova_visita',
     'nao_realizado','correcao_pedida','corrigido','validado','faturado',
-    'cancelado','reativado'
+    'cancelado','reativado','liquidado'
   ));
 
 -- BLOCO 5 — budget_events: histórico deixa de ser "for all" (que permitia
