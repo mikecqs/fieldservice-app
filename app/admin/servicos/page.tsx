@@ -3,7 +3,7 @@ import { calcularPreparacao } from "@/lib/preparacao";
 import { ServicosLista } from "./ServicosLista";
 
 export default async function ServicosPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: servicos } = await supabase
     .from("services")
     .select(

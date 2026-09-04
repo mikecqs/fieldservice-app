@@ -45,8 +45,9 @@ const EVENTO_LABEL: Record<string, string> = {
   reativado: "Reativado",
 };
 
-export default async function ServicoDetalhePage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function ServicoDetalhePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const organizationId = await getOrgId();
 
   const [{ data: servico }, { data: tecnicos }, { data: visitas }, { data: validacoes }, { data: eventos }] = await Promise.all([

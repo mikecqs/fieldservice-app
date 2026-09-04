@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const nonce = crypto.randomBytes(16).toString("hex");
   const state = Buffer.from(JSON.stringify({ organizationId, nonce })).toString("base64url");
 
-  cookies().set("google_sheets_oauth_nonce", nonce, {
+  (await cookies()).set("google_sheets_oauth_nonce", nonce, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",

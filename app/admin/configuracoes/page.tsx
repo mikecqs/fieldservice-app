@@ -4,12 +4,13 @@ import { getOrgId } from "@/lib/auth";
 import { guardarConfiguracoes } from "./actions";
 import { sincronizarAgora, desligarGoogleSheets } from "./integracoes-actions";
 
-export default async function ConfiguracoesPage({
-  searchParams,
-}: {
-  searchParams: { sheets?: string; sheets_erro?: string };
-}) {
-  const supabase = createClient();
+export default async function ConfiguracoesPage(
+  props: {
+    searchParams: Promise<{ sheets?: string; sheets_erro?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const organizationId = await getOrgId();
   const { data: settings } = await supabase
     .from("org_settings")

@@ -4,7 +4,7 @@ type BudgetEventTipo = "criado" | "enviado" | "followup" | "aceite" | "recusado"
 
 // Histórico do orçamento — mesmo espírito de registarEventoServico.
 export async function registarEventoOrcamento(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   params: { organizationId: string; budgetId: string; tipo: BudgetEventTipo; descricao: string; userId?: string }
 ) {
   let userId = params.userId;

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { obterDetalhePedido, arquivarPedido, converterEmOrcamento, resolverInfoPedido } from "../actions";
 import { PedidoDetalheConteudo } from "@/components/pedidos/PedidoDetalheConteudo";
 
-export default async function PedidoDetalhePage({ params }: { params: { id: string } }) {
+export default async function PedidoDetalhePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const detalhe = await obterDetalhePedido(params.id);
   if (!detalhe) notFound();
   const { pedido } = detalhe;

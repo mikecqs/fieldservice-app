@@ -3,7 +3,7 @@ import { criarEmpresa, criarAdminDaEmpresa, alterarEstadoEmpresa, alterarEstadoU
 import { ROLE_LABEL } from "@/lib/roles";
 
 export default async function SuperAdminPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: organizations } = await supabase
     .from("organizations")

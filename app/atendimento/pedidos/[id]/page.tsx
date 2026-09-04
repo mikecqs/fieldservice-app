@@ -9,8 +9,9 @@ import { estadoOperacionalPedido } from "@/lib/pedido-estado";
 // que o Admin usa (estadoOperacionalPedido), nunca um segundo sistema de
 // estado. Não mostra orçamento nem serviço em si (tabelas administrativas,
 // fora do alcance desta role), só o percurso resumido do próprio pedido.
-export default async function AtendimentoPedidoDetalhePage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function AtendimentoPedidoDetalhePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
 
   const { data: pedido } = await supabase
     .from("requests")

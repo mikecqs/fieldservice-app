@@ -6,7 +6,7 @@ import { rotuloTipoServico } from "@/lib/servico-estado";
 // ação de corrigir é do técnico, a de validar/rejeitar outra vez já está em
 // Faturação.
 export default async function PendenciasPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: pendentes } = await supabase
     .from("services")

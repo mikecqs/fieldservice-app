@@ -11,7 +11,7 @@ import { ROLE_LABEL } from "@/lib/roles";
 // role='ATENDIMENTO', mesmo por fora desta página.
 
 export default async function UtilizadoresPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: utilizadores } = await supabase
     .from("profiles")
     .select("id, nome, email, role, ativo")

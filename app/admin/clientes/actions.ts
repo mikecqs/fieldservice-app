@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 // componente cliente que, depois de criar o cliente, pergunta "Deseja criar
 // um pedido?" antes de navegar para qualquer lado).
 export async function criarCliente(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile } = await supabase
@@ -72,7 +72,7 @@ export async function criarCliente(formData: FormData) {
 // permitido — as duas roles que podem chamar isto (ADMIN/SUPER_ADMIN e
 // ATENDIMENTO) já têm essa permissão.
 export async function criarClienteRapido(input: { nome: string; telefone?: string; email?: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -103,7 +103,7 @@ export async function criarClienteRapido(input: { nome: string; telefone?: strin
 }
 
 export async function criarMoradaRapida(input: { client_id: string; endereco: string; label?: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -19,7 +19,7 @@ type ServiceEventTipo =
 // Admin — as ações do técnico (iniciar/terminar) já registam o próprio
 // evento dentro das RPCs SECURITY DEFINER (tech_start_service/tech_finish_visit).
 export async function registarEventoServico(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   params: { organizationId: string; serviceId: string; tipo: ServiceEventTipo; descricao: string; userId?: string }
 ) {
   let userId = params.userId;

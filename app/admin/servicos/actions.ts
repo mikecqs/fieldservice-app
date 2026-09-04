@@ -24,7 +24,7 @@ export async function verificarConflitoAgenda(input: {
   horaInicio: string;
   horaFim: string;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let tecnicoIds = input.technicianIds ?? [];
   let nomesConhecidos: Record<string, string> = {};
@@ -76,7 +76,7 @@ export async function verificarConflitoAgenda(input: {
 
 export async function atualizarAgendamento(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -138,7 +138,7 @@ export async function atualizarAgendamento(formData: FormData) {
 // obrigatório, validação de estado no servidor e evento sempre registado.
 export async function cancelarServico(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const motivo = String(formData.get("motivo") || "").trim();
   if (!id) return;
@@ -178,7 +178,7 @@ export async function reativarServico(formData: FormData) {
   if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
     throw new Error("Sem permissão para reativar este serviço.");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const id = String(formData.get("id") || "");
   const data_agendada = String(formData.get("data_agendada") || "");
@@ -249,7 +249,7 @@ export async function reativarServico(formData: FormData) {
 // faz o histórico do equipamento (na ficha do cliente) mostrar as
 // intervenções futuras/passadas relacionadas com ele.
 export async function associarEquipamento(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const equipment_id = String(formData.get("equipment_id") || "") || null;
   if (!id) return;
@@ -258,7 +258,7 @@ export async function associarEquipamento(formData: FormData) {
 }
 
 export async function atribuirTecnico(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const service_id = String(formData.get("service_id") || "");
   const user_id = String(formData.get("user_id") || "");
   if (!service_id || !user_id) return;
@@ -273,7 +273,7 @@ export async function atribuirTecnico(formData: FormData) {
 }
 
 export async function removerTecnico(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const service_id = String(formData.get("service_id") || "");
   const user_id = String(formData.get("user_id") || "");
   if (!service_id || !user_id) return;
@@ -293,7 +293,7 @@ export async function removerTecnico(formData: FormData) {
 // do facto (BLOCO 16). Nunca um estado/regra novos, reutiliza sempre
 // podeReagendarServico.
 export async function adicionarMaterialPlaneado(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const service_id = String(formData.get("service_id") || "");
   const nome = String(formData.get("nome") || "");
   const qtd = Number(formData.get("qtd") || 1);
@@ -313,7 +313,7 @@ export async function adicionarMaterialPlaneado(formData: FormData) {
 }
 
 export async function removerMaterialPlaneado(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const service_id = String(formData.get("service_id") || "");
   if (!id) return;
@@ -334,7 +334,7 @@ export async function removerMaterialPlaneado(formData: FormData) {
 // só em esconder o botão no frontend. Cada ação fica sempre registada no
 // histórico, mesmo que a mesma OS seja corrigida e reavaliada várias vezes.
 export async function validarServico(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -364,7 +364,7 @@ export async function validarServico(formData: FormData) {
 // de um Orçamento por `budget_id`, sejam do Fluxo A ou do Fluxo B.
 export async function criarOrcamentoDeVisita(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -394,7 +394,7 @@ export async function criarOrcamentoDeVisita(formData: FormData) {
 }
 
 export async function enviarParaCorrecao(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const motivo = String(formData.get("motivo") || "").trim();
   if (!id || !motivo) return;

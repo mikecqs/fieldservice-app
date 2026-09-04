@@ -7,8 +7,9 @@ import { PedidosCompactos } from "./PedidosCompactos";
 import { RegistarEquipamentoForm } from "./RegistarEquipamentoForm";
 import { rotuloTipoServico } from "@/lib/servico-estado";
 
-export default async function ClienteDetalhePage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function ClienteDetalhePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
 
   const { data: cliente } = await supabase
     .from("clients")

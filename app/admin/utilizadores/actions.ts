@@ -35,7 +35,7 @@ export async function criarUtilizador(formData: FormData) {
     throw new Error(authError?.message || "Não foi possível criar o utilizador.");
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error: profileError } = await supabase.from("profiles").insert({
     id: authUser.user.id,
     organization_id: organizationId,
@@ -61,7 +61,7 @@ export async function desativarUtilizador(formData: FormData) {
   if (chamadorRole !== "ADMIN" && chamadorRole !== "SUPER_ADMIN") {
     throw new Error("Sem permissão para desativar utilizadores.");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -86,7 +86,7 @@ export async function reativarUtilizador(formData: FormData) {
   if (chamadorRole !== "ADMIN" && chamadorRole !== "SUPER_ADMIN") {
     throw new Error("Sem permissão para reativar utilizadores.");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -105,7 +105,7 @@ export async function resetPasswordUtilizador(formData: FormData) {
   if (chamadorRole !== "ADMIN" && chamadorRole !== "SUPER_ADMIN") {
     throw new Error("Sem permissão para repor password de outro utilizador.");
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
 
@@ -115,7 +115,7 @@ export async function resetPasswordUtilizador(formData: FormData) {
     throw new Error("Não é possível repor a password de um Super Admin por aqui.");
   }
 
-  const host = headers().get("host");
+  const host = (await headers()).get("host");
   const origin = host ? `https://${host}` : `https://${process.env.VERCEL_URL ?? "localhost:3000"}`;
 
   const { error } = await supabase.auth.resetPasswordForEmail(alvo.email, {

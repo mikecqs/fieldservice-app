@@ -9,8 +9,9 @@ import { TIPO_LABEL } from "@/lib/orcamento-item-tipo";
 // A proteção de acesso é a mesma RLS de sempre: createClient() usa a sessão
 // do próprio pedido, por isso quem não for ADMIN/SUPER_ADMIN da organização
 // simplesmente não recebe nenhuma linha de `budgets` e cai no 404 abaixo.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const supabase = createClient();
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const { data: orcamento } = await supabase
     .from("budgets")
     .select("*, clients(nome, nif, email, telefone), budget_items(*)")

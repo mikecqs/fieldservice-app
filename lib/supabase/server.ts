@@ -1,11 +1,18 @@
+import "server-only";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 // Cliente Supabase para usar em Server Components, Server Actions e Route Handlers.
 // Lê/escreve a sessão através dos cookies do pedido — é o que garante que o
 // utilizador continua autenticado entre navegações no App Router.
-export function createClient() {
-  const cookieStore = cookies();
+// Assíncrona desde o Next 15 (cookies() passou a assíncrono) — todos os
+// ~48 chamadores já são funções async (Server Components/Actions/Route
+// Handlers), por isso é só acrescentar `await` em cada um, nunca uma
+// mudança de arquitetura. "server-only" acima garante que um import
+// acidental num componente "use client" falha já no build, nunca só em
+// runtime.
+export async function createClient() {
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -9,7 +9,7 @@ export default async function NovaCompraPage() {
   // Ocultado por decisão de produto (temporário) — ver app/admin/compras/page.tsx.
   redirect("/admin/servicos");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: servicos } = await supabase
     .from("services")
     .select("id, tipo, descricao, clients(nome)")

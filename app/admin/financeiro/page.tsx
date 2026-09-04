@@ -2,12 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import { computeRange, getFinanceiroStats } from "@/lib/financeiro";
 import { DashboardFinanceiro } from "@/components/DashboardFinanceiro";
 
-export default async function FinanceiroAdminPage({
-  searchParams,
-}: {
-  searchParams: { range?: string; desde?: string; ate?: string };
-}) {
-  const supabase = createClient();
+export default async function FinanceiroAdminPage(
+  props: {
+    searchParams: Promise<{ range?: string; desde?: string; ate?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const preset = searchParams.range ?? "mes";
   const range = computeRange(preset, searchParams.desde, searchParams.ate);
   const stats = await getFinanceiroStats(supabase, range.desde, range.ate);

@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { ServicoDetalheClient } from "./ServicoDetalheClient";
 
-export default async function ServicoTecnicoPage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function ServicoTecnicoPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const organizationId = await getOrgId();
 
   const { data: servico } = await supabase

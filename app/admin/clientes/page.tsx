@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ClientesLista, type ClienteResumo } from "./ClientesLista";
 
 export default async function ClientesPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: clients } = await supabase
     .from("clients")
     .select("id, codigo, nome, empresa, telefone, nif, client_addresses(label, endereco)")

@@ -48,12 +48,13 @@ function Cartao({ label, value, sub }: { label: string; value: string; sub?: Rea
   );
 }
 
-export default async function RelatoriosPage({
-  searchParams,
-}: {
-  searchParams: { range?: string; desde?: string; ate?: string };
-}) {
-  const supabase = createClient();
+export default async function RelatoriosPage(
+  props: {
+    searchParams: Promise<{ range?: string; desde?: string; ate?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const preset = searchParams.range ?? "mes";
   const range = computeRange(preset, searchParams.desde, searchParams.ate);
   const anterior = periodoAnterior(range.desde, range.ate);

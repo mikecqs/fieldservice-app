@@ -18,7 +18,7 @@ export async function PainelFaturacao({
   titulo?: string;
   subtitulo?: string;
 }) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: aguardamValidacao } = await supabase
     .from("services")

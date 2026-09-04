@@ -16,7 +16,7 @@ function toISO(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-type SB = ReturnType<typeof createClient>;
+type SB = Awaited<ReturnType<typeof createClient>>;
 
 // ---------------------------------------------------------------------------
 // Pontos de atenção — sinais complementares à Central de Atenção (não

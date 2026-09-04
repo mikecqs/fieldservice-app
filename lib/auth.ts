@@ -16,7 +16,7 @@ export function homeForRole(role?: string) {
 // normal (layouts de Server Component), não no middleware — ver nota em
 // middleware.ts sobre porque a verificação de role foi movida para aqui.
 export async function requireRole(allowed: string[]) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -48,7 +48,7 @@ export async function requireRole(allowed: string[]) {
 // alguém adultere o pedido, a RLS de cada tabela só aceita organization_id
 // igual ao do próprio utilizador, por isso um valor forjado seria rejeitado.
 export async function getOrgId() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -77,7 +77,7 @@ export async function getOrgId() {
 // quem a chamou — nunca confiar num campo escondido do formulário para isso,
 // a role vem sempre da sessão autenticada.
 export async function getOrgIdAndRole() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

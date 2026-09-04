@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { importarCatalogo, removerItemCatalogo } from "./actions";
 
-export default async function CatalogoPage({ searchParams }: { searchParams: { q?: string } }) {
-  const supabase = createClient();
+export default async function CatalogoPage(props: { searchParams: Promise<{ q?: string }> }) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const q = (searchParams.q ?? "").trim();
 
   let query = supabase.from("catalog_items").select("id, referencia, descricao, preco_venda").order("referencia");

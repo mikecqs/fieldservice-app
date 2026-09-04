@@ -24,7 +24,7 @@ import { podeReagendarServico, deveTransicionarParaAgendado } from "@/lib/servic
 // continua em cada chamador, porque são legitimamente diferentes entre os
 // dois fluxos.
 export async function escreverAgendamentoServico(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   input: {
     serviceId: string;
     dataAgendada: string | null;

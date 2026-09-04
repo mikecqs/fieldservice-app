@@ -6,7 +6,7 @@ import { getOrgId } from "@/lib/auth";
 
 export async function guardarConfiguracoes(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const followup_dias_default = Number(formData.get("followup_dias_default") || 3);
   if (!Number.isFinite(followup_dias_default) || followup_dias_default < 0) {

@@ -14,12 +14,13 @@ type Servico = ServicoAgenda & {
   preparacaoNivel?: NivelPreparacao;
 };
 
-export default async function AgendaPage({
-  searchParams,
-}: {
-  searchParams: { view?: string; data?: string };
-}) {
-  const supabase = createClient();
+export default async function AgendaPage(
+  props: {
+    searchParams: Promise<{ view?: string; data?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const view = searchParams.view === "dia" || searchParams.view === "mes" ? searchParams.view : "semana";
   const refDate = searchParams.data ? parseISO(searchParams.data) : new Date();
 

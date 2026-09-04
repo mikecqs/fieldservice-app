@@ -16,7 +16,7 @@ function encontrarColuna(headers: string[], candidatos: string[]) {
 // duplicar.
 export async function importarCatalogo(formData: FormData) {
   const organizationId = await getOrgId();
-  const supabase = createClient();
+  const supabase = await createClient();
   const file = formData.get("ficheiro") as File | null;
   if (!file || file.size === 0) throw new Error("Escolhe um ficheiro Excel (.xlsx).");
 
@@ -61,7 +61,7 @@ export async function importarCatalogo(formData: FormData) {
 }
 
 export async function removerItemCatalogo(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id") || "");
   if (!id) return;
   await supabase.from("catalog_items").delete().eq("id", id);

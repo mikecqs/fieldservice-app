@@ -21,7 +21,7 @@ const ESTADOS_TERMINAIS_HOJE = ["concluido", "aguarda_validacao", "nova_visita",
 // já era assim no resto do Admin) porque a RLS de cada tabela já garante o
 // isolamento por empresa.
 export default async function DashboardPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const organizationId = await getOrgId();
 
   const agora = new Date();

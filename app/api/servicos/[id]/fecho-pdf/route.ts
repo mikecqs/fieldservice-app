@@ -31,7 +31,7 @@ import { gerarPdfFecho } from "@/lib/pdf-fecho";
 const ROLES_PERMITIDOS = ["ADMIN", "SUPER_ADMIN", "FINANCE"];
 
 async function autorizarEObterServico(id: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { organizationId, role } = await getOrgIdAndRole();
 
   if (!ROLES_PERMITIDOS.includes(role)) {
@@ -74,7 +74,8 @@ function paginaFecho(opts: { mensagem: string; mostrarErro?: boolean }) {
   return new NextResponse(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const autorizado = await autorizarEObterServico(params.id);
   if ("erro" in autorizado) return autorizado.erro;
   const { supabase, organizationId, servico } = autorizado;
@@ -108,7 +109,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 // sempre a redirecionar para o GET acima (303, para o form não reenviar o
 // POST se a página for recarregada) — mostra o PDF se tiver resultado, ou a
 // mesma página com o motivo se tiver falhado outra vez.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const autorizado = await autorizarEObterServico(params.id);
   if ("erro" in autorizado) return autorizado.erro;
   const { servico } = autorizado;
