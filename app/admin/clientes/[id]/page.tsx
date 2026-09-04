@@ -27,6 +27,7 @@ export default async function ClienteDetalhePage(props: { params: Promise<{ id: 
       .from("client_equipment")
       .select("*, client_addresses(label, endereco)")
       .eq("client_id", params.id)
+      .eq("eliminado", false)
       .order("created_at", { ascending: false }),
   ]);
 
@@ -116,11 +117,20 @@ export default async function ClienteDetalhePage(props: { params: Promise<{ id: 
                     </div>
                     {e.notas && <p className="mt-1 text-xs text-neutral-400">{e.notas}</p>}
                   </div>
-                  <form action={removerEquipamento}>
-                    <input type="hidden" name="id" value={e.id} />
-                    <input type="hidden" name="client_id" value={params.id} />
-                    <button className="text-xs text-red-400 hover:underline">remover</button>
-                  </form>
+                  <details className="relative">
+                    <summary className="list-none cursor-pointer text-xs text-red-400 hover:underline">remover</summary>
+                    <form
+                      action={removerEquipamento}
+                      className="absolute right-0 z-10 mt-1 w-60 rounded-lg border border-neutral-800 bg-neutral-900 p-3 shadow-lg"
+                    >
+                      <input type="hidden" name="id" value={e.id} />
+                      <input type="hidden" name="client_id" value={params.id} />
+                      <p className="mb-2 text-xs text-neutral-300">Remover "{e.equipamento}" da ficha do cliente?</p>
+                      <button className="w-full rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-800">
+                        Confirmar remoção
+                      </button>
+                    </form>
+                  </details>
                 </div>
                 {intervencoes.length > 0 && (
                   <div className="mt-2 border-t border-neutral-800 pt-2">

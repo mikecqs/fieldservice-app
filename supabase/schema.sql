@@ -150,7 +150,13 @@ create table client_equipment (
   data_instalacao date,
   notas text,
   foto_path text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Soft delete (auditoria de segurança) — "remover equipamento" antes
+  -- apagava a linha e a fotografia do Storage de imediato, sem confirmação
+  -- nem forma de recuperar um clique em engano. Nunca apagado de verdade;
+  -- só deixa de aparecer na ficha do cliente (query filtra eliminado=false)
+  -- — mesmo espírito de profiles.ativo (nunca apagar, só esconder).
+  eliminado boolean not null default false
 );
 
 alter table client_equipment enable row level security;
@@ -1298,6 +1304,12 @@ begin
     raise exception 'Este serviço não está pronto para faturar.';
   end if;
 
+  -- O evento 'faturado' em service_events já não é inserido aqui — o
+  -- trigger services_log_faturacao_change (abaixo) trata disso sozinho,
+  -- para qualquer UPDATE que mude faturacao_estado, venha desta RPC ou de
+  -- um UPDATE direto do ADMIN (que tem RLS `for all` em services) — nunca
+  -- duas fontes divergentes do mesmo evento, e nunca uma alteração de
+  -- faturação sem rasto no histórico, seja qual for o caminho.
   update services
     set faturacao_estado = 'faturado',
         faturacao_valor = p_valor,
@@ -1305,13 +1317,6 @@ begin
         faturacao_data = current_date,
         faturacao_utilizador = auth.uid()
     where id = p_service_id;
-
-  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
-  values (
-    v_org_id, p_service_id, 'faturado',
-    'Faturado — ref. ' || p_referencia || ', valor ' || p_valor || '€.',
-    auth.uid()
-  );
 end;
 $$;
 grant execute on function finance_marcar_faturado(uuid, numeric, text) to authenticated;
@@ -1347,22 +1352,62 @@ begin
     raise exception 'Este serviço não está pronto para liquidar.';
   end if;
 
+  -- Ver nota equivalente em finance_marcar_faturado — o evento 'liquidado'
+  -- também já não é inserido aqui, fica todo a cargo do trigger abaixo.
   update services
     set faturacao_estado = 'liquidado',
         faturacao_metodo_pagamento = p_metodo_pagamento,
         faturacao_liquidado_data = current_date,
         faturacao_liquidado_utilizador = auth.uid()
     where id = p_service_id;
-
-  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
-  values (
-    v_org_id, p_service_id, 'liquidado',
-    'Liquidado — ' || p_metodo_pagamento || '.',
-    auth.uid()
-  );
 end;
 $$;
 grant execute on function finance_marcar_liquidado(uuid, text) to authenticated;
+
+-- =============================================================================
+-- TRIGGER: regista sempre um evento em service_events quando
+-- services.faturacao_estado muda para 'faturado' ou 'liquidado' — única
+-- fonte deste evento (as RPCs finance_marcar_faturado/finance_marcar_liquidado
+-- acima já não o inserem elas próprias). Auditoria de segurança: ADMIN tem
+-- RLS `for all` em services (decisão de confiança deliberada, ver
+-- CLAUDE.md) e podia sempre fazer UPDATE direto a faturacao_estado por
+-- fora destas RPCs — antes disto, esse UPDATE direto não deixava rasto
+-- nenhum no histórico. Um trigger de tabela corre sempre, seja qual for o
+-- caminho do UPDATE (RPC ou direto), por isso fecha essa lacuna de vez.
+-- Nunca dispara para outras transições (ex: reverter para 'por_faturar'
+-- não é um evento válido de service_events) — fica silenciosamente sem
+-- evento, mesmo comportamento de antes para esses casos fora do fluxo
+-- normal.
+-- =============================================================================
+create or replace function log_faturacao_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.faturacao_estado is distinct from old.faturacao_estado
+     and new.faturacao_estado in ('faturado', 'liquidado') then
+    insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+    values (
+      new.organization_id, new.id, new.faturacao_estado,
+      case
+        when new.faturacao_estado = 'faturado' then
+          'Faturado — ref. ' || coalesce(new.faturacao_referencia, '—') || ', valor ' || coalesce(new.faturacao_valor::text, '—') || '€.'
+        else
+          'Liquidado — ' || coalesce(new.faturacao_metodo_pagamento, '—') || '.'
+      end,
+      auth.uid()
+    );
+  end if;
+  return new;
+end;
+$$;
+
+create trigger services_log_faturacao_change
+  after update on services
+  for each row
+  execute function log_faturacao_change();
 
 -- =============================================================================
 -- TRIGGER: cria automaticamente um registo em org_settings quando nasce uma
