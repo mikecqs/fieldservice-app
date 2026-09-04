@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { desativarUtilizador, reativarUtilizador, resetPasswordUtilizador } from "./actions";
 import { NovoUtilizadorForm } from "./NovoUtilizadorForm";
+import { AcoesUtilizador } from "./AcoesUtilizador";
 import { ROLE_LABEL } from "@/lib/roles";
 
 // ATENDIMENTO pode aparecer aqui em modo só-leitura (a policy "org members
@@ -46,31 +46,7 @@ export default async function UtilizadoresPage() {
             {u.ativo === false && (
               <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-400">Desativado</span>
             )}
-            {u.role !== "SUPER_ADMIN" && (
-              <div className="ml-auto flex gap-2">
-                <form action={resetPasswordUtilizador}>
-                  <input type="hidden" name="id" value={u.id} />
-                  <button className="rounded-md border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:bg-neutral-800">
-                    Repor password
-                  </button>
-                </form>
-                {u.ativo === false ? (
-                  <form action={reativarUtilizador}>
-                    <input type="hidden" name="id" value={u.id} />
-                    <button className="rounded-md border border-emerald-500/30 px-2.5 py-1 text-xs text-emerald-400 hover:bg-emerald-500/10">
-                      Reativar
-                    </button>
-                  </form>
-                ) : (
-                  <form action={desativarUtilizador}>
-                    <input type="hidden" name="id" value={u.id} />
-                    <button className="rounded-md border border-red-500/30 px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10">
-                      Desativar
-                    </button>
-                  </form>
-                )}
-              </div>
-            )}
+            {u.role !== "SUPER_ADMIN" && <AcoesUtilizador id={u.id} ativo={u.ativo !== false} />}
           </div>
         ))}
       </div>
