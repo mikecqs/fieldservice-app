@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
+import { assertPertenceAOrg, assertMoradaPertenceCliente } from "@/lib/tenant-guard";
 
 export async function criarEquipamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -16,6 +17,16 @@ export async function criarEquipamento(formData: FormData) {
   const data_instalacao = String(formData.get("data_instalacao") || "") || null;
   const notas = String(formData.get("notas") || "").trim() || null;
   if (!client_id || !equipamento) return;
+
+  // Finding 1 — client_id/address_id vêm da própria página do cliente
+  // (nunca de um formulário genérico), mas nada impede um pedido forjado
+  // com ids de outra empresa; a RLS de INSERT em "client_equipment" só
+  // valida a organização da PRÓPRIA linha, nunca a do cliente/morada
+  // referenciados.
+  await assertPertenceAOrg(supabase, "clients", client_id, organizationId, "Cliente não pertence a esta empresa.");
+  if (address_id) {
+    await assertMoradaPertenceCliente(supabase, address_id, client_id, organizationId, "A morada selecionada não pertence a este cliente.");
+  }
 
   const { data: equip, error } = await supabase
     .from("client_equipment")

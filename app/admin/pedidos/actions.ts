@@ -9,6 +9,7 @@ import { registarEventoPedido } from "@/lib/request-events";
 import { podeDecidirPedido } from "@/lib/pedido-estado";
 import { ORIGENS_PEDIDO as ORIGENS_VALIDAS } from "@/lib/pedido-opcoes";
 import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
+import { assertPertenceAOrg, assertMoradaPertenceCliente } from "@/lib/tenant-guard";
 
 // Única lógica que cria um orçamento a partir de um pedido — usada tanto
 // quando o tipo já é "Orçamento" (automático, sem perguntar nada) como
@@ -169,18 +170,16 @@ export async function criarPedido(formData: FormData) {
   if (!client_id || !address_id || !tipo || !descricao) return;
   if (!ORIGENS_VALIDAS.includes(origem)) return;
 
-  // Nunca confiar que o address_id do formulário pertence mesmo ao cliente
-  // selecionado — mesmo vindo de um <select> já filtrado no cliente, um
-  // pedido forjado poderia enviar a morada de outro cliente qualquer. Esta
-  // verificação garante que morada e cliente nunca ficam desalinhados,
-  // reforçando o que a RLS de client_addresses já limita por organização.
-  const { data: morada } = await supabase
-    .from("client_addresses")
-    .select("id")
-    .eq("id", address_id)
-    .eq("client_id", client_id)
-    .single();
-  if (!morada) throw new Error("A morada selecionada não pertence ao cliente selecionado.");
+  // Finding 1 — nunca confiar que client_id/address_id vindos do formulário
+  // pertencem mesmo a esta organização: a RLS de INSERT em "requests" só
+  // valida organization_id da PRÓPRIA linha, nunca a organização do cliente
+  // referenciado por client_id. Sem isto, um pedido forjado conseguia
+  // associar-se ao cliente de outra empresa.
+  await assertPertenceAOrg(supabase, "clients", client_id, organizationId, "Cliente não pertence a esta empresa.");
+  // E nunca confiar que o address_id pertence mesmo ao cliente selecionado
+  // — mesmo vindo de um <select> já filtrado no cliente, um pedido forjado
+  // poderia enviar a morada de outro cliente qualquer.
+  await assertMoradaPertenceCliente(supabase, address_id, client_id, organizationId);
 
   const { data: pedido, error } = await supabase
     .from("requests")
@@ -244,18 +243,19 @@ export async function decidirComOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
   const supabase = await createClient();
   const requestId = String(formData.get("id") || "");
-  const clientId = String(formData.get("client_id") || "");
-  if (!requestId || !clientId) return;
+  if (!requestId) return;
 
-  // Nunca decidir duas vezes o mesmo pedido — revisitar esta página (ex:
-  // botão "voltar" do browser) depois de já ter sido decidido por outro
-  // caminho criaria um segundo orçamento órfão para o mesmo pedido.
-  const { data: pedidoAtual } = await supabase.from("requests").select("estado").eq("id", requestId).single();
+  // Finding 1 — client_id nunca vem do formulário (era só um <input hidden>
+  // redundante, sempre igual a pedido.client_id): lê-se sempre do próprio
+  // pedido, já filtrado pela RLS de "requests" (organization_id = my_org()),
+  // nunca de um valor que um pedido forjado pudesse trocar por um cliente de
+  // outra empresa.
+  const { data: pedidoAtual } = await supabase.from("requests").select("estado, client_id").eq("id", requestId).single();
   if (!pedidoAtual || !podeDecidirPedido(pedidoAtual)) {
     throw new Error("Este pedido já foi decidido — não é possível criar outro orçamento a partir dele.");
   }
 
-  const budget = await criarOrcamentoDePedido(supabase, organizationId, requestId, clientId);
+  const budget = await criarOrcamentoDePedido(supabase, organizationId, requestId, pedidoAtual.client_id);
   revalidatePath("/admin/pedidos");
   redirect(`/admin/orcamentos/${budget.id}`);
 }
@@ -467,15 +467,16 @@ export async function converterEmOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
   const supabase = await createClient();
   const requestId = String(formData.get("id") || "");
-  const clientId = String(formData.get("client_id") || "");
-  if (!requestId || !clientId) return;
+  if (!requestId) return;
 
-  const { data: pedidoAtual } = await supabase.from("requests").select("estado").eq("id", requestId).single();
+  // Finding 1 — mesmo motivo de decidirComOrcamento: client_id lê-se sempre
+  // do próprio pedido (RLS-scoped), nunca do <input hidden> do formulário.
+  const { data: pedidoAtual } = await supabase.from("requests").select("estado, client_id").eq("id", requestId).single();
   if (!pedidoAtual || !podeDecidirPedido(pedidoAtual)) {
     throw new Error("Este pedido já foi decidido — não é possível criar outro orçamento a partir dele.");
   }
 
-  const budget = await criarOrcamentoDePedido(supabase, organizationId, requestId, clientId);
+  const budget = await criarOrcamentoDePedido(supabase, organizationId, requestId, pedidoAtual.client_id);
   revalidatePath("/admin/pedidos");
   redirect(`/admin/orcamentos/${budget.id}`);
 }

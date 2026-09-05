@@ -31,7 +31,6 @@ export default async function DecisaoPedidoPage(props: { params: Promise<{ id: s
         <div className="flex gap-3">
           <form action={decidirComOrcamento} className="flex-1">
             <input type="hidden" name="id" value={pedido.id} />
-            <input type="hidden" name="client_id" value={pedido.client_id} />
             <button className="w-full rounded-md bg-white px-4 py-2.5 text-sm font-medium text-neutral-950 hover:bg-neutral-200">
               Sim → Orçamento
             </button>

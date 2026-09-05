@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { registarEventoServico } from "@/lib/service-events";
 import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
+import { assertTecnicoPertenceOrg } from "@/lib/tenant-guard";
 
 // Auditoria "Centralizar criação" (Ponto 2) — esta ação criava também
 // Serviços novos diretamente na Agenda (ramo `else` abaixo, removido), sem
@@ -56,6 +57,8 @@ export async function agendarServicoExistente(input: {
   });
 
   if (input.tecnicoId) {
+    // Finding 1 — mesmo motivo de reativarServico/atribuirTecnico.
+    await assertTecnicoPertenceOrg(supabase, input.tecnicoId, organizationId);
     const { data: jaAtribuido } = await supabase
       .from("service_technicians")
       .select("user_id")

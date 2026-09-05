@@ -11,12 +11,19 @@ import { podeEditarItensOrcamento, podeMarcarEnviado, podeAceitarOrcamento, pode
 import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
 import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
 import { calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib/mao-obra";
+import { assertPertenceAOrg, assertTecnicoPertenceOrg } from "@/lib/tenant-guard";
 
 export async function criarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
   const supabase = await createClient();
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return;
+
+  // Finding 1 — client_id vem de um <select>, mas nada impede um pedido
+  // forjado com o id de um cliente de outra empresa; a RLS de INSERT em
+  // "budgets" só valida organization_id da própria linha, nunca a
+  // organização do cliente referenciado.
+  await assertPertenceAOrg(supabase, "clients", client_id, organizationId, "Cliente não pertence a esta empresa.");
 
   const { data: budget, error } = await supabase
     .from("budgets")
@@ -480,6 +487,11 @@ export async function aceitarOrcamento(formData: FormData) {
       horaFimAgendada: hora_fim_agendada,
     });
     if (tecnico_id) {
+      // Finding 1 — service_technicians não tem organization_id próprio; a
+      // sua RLS só valida a organização do service_id, nunca a do user_id
+      // atribuído. Sem este check, um tecnico_id de outra empresa ficava
+      // associado a um serviço desta.
+      await assertTecnicoPertenceOrg(supabase, tecnico_id, organizationId);
       await supabase.from("service_technicians").insert({ service_id: service.id, user_id: tecnico_id });
     }
     await registarEventoServico(supabase, {
