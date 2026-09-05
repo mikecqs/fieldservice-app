@@ -25,6 +25,58 @@ export async function obterVisitaAberta(serviceId: string) {
   return data?.id ?? null;
 }
 
+// Chamado por abrirFinalizar() logo a seguir a obterVisitaAberta() — nunca
+// confiar no "servico.motivo_correcao" recebido por prop no render inicial
+// da página para decidir se esta visita é uma correção: esse valor fica
+// preenchido para sempre depois da primeira rejeição de um serviço (nunca
+// volta a null), por isso, sozinho, não distingue "esta visita concreta é
+// uma reabertura de correção" de "este serviço já foi rejeitado alguma vez
+// no passado, mas esta visita é uma reabertura normal, sem correção". A
+// única fonte fiável é sempre visits.apos_correcao da própria visita aberta
+// (o mesmo valor que tech_finish_visit usa para exigir a justificação) —
+// por isso vai sempre buscar isto em tempo real, nunca por prop.
+export async function obterContextoCorrecao(visitId: string) {
+  const supabase = await createClient();
+  const { data: visita } = await supabase.from("visits").select("service_id, apos_correcao").eq("id", visitId).maybeSingle();
+  if (!visita?.apos_correcao) return { aposCorrecao: false, visitaAnterior: null };
+
+  const { data: anterior } = await supabase
+    .from("visits")
+    .select(
+      "trabalho_realizado, problema_identificado, equipamento_instalado, quantidade_instalada, testes_realizados, mao_obra_tipo, mao_obra_detalhe, visit_materials_used(nome, qtd, preco_unit), visit_photos(storage_path)"
+    )
+    .eq("service_id", visita.service_id)
+    .neq("id", visitId)
+    .not("hora_fim_real", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!anterior) return { aposCorrecao: true, visitaAnterior: null };
+
+  let fotosUrls: string[] = [];
+  if (anterior.visit_photos?.length) {
+    const paths = anterior.visit_photos.map((p: any) => p.storage_path);
+    const { data: assinadas } = await supabase.storage.from("visitas").createSignedUrls(paths, 3600);
+    fotosUrls = (assinadas ?? []).map((s: any) => s.signedUrl).filter(Boolean);
+  }
+
+  return {
+    aposCorrecao: true,
+    visitaAnterior: {
+      trabalhoRealizado: anterior.trabalho_realizado as string | null,
+      problemaIdentificado: anterior.problema_identificado as string | null,
+      equipamentoInstalado: anterior.equipamento_instalado as string | null,
+      quantidadeInstalada: anterior.quantidade_instalada as number | null,
+      testesRealizados: anterior.testes_realizados as string | null,
+      maoObraTipo: anterior.mao_obra_tipo as string | null,
+      maoObraDetalhe: anterior.mao_obra_detalhe as string | null,
+      materiais: (anterior.visit_materials_used ?? []) as { nome: string; qtd: number; preco_unit: number }[],
+      fotosUrls,
+    },
+  };
+}
+
 // Onda 2 — sugestão inicial de mão de obra para o formulário de fecho,
 // calculada a partir de hora_inicio_real da visita (gravada
 // automaticamente por tech_start_service, nunca pedida ao Técnico). Usa o
