@@ -1330,16 +1330,13 @@ begin
   insert into visit_photos (visit_id, storage_path)
   select p_visit_id, unnest(p_fotos);
 
-  -- Duplica materiais/fotos da visita rejeitada anterior para esta — somam
-  -- aos que o técnico tenha acrescentado acima, nunca substituem (histórico
-  -- da visita anterior continua intacto, isto só garante que nada
-  -- "desaparece" da nova visita).
+  -- Fotos da visita rejeitada anterior duplicam-se sempre para esta — somam
+  -- às que o técnico tenha acrescentado acima, nunca substituem (histórico
+  -- da visita anterior continua intacto). Materiais NÃO se duplicam aqui:
+  -- o técnico já os vê pré-preenchidos e editáveis no formulário (UI), por
+  -- isso p_materiais já chega com a lista completa pretendida — duplicar
+  -- aqui também contaria tudo a dobrar.
   if v_apos_correcao and v_visita_anterior_id is not null then
-    insert into visit_materials_used (visit_id, nome, qtd, preco_unit)
-    select p_visit_id, nome, qtd, preco_unit
-    from visit_materials_used
-    where visit_id = v_visita_anterior_id;
-
     insert into visit_photos (visit_id, storage_path)
     select p_visit_id, storage_path
     from visit_photos
