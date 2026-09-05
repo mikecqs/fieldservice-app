@@ -29,11 +29,28 @@ export async function PainelFaturacao({
   const { data: servicos } = await supabase
     .from("services")
     .select(
-      "id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, faturacao_metodo_pagamento, faturacao_liquidado_data, clients(nome, codigo), requests(id, codigo)"
+      "id, tipo, descricao, valor, faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia, faturacao_metodo_pagamento, faturacao_liquidado_data, clients(nome, codigo), requests(id, codigo), visits(valor_calculado, created_at)"
     )
     .eq("estado", "concluido")
     .order("faturacao_estado")
     .order("created_at", { ascending: false });
+
+  // "valor" do serviço fica congelado no valor do orçamento aceite (ou no
+  // primeiro fecho, se não vier de orçamento) — nunca é substituído
+  // automaticamente pelo que o técnico calculou no fecho (decisão
+  // deliberada: o valor combinado com o cliente no orçamento não muda só
+  // porque o técnico gastou mais/menos material). Mas quem fatura precisa
+  // de ver quando os dois divergem — ex: o técnico e o cliente combinaram
+  // um preço diferente no local — em vez de faturar o valor do orçamento
+  // às cegas. `valorReal` é o valor calculado no último fecho (materiais +
+  // mão de obra) desta visita; null se nunca foi calculado (ex: serviço
+  // ainda sem nenhum fecho "concluído").
+  const valorReal = (s: any): number | null => {
+    const visitas = (s.visits ?? []).filter((v: any) => v.valor_calculado != null);
+    if (visitas.length === 0) return null;
+    visitas.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return Number(visitas[0].valor_calculado);
+  };
 
   const termo = (q ?? "").trim().toLowerCase();
   const bate = (s: any) =>
@@ -146,17 +163,37 @@ export async function PainelFaturacao({
 
       <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-neutral-500">Por faturar · {porFaturar.length}</h2>
       <div className="mb-6 space-y-2">
-        {porFaturar.map((s: any) => (
+        {porFaturar.map((s: any) => {
+          const real = valorReal(s);
+          const divergente = real != null && Math.abs(real - Number(s.valor)) > 0.01;
+          return (
           <div key={s.id} className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
             <div className="mb-2 flex items-start justify-between">
               <div>
                 <div className="font-medium text-neutral-100">{s.clients?.nome}</div>
                 <div className="text-sm text-neutral-400">{rotuloTipoServico(s.tipo)} · {s.descricao}</div>
               </div>
-              <span className="font-semibold text-neutral-200">
-                {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
-              </span>
+              {divergente ? (
+                <div className="text-right text-xs">
+                  <div className="text-neutral-500">
+                    Orç: {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                  </div>
+                  <div className="font-semibold text-amber-400">
+                    Fecho: {real.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                  </div>
+                </div>
+              ) : (
+                <span className="font-semibold text-neutral-200">
+                  {Number(s.valor).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                </span>
+              )}
             </div>
+            {divergente && (
+              <p className="mb-2 -mt-1 text-xs text-amber-400">
+                O valor calculado no fecho ({real.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}) é diferente do
+                valor do orçamento — confirma qual faturar antes de gravar (o campo abaixo vem pré-preenchido com o do orçamento).
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <VerPdfFechoLink servicoId={s.id} />
               <form action={marcarFaturado} className="flex flex-1 gap-2">
@@ -180,7 +217,8 @@ export async function PainelFaturacao({
               </form>
             </div>
           </div>
-        ))}
+          );
+        })}
         {porFaturar.length === 0 && <p className="py-6 text-center text-sm text-neutral-500">Nada por faturar.</p>}
       </div>
 
