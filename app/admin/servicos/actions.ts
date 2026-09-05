@@ -86,6 +86,10 @@ export async function atualizarAgendamento(formData: FormData) {
   const hora_fim_agendada = String(formData.get("hora_fim_agendada") || "") || null;
   const prioridade = String(formData.get("prioridade") || "normal");
   const notas = String(formData.get("notas") || "");
+  const descricao = String(formData.get("descricao") || "").trim();
+  if (!descricao) {
+    throw new Error("Descrição é obrigatória.");
+  }
 
   // Data e hora de início e fim andam sempre juntas: ou as três estão
   // preenchidas (agenda-se), ou nenhuma está (fica por agendar) — nunca uma
@@ -112,7 +116,7 @@ export async function atualizarAgendamento(formData: FormData) {
     dataAgendada: data_agendada,
     horaAgendada: hora_agendada,
     horaFimAgendada: hora_fim_agendada,
-    camposExtra: { prioridade, notas },
+    camposExtra: { prioridade, notas, descricao },
   });
   if (!anterior) return;
 

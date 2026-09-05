@@ -96,6 +96,16 @@ export function AgendamentoForm({ servico }: { servico: any }) {
         </select>
       </label>
       <label className="col-span-2 block">
+        <span className="mb-1 block text-xs font-medium text-neutral-300">Descrição</span>
+        <textarea
+          name="descricao"
+          required
+          defaultValue={servico.descricao ?? ""}
+          rows={2}
+          className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="col-span-2 block">
         <span className="mb-1 block text-xs font-medium text-neutral-300">Notas</span>
         <textarea name="notas" defaultValue={servico.notas ?? ""} rows={2} className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm" />
       </label>
