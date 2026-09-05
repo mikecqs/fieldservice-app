@@ -1119,6 +1119,15 @@ $$;
 
 grant execute on function tech_start_service(uuid) to authenticated;
 
+-- "create or replace function" só substitui quando a lista de parâmetros é
+-- idêntica — como esta versão acrescenta 5 parâmetros novos, sem este drop
+-- explícito da assinatura antiga (13 parâmetros) ficam DUAS funções
+-- tech_finish_visit a coexistir, e o Postgres deixa de conseguir escolher
+-- qual chamar ("Could not choose the best candidate function") — foi
+-- exatamente isto que aconteceu em produção ao correr este ficheiro pela
+-- primeira vez, confirmado pelo erro 500 em /tecnico/servico/[id].
+drop function if exists tech_finish_visit(uuid, text, text, jsonb, text[], text, text, date, time, text, text, numeric, text);
+
 create or replace function tech_finish_visit(
   p_visit_id uuid,
   p_resultado text,
