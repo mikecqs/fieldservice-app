@@ -5,12 +5,35 @@ import { adicionarItem, adicionarItensCatalogo } from "../actions";
 
 type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
 
-export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; catalogo: CatalogItem[] }) {
+// Mesma descrição fixa sempre que o tipo é "mao_obra" — o Admin só escolhe
+// a quantidade, o preço vem sempre de org_settings.valor_mao_obra_orcamento
+// (Configurações), exatamente como o Técnico nunca escolhe preço no fecho
+// de OS, só a duração.
+const DESCRICAO_MAO_OBRA = "Mão de Obra - Serviços Externos";
+
+export function AdicionarItemForm({
+  budgetId,
+  catalogo,
+  valorMaoObraOrcamento,
+}: {
+  budgetId: string;
+  catalogo: CatalogItem[];
+  valorMaoObraOrcamento: number;
+}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [tipo, setTipo] = useState("mao_obra");
-  const [descricao, setDescricao] = useState("");
-  const [valorUnit, setValorUnit] = useState("");
+  const [descricao, setDescricao] = useState(DESCRICAO_MAO_OBRA);
+  const [valorUnit, setValorUnit] = useState(String(valorMaoObraOrcamento));
   const [erro, setErro] = useState<string | null>(null);
+  const isMaoObra = tipo === "mao_obra";
+
+  function mudarTipo(novoTipo: string) {
+    setTipo(novoTipo);
+    if (novoTipo === "mao_obra") {
+      setDescricao(DESCRICAO_MAO_OBRA);
+      setValorUnit(String(valorMaoObraOrcamento));
+    }
+  }
 
   // Onda 3 (Etapa 3) — seleção múltipla do catálogo: estado próprio,
   // independente do formulário de linha única acima, para os dois nunca
@@ -53,8 +76,8 @@ export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; ca
     try {
       await adicionarItem(formData);
       setTipo("mao_obra");
-      setDescricao("");
-      setValorUnit("");
+      setDescricao(DESCRICAO_MAO_OBRA);
+      setValorUnit(String(valorMaoObraOrcamento));
       formRef.current?.reset();
     } catch (e: any) {
       setErro(e?.message || "Não foi possível adicionar a linha.");
@@ -115,7 +138,7 @@ export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; ca
       )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <select name="tipo" value={tipo} onChange={(e) => setTipo(e.target.value)} className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs">
+        <select name="tipo" value={tipo} onChange={(e) => mudarTipo(e.target.value)} className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs">
           <option value="materiais">Materiais</option>
           <option value="mao_obra">Mão de obra</option>
           <option value="deslocacao">Deslocação</option>
@@ -125,20 +148,34 @@ export function AdicionarItemForm({ budgetId, catalogo }: { budgetId: string; ca
           name="descricao"
           placeholder="Descrição"
           required
+          readOnly={isMaoObra}
           value={descricao}
           onChange={(e) => setDescricao(e.target.value)}
-          className="col-span-2 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+          className={`col-span-2 rounded-md border border-neutral-700 px-2 py-1.5 text-xs ${isMaoObra ? "bg-neutral-800 text-neutral-400" : ""}`}
         />
-        <input name="qtd" type="number" step="0.01" defaultValue="1" placeholder="Qtd" className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs" />
+        <input
+          name="qtd"
+          type="number"
+          step="0.1"
+          defaultValue="1"
+          placeholder="Qtd"
+          className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+        />
         <input
           name="valor_unit"
           type="number"
-          step="0.01"
+          step="1"
           placeholder="€ unit."
+          readOnly={isMaoObra}
           value={valorUnit}
           onChange={(e) => setValorUnit(e.target.value)}
-          className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+          className={`rounded-md border border-neutral-700 px-2 py-1.5 text-xs ${isMaoObra ? "bg-neutral-800 text-neutral-400" : ""}`}
         />
+        {isMaoObra && (
+          <p className="col-span-2 -mt-1 text-[11px] text-neutral-500 sm:col-span-5">
+            Descrição e preço da mão de obra são automáticos (definidos em Configurações) — só a quantidade é editável.
+          </p>
+        )}
         <button className="col-span-2 mt-1 rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200 sm:col-span-5">
           Adicionar linha
         </button>

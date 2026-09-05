@@ -1264,8 +1264,14 @@ begin
       end if;
     end if;
 
+    if p_cliente_pagou is null then
+      raise exception 'Indica se o cliente pagou.';
+    end if;
     if p_cliente_pagou is true and (p_meio_pagamento is null or p_meio_pagamento not in ('Numerário','Transferência Bancária','Multibanco','Cheque','MB Way')) then
       raise exception 'Indica o meio de pagamento.';
+    end if;
+    if p_fatura_com_nif is null then
+      raise exception 'Indica se o cliente pretende fatura com NIF.';
     end if;
     if p_fatura_com_nif is true and length(trim(coalesce(p_nif, ''))) = 0 then
       raise exception 'Indica o NIF do cliente.';
@@ -1444,6 +1450,23 @@ create policy "admin inserts request_events" on request_events for insert
 
 grant select, insert on request_events to authenticated;
 
+-- =============================================================================
+-- Mão de obra automática em linhas de Orçamento + logotipo da empresa nos
+-- PDFs (orçamento/fecho de serviço).
+-- =============================================================================
+alter table org_settings add column if not exists valor_mao_obra_orcamento numeric not null default 0;
+
+alter table organizations add column if not exists logo_path text;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('logos', 'logos', false, 2097152, array['image/jpeg','image/png'])
+on conflict (id) do nothing;
+
+drop policy if exists "admin manages logos storage" on storage.objects;
+create policy "admin manages logos storage" on storage.objects for all
+  using (bucket_id = 'logos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (bucket_id = 'logos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
+
 commit;
 
 -- =============================================================================
@@ -1516,4 +1539,10 @@ commit;
 --     + as suas 2 policies acima. O resto (editarPedido, EditarPedidoForm.tsx,
 --     e a secção "Histórico de edições" em PedidoDetalheConteudo.tsx) é só
 --     código.
+--   - Mão de obra automática em Orçamentos + logotipo da empresa nos PDFs:
+--     só a coluna org_settings.valor_mao_obra_orcamento + organizations.
+--     logo_path + o bucket "logos" e a sua policy acima. O resto
+--     (AdicionarItemForm.tsx, LogotipoForm.tsx, guardarLogotipo/
+--     removerLogotipo, lib/pdf-logo.ts e o uso nos dois geradores de PDF) é
+--     só código.
 -- =============================================================================

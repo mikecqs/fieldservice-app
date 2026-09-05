@@ -16,7 +16,7 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
   const params = await props.params;
   const supabase = await createClient();
   const organizationId = await getOrgId();
-  const [{ data: orcamento }, { data: catalogo }, { data: eventos }, { data: tecnicos }] = await Promise.all([
+  const [{ data: orcamento }, { data: catalogo }, { data: eventos }, { data: tecnicos }, { data: settings }] = await Promise.all([
     supabase
       .from("budgets")
       .select("*, clients(nome, telefone, email), budget_items(*)")
@@ -29,6 +29,7 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
       .eq("budget_id", params.id)
       .order("created_at", { ascending: false }),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
+    supabase.from("org_settings").select("valor_mao_obra_orcamento").eq("organization_id", organizationId).single(),
   ]);
 
   if (!orcamento) notFound();
@@ -210,7 +211,7 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
         </div>
 
         {orcamento.estado === "rascunho" && (
-          <AdicionarItemForm budgetId={orcamento.id} catalogo={catalogo ?? []} />
+          <AdicionarItemForm budgetId={orcamento.id} catalogo={catalogo ?? []} valorMaoObraOrcamento={settings?.valor_mao_obra_orcamento ?? 0} />
         )}
       </div>
 

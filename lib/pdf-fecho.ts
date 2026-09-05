@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { createAdminClient } from "@/lib/supabase/server";
 import { rotuloTipoServico } from "@/lib/servico-estado";
+import { embutirLogo } from "@/lib/pdf-logo";
 
 // =============================================================================
 // PDF DO FECHO DE SERVIÇO — um único documento por Serviço, sempre gravado no
@@ -171,7 +172,7 @@ export async function gerarPdfFecho(serviceId: string): Promise<{ ok: true } | {
 
     const [{ data: org }, { data: request }, { data: budget }, { data: visitaPreviaSibling }, { data: visits }, { data: eventos }, { data: validacoes }] =
       await Promise.all([
-        supabase.from("organizations").select("nome, nif").eq("id", organizationId).single(),
+        supabase.from("organizations").select("nome, nif, logo_path").eq("id", organizationId).single(),
         servico.request_id
           ? supabase.from("requests").select("codigo, tipo, descricao, origem").eq("id", servico.request_id).eq("organization_id", organizationId).maybeSingle()
           : Promise.resolve({ data: null as any }),
@@ -267,11 +268,21 @@ export async function gerarPdfFecho(serviceId: string): Promise<{ ok: true } | {
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
     const cursor: Cursor = { pdf, page: pdf.addPage([LARGURA_PAGINA, ALTURA_PAGINA]), y: ALTURA_PAGINA - MARGEM, fontRegular, fontBold };
 
-    // Identificação
-    cursor.page.drawRectangle({ x: MARGEM, y: cursor.y - 24, width: 32, height: 32, color: COR_MARCA });
-    cursor.page.drawText("nX", { x: MARGEM + 6, y: cursor.y - 15, size: 14, font: fontBold, color: rgb(1, 1, 1) });
-    cursor.page.drawText(org?.nome ?? "—", { x: MARGEM + 42, y: cursor.y - 6, size: 14, font: fontBold, color: COR_TITULO });
-    if (org?.nif) cursor.page.drawText(`NIF: ${org.nif}`, { x: MARGEM + 42, y: cursor.y - 22, size: 9, font: fontRegular, color: COR_LEVE });
+    // Identificação — logotipo real da empresa (Configurações) quando
+    // existir, senão o quadrado "nX" genérico de sempre.
+    const logo = await embutirLogo(pdf, supabase, org?.logo_path);
+    if (logo) {
+      const alturaLogo = 32;
+      const larguraLogo = (logo.width / logo.height) * alturaLogo;
+      cursor.page.drawImage(logo, { x: MARGEM, y: cursor.y - 24, width: larguraLogo, height: alturaLogo });
+      cursor.page.drawText(org?.nome ?? "—", { x: MARGEM + larguraLogo + 10, y: cursor.y - 6, size: 14, font: fontBold, color: COR_TITULO });
+      if (org?.nif) cursor.page.drawText(`NIF: ${org.nif}`, { x: MARGEM + larguraLogo + 10, y: cursor.y - 22, size: 9, font: fontRegular, color: COR_LEVE });
+    } else {
+      cursor.page.drawRectangle({ x: MARGEM, y: cursor.y - 24, width: 32, height: 32, color: COR_MARCA });
+      cursor.page.drawText("nX", { x: MARGEM + 6, y: cursor.y - 15, size: 14, font: fontBold, color: rgb(1, 1, 1) });
+      cursor.page.drawText(org?.nome ?? "—", { x: MARGEM + 42, y: cursor.y - 6, size: 14, font: fontBold, color: COR_TITULO });
+      if (org?.nif) cursor.page.drawText(`NIF: ${org.nif}`, { x: MARGEM + 42, y: cursor.y - 22, size: 9, font: fontRegular, color: COR_LEVE });
+    }
     cursor.y -= 55;
 
     texto(cursor, `FECHO DE SERVIÇO — ${servico.codigo}`, { size: 16, bold: true });

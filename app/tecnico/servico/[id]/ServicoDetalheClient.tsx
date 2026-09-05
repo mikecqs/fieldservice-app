@@ -281,8 +281,16 @@ export function ServicoDetalheClient({
     }
 
     if (resultado === "concluido") {
+      if (!clientePagou) {
+        setErro("Indica se o cliente pagou.");
+        return;
+      }
       if (clientePagou === "sim" && !meioPagamento) {
         setErro("Indica o meio de pagamento.");
+        return;
+      }
+      if (!faturaComNif) {
+        setErro("Indica se o cliente pretende fatura com NIF.");
         return;
       }
       if (faturaComNif === "sim" && !nif.trim()) {
@@ -519,9 +527,8 @@ export function ServicoDetalheClient({
                   </div>
                 )}
                 <p className="text-[11px] text-neutral-500">
-                  Trabalho realizado, problema identificado e mão de obra só ficam aqui para consulta — não são
-                  editáveis. Os materiais estão pré-preenchidos abaixo e podes ajustá-los. Só precisas de escrever a
-                  justificação para reabrir.
+                  Isto é só consulta do fecho anterior, não é editável. Abaixo podes atualizar qualquer campo se
+                  precisares (todos opcionais) — só a justificação é obrigatória para reabrir.
                 </p>
               </div>
             )}
@@ -588,9 +595,11 @@ export function ServicoDetalheClient({
               </div>
             </div>
 
-            {resultado === "concluido" && !isInstalacao && !isCorrecao && (
+            {resultado === "concluido" && !isInstalacao && (
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-300">Problema identificado (obrigatório)</span>
+                <span className="mb-1 block text-xs font-medium text-neutral-300">
+                  Problema identificado {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                </span>
                 <textarea
                   rows={2}
                   value={problemaIdentificado}
@@ -601,10 +610,12 @@ export function ServicoDetalheClient({
               </label>
             )}
 
-            {resultado === "concluido" && isInstalacao && !isCorrecao && (
+            {resultado === "concluido" && isInstalacao && (
               <div className="grid grid-cols-3 gap-2">
                 <label className="col-span-2 block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">Equipamento instalado (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">
+                    Equipamento instalado {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                  </span>
                   <input
                     value={equipamentoInstalado}
                     onChange={(e) => setEquipamentoInstalado(e.target.value)}
@@ -613,7 +624,7 @@ export function ServicoDetalheClient({
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">Qtd (obrigatório)</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">Qtd {isCorrecao ? "(opcional)" : "(obrigatório)"}</span>
                   <input
                     type="number"
                     min="1"
@@ -626,20 +637,22 @@ export function ServicoDetalheClient({
               </div>
             )}
 
-            {!isCorrecao && (
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-300">
-                  {resultado === "concluido" ? "Trabalho realizado (obrigatório)" : "Notas (obrigatório)"}
-                </span>
-                <textarea
-                  rows={3}
-                  value={trabalho}
-                  onChange={(e) => setTrabalho(e.target.value)}
-                  className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
-                  placeholder="Descreve o que foi feito…"
-                />
-              </label>
-            )}
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-neutral-300">
+                {isCorrecao
+                  ? "Trabalho realizado (opcional — atualiza se quiseres)"
+                  : resultado === "concluido"
+                  ? "Trabalho realizado (obrigatório)"
+                  : "Notas (obrigatório)"}
+              </span>
+              <textarea
+                rows={3}
+                value={trabalho}
+                onChange={(e) => setTrabalho(e.target.value)}
+                className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+                placeholder="Descreve o que foi feito…"
+              />
+            </label>
 
             <div>
               <span className="mb-1 block text-xs font-medium text-neutral-300">Fotos (opcional)</span>
@@ -751,25 +764,25 @@ export function ServicoDetalheClient({
                   </button>
                 </div>
 
-                {!isCorrecao && (
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-300">Mão de obra (obrigatório)</span>
-                    <select
-                      value={maoObraTipo}
-                      onChange={(e) => setMaoObraTipo(e.target.value)}
-                      className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                    >
-                      <option value="">Seleciona…</option>
-                      {MAO_OBRA_OPCOES.map(([val, lbl]) => (
-                        <option key={val} value={val}>
-                          {lbl}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">
+                    Mão de obra {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                  </span>
+                  <select
+                    value={maoObraTipo}
+                    onChange={(e) => setMaoObraTipo(e.target.value)}
+                    className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                  >
+                    <option value="">Seleciona…</option>
+                    {MAO_OBRA_OPCOES.map(([val, lbl]) => (
+                      <option key={val} value={val}>
+                        {lbl}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-                {!isCorrecao && maoObraTipo === "outro" && (
+                {maoObraTipo === "outro" && (
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-neutral-300">Descreve a mão de obra</span>
                     <input
@@ -781,35 +794,28 @@ export function ServicoDetalheClient({
                   </label>
                 )}
 
-                {isCorrecao
-                  ? totalMateriais > 0 && (
-                      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-semibold text-white">Total de materiais</span>
-                          <span className="font-semibold text-white">{formatEuros(totalMateriais)}</span>
-                        </div>
-                      </div>
-                    )
-                  : (totalMateriais > 0 || maoObraTipo) && (
-                      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-neutral-400">Materiais</span>
-                          <span className="font-medium text-neutral-200">{formatEuros(totalMateriais)}</span>
-                        </div>
-                        <div className="mt-1 flex items-center justify-between text-sm">
-                          <span className="text-neutral-400">Mão de obra</span>
-                          <span className="font-medium text-neutral-200">{formatEuros(totalMaoObra)}</span>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
-                          <span className="font-semibold text-white">Total do serviço</span>
-                          <span className="font-semibold text-white">{formatEuros(totalMateriais + totalMaoObra)}</span>
-                        </div>
-                      </div>
-                    )}
+                {(totalMateriais > 0 || maoObraTipo) && (
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-400">Materiais</span>
+                      <span className="font-medium text-neutral-200">{formatEuros(totalMateriais)}</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-sm">
+                      <span className="text-neutral-400">Mão de obra</span>
+                      <span className="font-medium text-neutral-200">{formatEuros(totalMaoObra)}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
+                      <span className="font-semibold text-white">Total do serviço</span>
+                      <span className="font-semibold text-white">{formatEuros(totalMateriais + totalMaoObra)}</span>
+                    </div>
+                  </div>
+                )}
 
-                {isInstalacao && !isCorrecao && (
+                {isInstalacao && (
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-300">Testes realizados (obrigatório)</span>
+                    <span className="mb-1 block text-xs font-medium text-neutral-300">
+                      Testes realizados {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
+                    </span>
                     <textarea
                       rows={2}
                       value={testesRealizados}
@@ -825,7 +831,7 @@ export function ServicoDetalheClient({
             {resultado === "concluido" && (
               <div className="space-y-3 rounded-lg border border-neutral-800 p-3">
                 <div>
-                  <span className="mb-2 block text-xs font-medium text-neutral-300">O cliente pagou?</span>
+                  <span className="mb-2 block text-xs font-medium text-neutral-300">O cliente pagou? (obrigatório)</span>
                   <div className="flex gap-2">
                     {(["sim", "nao"] as const).map((v) => (
                       <button
@@ -860,7 +866,7 @@ export function ServicoDetalheClient({
                 </div>
 
                 <div>
-                  <span className="mb-2 block text-xs font-medium text-neutral-300">Cliente pretende fatura com NIF?</span>
+                  <span className="mb-2 block text-xs font-medium text-neutral-300">Cliente pretende fatura com NIF? (obrigatório)</span>
                   <div className="flex gap-2">
                     {(["sim", "nao"] as const).map((v) => (
                       <button

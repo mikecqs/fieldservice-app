@@ -22,6 +22,11 @@ create table organizations (
   nome text not null,
   nif text,
   ativa boolean not null default true,
+  -- Caminho no bucket "logos" (ex: "{organization_id}/logo.png") — nunca a
+  -- URL pública direta, porque o bucket é privado; lido sempre via
+  -- createAdminClient() no momento de gerar o PDF (fecho/orçamento), mesmo
+  -- padrão de storage privado já usado em "fechos"/"visitas".
+  logo_path text,
   created_at timestamptz not null default now()
 );
 
@@ -98,7 +103,12 @@ create table org_settings (
   -- fica configurável como as restantes, em vez de um 0 hardcoded só no
   -- calculo — mesma tabela, mesmo padrão, só um valor por omissão diferente.
   valor_mao_obra_visita_orcamento numeric not null default 0,
-  valor_mao_obra_taxa_deslocacao numeric not null default 20
+  valor_mao_obra_taxa_deslocacao numeric not null default 20,
+  -- Mão de obra em linhas de Orçamento (distinta da tabela acima, que é só
+  -- para o fecho de OS pelo Técnico) — preço por unidade fixo, usado para
+  -- preencher automaticamente a linha "Mão de Obra - Serviços Externos" em
+  -- AdicionarItemForm; o Admin só escolhe a quantidade.
+  valor_mao_obra_orcamento numeric not null default 0
 );
 
 -- -----------------------------------------------------------------------------
@@ -1165,8 +1175,14 @@ begin
       end if;
     end if;
 
+    if p_cliente_pagou is null then
+      raise exception 'Indica se o cliente pagou.';
+    end if;
     if p_cliente_pagou is true and (p_meio_pagamento is null or p_meio_pagamento not in ('Numerário','Transferência Bancária','Multibanco','Cheque','MB Way')) then
       raise exception 'Indica o meio de pagamento.';
+    end if;
+    if p_fatura_com_nif is null then
+      raise exception 'Indica se o cliente pretende fatura com NIF.';
     end if;
     if p_fatura_com_nif is true and length(trim(coalesce(p_nif, ''))) = 0 then
       raise exception 'Indica o NIF do cliente.';
@@ -1591,6 +1607,21 @@ on conflict (id) do nothing;
 create policy "admin manages equipamentos storage" on storage.objects for all
   using (bucket_id = 'equipamentos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (bucket_id = 'equipamentos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+-- =============================================================================
+-- STORAGE: bucket para o logotipo da empresa (Configurações) — usado para
+-- os PDFs de orçamento/fecho de serviço em vez do quadrado "nX" genérico.
+-- Caminho sempre "{organization_id}/{ficheiro}", mesmo critério de posse já
+-- usado em "equipamentos". Só imagens embutíveis em PDF (pdf-lib só sabe
+-- embedPng/embedJpg, nunca webp/heic).
+-- =============================================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('logos', 'logos', false, 2097152, array['image/jpeg','image/png'])
+on conflict (id) do nothing;
+
+create policy "admin manages logos storage" on storage.objects for all
+  using (bucket_id = 'logos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (bucket_id = 'logos' and (storage.foldername(name))[1] = my_org()::text and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 -- =============================================================================
 -- STORAGE: bucket para fotografias do fecho de visita (opcional, nunca

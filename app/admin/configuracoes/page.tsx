@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { guardarConfiguracoes } from "./actions";
 import { sincronizarAgora, desligarGoogleSheets } from "./integracoes-actions";
+import { LogotipoForm } from "./LogotipoForm";
 
 export default async function ConfiguracoesPage(
   props: {
@@ -15,7 +16,7 @@ export default async function ConfiguracoesPage(
   const { data: settings } = await supabase
     .from("org_settings")
     .select(
-      "followup_dias_default, valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao"
+      "followup_dias_default, valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao, valor_mao_obra_orcamento"
     )
     .eq("organization_id", organizationId)
     .single();
@@ -24,6 +25,13 @@ export default async function ConfiguracoesPage(
     .select("status, spreadsheet_url, google_email, last_synced_at, last_error")
     .eq("organization_id", organizationId)
     .maybeSingle();
+
+  const { data: org } = await supabase.from("organizations").select("logo_path").eq("id", organizationId).single();
+  let logoUrl: string | null = null;
+  if (org?.logo_path) {
+    const { data: assinado } = await supabase.storage.from("logos").createSignedUrl(org.logo_path, 3600);
+    logoUrl = assinado?.signedUrl ?? null;
+  }
 
   return (
     <div className="mx-auto max-w-lg">
@@ -120,6 +128,25 @@ export default async function ConfiguracoesPage(
             </div>
           </div>
 
+          <div>
+            <span className="mb-1 block text-xs font-medium text-neutral-300">Mão de obra em Orçamentos</span>
+            <p className="mb-2 text-xs text-neutral-500">
+              Preço por unidade da linha "Mão de Obra - Serviços Externos" nos orçamentos — ao adicionares essa
+              linha, a descrição e o preço ficam automáticos, só escolhes a quantidade.
+            </p>
+            <label className="block w-40">
+              <span className="mb-1 block text-[11px] text-neutral-400">Preço por unidade (€)</span>
+              <input
+                name="valor_mao_obra_orcamento"
+                type="number"
+                step="1"
+                min="0"
+                defaultValue={settings?.valor_mao_obra_orcamento ?? 0}
+                className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+
           <p className="rounded-md border border-neutral-800 bg-neutral-800 p-3 text-xs text-neutral-400">
             O técnico vê sempre a morada, contacto e descrição do serviço atual e do seguinte (para poder avisar
             o próximo cliente se estiver atrasado) — a partir do 2º seguinte, só vê a hora e o cliente. Isto é
@@ -130,6 +157,8 @@ export default async function ConfiguracoesPage(
           </button>
         </form>
       </div>
+
+      <LogotipoForm logoUrl={logoUrl} />
 
       <div className="mt-5 rounded-xl border border-neutral-800 bg-neutral-900 p-6">
         <h2 className="mb-1 text-sm font-semibold text-neutral-100">Integrações</h2>
