@@ -690,7 +690,7 @@ alter table services add constraint services_faturacao_estado_check
 alter table services add column if not exists faturacao_metodo_pagamento text;
 alter table services drop constraint if exists services_faturacao_metodo_pagamento_check;
 alter table services add constraint services_faturacao_metodo_pagamento_check
-  check (faturacao_metodo_pagamento in ('Numerário','Transferência Bancária','Multibanco','Cheque'));
+  check (faturacao_metodo_pagamento in ('Numerário','Transferência Bancária','Multibanco','Cheque','MB Way'));
 alter table services add column if not exists faturacao_liquidado_data date;
 alter table services add column if not exists faturacao_liquidado_utilizador uuid references profiles(id);
 
