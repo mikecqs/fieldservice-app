@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { assertPertenceAOrg } from "@/lib/tenant-guard";
 
 // Nunca redireciona — devolve sempre o cliente criado para quem chamou
 // decidir o que fazer a seguir (a página /admin/clientes/novo é um
@@ -116,6 +117,12 @@ export async function criarMoradaRapida(input: { client_id: string; endereco: st
   const endereco = input.endereco.trim();
   const client_id = input.client_id;
   if (!endereco || !client_id) throw new Error("Morada é obrigatória.");
+
+  // Finding 1 — client_id é um argumento direto (chamado via RPC do
+  // cliente, não um <select> do servidor); a RLS de INSERT em
+  // "client_addresses" só valida a organização da PRÓPRIA linha, nunca a do
+  // cliente referenciado.
+  await assertPertenceAOrg(supabase, "clients", client_id, profile!.organization_id, "Cliente não pertence a esta empresa.");
 
   const { data: morada, error } = await supabase
     .from("client_addresses")

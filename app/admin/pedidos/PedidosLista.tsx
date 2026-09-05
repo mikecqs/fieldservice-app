@@ -160,7 +160,6 @@ function PedidoCard({ pedido: p, onAbrir }: { pedido: PedidoResumo; onAbrir: () 
         <div className="mt-3 flex gap-2">
           <form action={converterEmOrcamento}>
             <input type="hidden" name="id" value={p.id} />
-            <input type="hidden" name="client_id" value={p.cliente?.id ?? ""} />
             <button className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200">
               Converter em orçamento
             </button>

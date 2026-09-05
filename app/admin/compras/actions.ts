@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { podeAvancarCompraParaEstado } from "@/lib/compra-estado";
+import { assertPertenceAOrg } from "@/lib/tenant-guard";
 
 // BLOCO 17 — nenhum campo (nem combinação de campos) de purchases/
 // purchase_items pode ter uma UNIQUE constraint: descrição, fornecedor,
@@ -55,6 +56,13 @@ export async function criarCompra(formData: FormData) {
   // negativa ou não numérica passava direto para purchase_items.
   if (items.some((i) => !Number.isFinite(i.qtd) || i.qtd < 0)) {
     throw new Error("A quantidade de cada item tem de ser um número igual ou superior a 0.");
+  }
+
+  // Finding 1 — purchases.service_id referencia services, mas a RLS de
+  // INSERT em "purchases" só valida a organização da PRÓPRIA linha, nunca a
+  // do serviço associado.
+  if (service_id) {
+    await assertPertenceAOrg(supabase, "services", service_id, organizationId, "Este serviço não pertence a esta empresa.");
   }
 
   const desde = new Date(Date.now() - 10_000).toISOString();
@@ -131,6 +139,8 @@ export async function criarCompraRapida(formData: FormData) {
   }
 
   if (service_id) {
+    // Finding 1 — mesmo motivo de criarCompra acima.
+    await assertPertenceAOrg(supabase, "services", service_id, organizationId, "Este serviço não pertence a esta empresa.");
     const { data: existentes } = await supabase
       .from("purchases")
       .select("id, purchase_items(nome)")

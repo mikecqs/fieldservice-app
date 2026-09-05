@@ -9,6 +9,7 @@ import { podeReagendarServico, podeCancelarServico, podeReativarServico, podeGer
 import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
 import { criarOrcamentoDePedido } from "../pedidos/actions";
 import { gerarPdfFechoSemBloquear } from "@/lib/pdf-fecho";
+import { assertTecnicoPertenceOrg } from "@/lib/tenant-guard";
 
 // Aviso não-bloqueante de conflito de agenda — chamado pelo formulário antes
 // de gravar. Não impede nada sozinho: só devolve a informação para o Admin
@@ -217,6 +218,10 @@ export async function reativarServico(formData: FormData) {
   // nunca foi uma condição para um serviço ficar "agendado".
   let nomeTecnico: string | null = null;
   if (tecnicoId) {
+    // Finding 1 — service_technicians não tem organization_id próprio; a
+    // sua RLS só valida a organização do service_id, nunca a do user_id
+    // atribuído.
+    await assertTecnicoPertenceOrg(supabase, tecnicoId, organizationId);
     const { data: jaAtribuido } = await supabase
       .from("service_technicians")
       .select("user_id")
@@ -249,15 +254,37 @@ export async function reativarServico(formData: FormData) {
 // faz o histórico do equipamento (na ficha do cliente) mostrar as
 // intervenções futuras/passadas relacionadas com ele.
 export async function associarEquipamento(formData: FormData) {
+  const organizationId = await getOrgId();
   const supabase = await createClient();
   const id = String(formData.get("id") || "");
   const equipment_id = String(formData.get("equipment_id") || "") || null;
   if (!id) return;
+
+  if (equipment_id) {
+    // Finding 1 — services.equipment_id referencia client_equipment, mas a
+    // RLS de UPDATE em "services" só valida a organização da PRÓPRIA linha,
+    // nunca a do equipamento associado. Confirma também que o equipamento é
+    // do MESMO cliente do serviço — associar o equipamento de outro cliente
+    // (ainda que da mesma empresa) não faz sentido de negócio e corromperia
+    // o histórico do equipamento na ficha do cliente errado.
+    const { data: servico } = await supabase.from("services").select("client_id").eq("id", id).single();
+    if (!servico) return;
+    const { data: equipamento } = await supabase
+      .from("client_equipment")
+      .select("id")
+      .eq("id", equipment_id)
+      .eq("organization_id", organizationId)
+      .eq("client_id", servico.client_id)
+      .maybeSingle();
+    if (!equipamento) throw new Error("Este equipamento não pertence ao cliente deste serviço.");
+  }
+
   await supabase.from("services").update({ equipment_id }).eq("id", id);
   revalidatePath(`/admin/servicos/${id}`);
 }
 
 export async function atribuirTecnico(formData: FormData) {
+  const organizationId = await getOrgId();
   const supabase = await createClient();
   const service_id = String(formData.get("service_id") || "");
   const user_id = String(formData.get("user_id") || "");
@@ -267,6 +294,9 @@ export async function atribuirTecnico(formData: FormData) {
   if (!servico || !podeReagendarServico(servico)) {
     throw new Error("Este serviço já não pode ter técnicos alterados (concluído, cancelado, não realizado, já faturado ou liquidado).");
   }
+
+  // Finding 1 — mesmo motivo de reativarServico/aceitarOrcamento acima.
+  await assertTecnicoPertenceOrg(supabase, user_id, organizationId);
 
   await supabase.from("service_technicians").insert({ service_id, user_id });
   revalidatePath(`/admin/servicos/${service_id}`);

@@ -746,9 +746,16 @@ create policy "finance reads services" on services for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- service_technicians: admin atribui; técnico só lê as suas próprias atribuições
+-- Finding 1 (auditoria de segurança) — esta tabela não tem organization_id
+-- próprio; sem validar TAMBÉM a organização de user_id (só a de service_id),
+-- a app conseguia atribuir a um serviço um "técnico" que na verdade era um
+-- profile de outra empresa. A camada de aplicação já valida isto
+-- (lib/tenant-guard.ts, assertTecnicoPertenceOrg), mas a RLS é sempre a
+-- fronteira real (secção 7 do CLAUDE.md) — nunca confiar só na app.
 create policy "admin manages service_technicians" on service_technicians for all
   using (
     exists (select 1 from services s where s.id = service_id and s.organization_id = my_org())
+    and exists (select 1 from profiles p where p.id = user_id and p.organization_id = my_org())
     and my_role() in ('ADMIN','SUPER_ADMIN')
   );
 create policy "technician reads own assignments" on service_technicians for select
