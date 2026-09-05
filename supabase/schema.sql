@@ -779,6 +779,22 @@ create policy "admin inserts services" on services for insert
 create policy "admin updates services" on services for update
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
   with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+-- Auditoria de segurança ("ADMIN todo-poderoso") — a RLS acima dá ao ADMIN
+-- UPDATE em todas as colunas de `services`, incluindo as de faturação, que
+-- deviam passar sempre pelas RPCs finance_* (única fonte real de validação:
+-- referência obrigatória, estado correto, evento registado). Confirmado por
+-- grep que nenhuma Server Action escreve estas colunas por fora das RPCs —
+-- a única via era um ADMIN comprometido ou uma chamada direta à API/SQL.
+-- Revoga-se ao nível da COLUNA (não da tabela): ADMIN mantém UPDATE em
+-- tudo o resto de `services` (estado, agendamento, valor, etc.) sem
+-- qualquer alteração de comportamento — só estas colunas passam a só ser
+-- graváveis pelas RPCs (SECURITY DEFINER, correm com o privilégio do dono,
+-- nunca afetadas por um revoke a "authenticated").
+revoke update (
+  faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia,
+  faturacao_utilizador, faturacao_metodo_pagamento, faturacao_liquidado_data,
+  faturacao_liquidado_utilizador
+) on services from authenticated;
 -- FINANCE só lê — as únicas mutações que lhe interessam (validar, rejeitar,
 -- marcar faturado) passam sempre pelas RPCs finance_* mais abaixo, nunca por
 -- UPDATE direto (evita que consiga alterar valor, técnicos, cliente, etc.).
@@ -823,13 +839,13 @@ create policy "technician reads materials of own services" on service_materials_
 -- A) — nunca DELETE direto, só SELECT/INSERT/UPDATE. Apagar uma visita em
 -- cascata levaria consigo visit_photos/visit_materials_used, o histórico
 -- real do que o técnico fez.
+-- Auditoria de segurança ("ADMIN todo-poderoso") — confirmado por grep que
+-- nenhuma Server Action do Admin escreve em `visits` (só lê): criação e
+-- fecho são sempre feitos por tech_start_service/tech_finish_visit
+-- (SECURITY DEFINER). INSERT/UPDATE diretos aqui não tinham nenhuma
+-- funcionalidade a depender deles — reduzido a SELECT.
 create policy "admin selects visits" on visits for select
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
-create policy "admin inserts visits" on visits for insert
-  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
-create policy "admin updates visits" on visits for update
-  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 create policy "technician selects own service visits" on visits for select
   using (
@@ -855,7 +871,14 @@ create policy "technician inserts visit on own service" on visits for insert
 -- RPC. Só SELECT (acima) e INSERT (abaixo) continuam disponíveis.
 
 -- visit_materials_used / visit_photos: seguem a visita
-create policy "admin manages visit_materials_used" on visit_materials_used for all
+-- Auditoria de segurança ("ADMIN todo-poderoso") — confirmado por grep que
+-- nenhuma Server Action do Admin escreve nestas duas tabelas nem em
+-- `visits`; tudo entra sempre via tech_finish_visit (SECURITY DEFINER).
+-- ADMIN mantinha INSERT/UPDATE/DELETE aqui sem nenhuma funcionalidade
+-- usar isso — só abria uma via de alguém (ou uma sessão ADMIN
+-- comprometida) alterar/apagar o registo real do que o técnico fez em
+-- campo, sem deixar rasto. Reduzido a SELECT — sem custo funcional.
+create policy "admin selects visit_materials_used" on visit_materials_used for select
   using (
     exists (
       select 1 from visits v where v.id = visit_id and v.organization_id = my_org()
@@ -870,7 +893,7 @@ create policy "technician selects own visit materials used" on visit_materials_u
 create policy "technician inserts own visit materials used" on visit_materials_used for insert
   with check (exists (select 1 from visits v where v.id = visit_id and v.created_by = auth.uid()));
 
-create policy "admin manages visit_photos" on visit_photos for all
+create policy "admin selects visit_photos" on visit_photos for select
   using (
     exists (select 1 from visits v where v.id = visit_id and v.organization_id = my_org())
     and my_role() in ('ADMIN','SUPER_ADMIN')
