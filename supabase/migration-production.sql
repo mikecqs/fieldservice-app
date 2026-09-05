@@ -1387,7 +1387,7 @@ begin
 
     update services
       set valor = v_valor_materiais + v_valor_mao_obra
-      where id = v_service_id and valor = 0;
+      where id = v_service_id and (valor = 0 or v_apos_correcao);
   end if;
 
   v_novo_estado := case when p_resultado = 'concluido' then 'aguarda_validacao' else p_resultado end;
@@ -1545,4 +1545,8 @@ commit;
 --     (AdicionarItemForm.tsx, LogotipoForm.tsx, guardarLogotipo/
 --     removerLogotipo, lib/pdf-logo.ts e o uso nos dois geradores de PDF) é
 --     só código.
+--   - "Preço atual" volta a atualizar num refecho de correção (deixou de
+--     ficar sempre congelado do primeiro fecho): só o CREATE OR REPLACE de
+--     tech_finish_visit acima (mesma assinatura, só o corpo mudou) — sem
+--     alteração de schema.
 -- =============================================================================
