@@ -1251,6 +1251,28 @@ begin
   select p_visit_id, item->>'nome', coalesce((item->>'qtd')::numeric, 1), coalesce((item->>'preco_unit')::numeric, 0)
   from jsonb_array_elements(p_materiais) as item;
 
+  -- Auditoria de segurança — Finding 3: p_fotos é um array de caminhos de
+  -- Storage que o CLIENTE envia (depois de fazer upload no browser); sem
+  -- isto, nada impedia enviar aqui o storage_path de outra visita (ou de
+  -- outra organização, se alguma vez ficasse acessível) e ficar associado a
+  -- esta. A policy de INSERT em storage.objects já garante que só se pode
+  -- fazer upload para "{organization_id}/{visit_id}/..." da própria visita
+  -- (schema.sql, bucket "visitas") — aqui confirma-se que cada path
+  -- realmente EXISTE nessa mesma pasta exata (organização + visita), nunca
+  -- confiando no texto vindo do formulário.
+  if exists (
+    select 1 from unnest(p_fotos) as foto(path)
+    where not exists (
+      select 1 from storage.objects o
+      where o.bucket_id = 'visitas'
+        and o.name = foto.path
+        and (storage.foldername(o.name))[1] = v_org_id::text
+        and (storage.foldername(o.name))[2] = p_visit_id::text
+    )
+  ) then
+    raise exception 'Uma ou mais fotos não pertencem a esta visita.';
+  end if;
+
   insert into visit_photos (visit_id, storage_path)
   select p_visit_id, unnest(p_fotos);
 
