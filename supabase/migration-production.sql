@@ -1507,6 +1507,466 @@ create policy "admin manages service_technicians" on service_technicians for all
 commit;
 
 -- =============================================================================
+-- Nova auditoria de segurança (pós Findings 1-5) — dois achados críticos e
+-- alguns de reforço.
+--
+-- 1) CRÍTICO: 11 policies "for all" tinham USING com my_role() in
+--    ('ADMIN','SUPER_ADMIN') mas WITH CHECK só validava organization_id,
+--    sem repetir a condição de role. Como o Postgres só aplica USING a
+--    SELECT/UPDATE/DELETE (nunca a INSERT — só WITH CHECK conta aí),
+--    QUALQUER role autenticada da mesma organização (TECHNICIAN, FINANCE,
+--    ATENDIMENTO) conseguia INSERT direto nestas tabelas via
+--    POST /rest/v1/<tabela>, contornando por completo a app e todas as
+--    Server Actions/RPCs.
+-- 2) CRÍTICO: enqueue_sheets_sync (SECURITY DEFINER) nunca teve nenhum
+--    grant/revoke — o Postgres concede EXECUTE a PUBLIC por omissão em
+--    toda função nova, e "authenticated"/"anon" são membros implícitos de
+--    PUBLIC. Qualquer utilizador (de qualquer organização, autenticado ou
+--    até anónimo) conseguia chamar isto diretamente com um p_org_id à
+--    escolha, poluindo a fila de sync de outra empresa e disparando
+--    pedidos HTTP reais (com o segredo verdadeiro) em nome dela.
+-- 3) Finding A: "clients"/"requests"/"budgets"/"services"/"visits" tinham
+--    DELETE incluído na policy "for all" do ADMIN — a app nunca apaga
+--    nenhuma destas tabelas (só soft-delete onde existe eliminação), e um
+--    DELETE direto apagaria em cascata request_events/budget_events/
+--    service_events/service_validations/visit_photos/
+--    visit_materials_used, quebrando a garantia de histórico "nunca
+--    apagado" descrita no CLAUDE.md.
+-- 4) budget_items reforçada para validar também que budget_id pertence à
+--    própria organização (mesmo padrão do reforço já feito em
+--    service_technicians).
+-- 5) tech_finish_visit e finance_marcar_faturado passam a validar
+--    qtd/preco_unit/p_valor >= 0 DENTRO da própria RPC — antes só a Server
+--    Action validava, e como ambas são `grant execute ... to
+--    authenticated`, um TECHNICIAN/FINANCE conseguia chamá-las
+--    diretamente com valores negativos/NaN.
+-- =============================================================================
+begin;
+
+drop policy if exists "admin manages client_equipment" on client_equipment;
+create policy "admin manages client_equipment" on client_equipment for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages catalog_items" on catalog_items;
+create policy "admin manages catalog_items" on catalog_items for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages org_settings" on org_settings;
+create policy "admin manages org_settings" on org_settings for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages client_addresses" on client_addresses;
+create policy "admin manages client_addresses" on client_addresses for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages purchases" on purchases;
+create policy "admin manages purchases" on purchases for all
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages budget_items" on budget_items;
+create policy "admin manages budget_items" on budget_items for all
+  using (
+    organization_id = my_org()
+    and my_role() in ('ADMIN','SUPER_ADMIN')
+    and exists (select 1 from budgets b where b.id = budget_id and b.organization_id = my_org())
+  )
+  with check (
+    organization_id = my_org()
+    and my_role() in ('ADMIN','SUPER_ADMIN')
+    and exists (select 1 from budgets b where b.id = budget_id and b.organization_id = my_org())
+  );
+
+-- clients / requests / budgets / services / visits: split select/insert/
+-- update (sem delete), com role também no with check.
+drop policy if exists "admin manages clients" on clients;
+create policy "admin selects clients" on clients for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts clients" on clients for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates clients" on clients for update
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages requests" on requests;
+create policy "admin selects requests" on requests for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts requests" on requests for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates requests" on requests for update
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages budgets" on budgets;
+create policy "admin selects budgets" on budgets for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts budgets" on budgets for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates budgets" on budgets for update
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages services" on services;
+create policy "admin selects services" on services for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts services" on services for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates services" on services for update
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages visits" on visits;
+create policy "admin selects visits" on visits for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts visits" on visits for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates visits" on visits for update
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+revoke execute on function enqueue_sheets_sync(uuid, text, uuid, text) from public, anon, authenticated;
+
+create or replace function tech_finish_visit(
+  p_visit_id uuid,
+  p_resultado text,
+  p_trabalho_realizado text,
+  p_materiais jsonb default '[]'::jsonb,
+  p_fotos text[] default '{}'::text[],
+  p_mao_obra_tipo text default null,
+  p_mao_obra_detalhe text default null,
+  p_nova_data_agendada date default null,
+  p_nova_hora_agendada time default null,
+  p_problema_identificado text default null,
+  p_equipamento_instalado text default null,
+  p_quantidade_instalada numeric default null,
+  p_testes_realizados text default null,
+  p_cliente_pagou boolean default null,
+  p_meio_pagamento text default null,
+  p_fatura_com_nif boolean default null,
+  p_nif text default null,
+  p_justificacao_correcao text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_service_id uuid;
+  v_org_id uuid;
+  v_tipo text;
+  v_estado_servico text;
+  v_novo_estado text;
+  v_valor_primeira_hora numeric;
+  v_valor_hora_adicional numeric;
+  v_valor_dia_completo numeric;
+  v_valor_2_dias numeric;
+  v_valor_visita_orcamento numeric;
+  v_valor_taxa_deslocacao numeric;
+  v_valor_materiais numeric;
+  v_valor_mao_obra numeric;
+  v_apos_correcao boolean;
+  v_visita_anterior_id uuid;
+  v_prev_trabalho text;
+  v_prev_problema text;
+  v_prev_equipamento text;
+  v_prev_quantidade numeric;
+  v_prev_testes text;
+  v_prev_mao_obra_tipo text;
+  v_prev_mao_obra_detalhe text;
+  v_efetivo_mao_obra_tipo text;
+begin
+  if p_resultado not in ('concluido', 'nova_visita', 'nao_realizado') then
+    raise exception 'Resultado inválido.';
+  end if;
+
+  select service_id, apos_correcao into v_service_id, v_apos_correcao from visits
+  where id = p_visit_id and created_by = auth.uid() and hora_fim_real is null;
+
+  if v_service_id is null then
+    raise exception 'Visita não encontrada, já fechada, ou não pertence a este técnico.';
+  end if;
+
+  select organization_id, tipo, estado into v_org_id, v_tipo, v_estado_servico from services where id = v_service_id;
+
+  if v_estado_servico != 'em_curso' then
+    raise exception 'Este serviço já não está em curso — não é possível fechar esta visita.';
+  end if;
+
+  if v_apos_correcao then
+    select id, trabalho_realizado, problema_identificado, equipamento_instalado, quantidade_instalada, testes_realizados, mao_obra_tipo, mao_obra_detalhe
+      into v_visita_anterior_id, v_prev_trabalho, v_prev_problema, v_prev_equipamento, v_prev_quantidade, v_prev_testes, v_prev_mao_obra_tipo, v_prev_mao_obra_detalhe
+      from visits
+      where service_id = v_service_id and id != p_visit_id and hora_fim_real is not null
+      order by created_at desc
+      limit 1;
+
+    if length(trim(coalesce(p_justificacao_correcao, ''))) = 0 then
+      raise exception 'Justificação da correção é obrigatória.';
+    end if;
+  else
+    if length(trim(coalesce(p_trabalho_realizado, ''))) = 0 then
+      if p_resultado = 'concluido' then
+        raise exception 'Trabalho realizado é obrigatório para concluir o serviço.';
+      else
+        raise exception 'Notas são obrigatórias.';
+      end if;
+    end if;
+  end if;
+
+  if p_resultado = 'concluido' then
+    if not v_apos_correcao and (p_mao_obra_tipo is null or length(trim(p_mao_obra_tipo)) = 0) then
+      raise exception 'Mão de obra é obrigatória para concluir o serviço.';
+    end if;
+    if p_mao_obra_tipo is not null and p_mao_obra_tipo not in ('visita_orcamento','taxa_deslocacao','1h','2h','3h','4h','5h','6h','7h','8h','dia_completo','2dias','outro') then
+      raise exception 'Tipo de mão de obra inválido.';
+    end if;
+    if p_mao_obra_tipo = 'outro' and length(trim(coalesce(p_mao_obra_detalhe, ''))) = 0 then
+      raise exception 'Descreve a mão de obra em "Outro".';
+    end if;
+
+    if not v_apos_correcao then
+      if v_tipo = 'Instalação' then
+        if length(trim(coalesce(p_equipamento_instalado, ''))) = 0 then
+          raise exception 'Equipamento instalado é obrigatório.';
+        end if;
+        if p_quantidade_instalada is null or p_quantidade_instalada <= 0 then
+          raise exception 'Quantidade instalada é obrigatória.';
+        end if;
+        if length(trim(coalesce(p_testes_realizados, ''))) = 0 then
+          raise exception 'Testes realizados são obrigatórios.';
+        end if;
+      else
+        if length(trim(coalesce(p_problema_identificado, ''))) = 0 then
+          raise exception 'Problema identificado é obrigatório.';
+        end if;
+      end if;
+    end if;
+
+    if p_cliente_pagou is null then
+      raise exception 'Indica se o cliente pagou.';
+    end if;
+    if p_cliente_pagou is true and (p_meio_pagamento is null or p_meio_pagamento not in ('Numerário','Transferência Bancária','Multibanco','Cheque','MB Way')) then
+      raise exception 'Indica o meio de pagamento.';
+    end if;
+    if p_fatura_com_nif is null then
+      raise exception 'Indica se o cliente pretende fatura com NIF.';
+    end if;
+    if p_fatura_com_nif is true and length(trim(coalesce(p_nif, ''))) = 0 then
+      raise exception 'Indica o NIF do cliente.';
+    end if;
+  end if;
+
+  update visits
+    set hora_fim_real = current_time,
+        trabalho_realizado = case
+          when length(trim(coalesce(p_trabalho_realizado, ''))) > 0 then p_trabalho_realizado
+          when v_apos_correcao then v_prev_trabalho
+          else p_trabalho_realizado
+        end,
+        resultado = p_resultado,
+        mao_obra_tipo = case
+          when p_resultado != 'concluido' then null
+          when p_mao_obra_tipo is not null then p_mao_obra_tipo
+          when v_apos_correcao then v_prev_mao_obra_tipo
+          else null
+        end,
+        mao_obra_detalhe = case
+          when p_resultado != 'concluido' then null
+          when p_mao_obra_detalhe is not null then p_mao_obra_detalhe
+          when v_apos_correcao then v_prev_mao_obra_detalhe
+          else null
+        end,
+        problema_identificado = case
+          when p_resultado != 'concluido' or v_tipo = 'Instalação' then null
+          when length(trim(coalesce(p_problema_identificado, ''))) > 0 then p_problema_identificado
+          when v_apos_correcao then v_prev_problema
+          else null
+        end,
+        equipamento_instalado = case
+          when p_resultado != 'concluido' or v_tipo != 'Instalação' then null
+          when length(trim(coalesce(p_equipamento_instalado, ''))) > 0 then p_equipamento_instalado
+          when v_apos_correcao then v_prev_equipamento
+          else null
+        end,
+        quantidade_instalada = case
+          when p_resultado != 'concluido' or v_tipo != 'Instalação' then null
+          when p_quantidade_instalada is not null then p_quantidade_instalada
+          when v_apos_correcao then v_prev_quantidade
+          else null
+        end,
+        testes_realizados = case
+          when p_resultado != 'concluido' or v_tipo != 'Instalação' then null
+          when length(trim(coalesce(p_testes_realizados, ''))) > 0 then p_testes_realizados
+          when v_apos_correcao then v_prev_testes
+          else null
+        end,
+        cliente_pagou = case when p_resultado = 'concluido' then p_cliente_pagou else null end,
+        meio_pagamento = case when p_resultado = 'concluido' and p_cliente_pagou is true then p_meio_pagamento else null end,
+        fatura_com_nif = case when p_resultado = 'concluido' then p_fatura_com_nif else null end,
+        nif = case when p_resultado = 'concluido' and p_fatura_com_nif is true then p_nif else null end,
+        justificacao_correcao = p_justificacao_correcao
+    where id = p_visit_id;
+
+  if exists (
+    select 1 from jsonb_array_elements(p_materiais) as item
+    where coalesce((item->>'qtd')::numeric, 1) < 0
+       or coalesce((item->>'preco_unit')::numeric, 0) < 0
+  ) then
+    raise exception 'Quantidade e preço dos materiais têm de ser números iguais ou superiores a 0.';
+  end if;
+
+  insert into visit_materials_used (visit_id, nome, qtd, preco_unit)
+  select p_visit_id, item->>'nome', coalesce((item->>'qtd')::numeric, 1), coalesce((item->>'preco_unit')::numeric, 0)
+  from jsonb_array_elements(p_materiais) as item;
+
+  if exists (
+    select 1 from unnest(p_fotos) as foto(path)
+    where not exists (
+      select 1 from storage.objects o
+      where o.bucket_id = 'visitas'
+        and o.name = foto.path
+        and (storage.foldername(o.name))[1] = v_org_id::text
+        and (storage.foldername(o.name))[2] = p_visit_id::text
+    )
+  ) then
+    raise exception 'Uma ou mais fotos não pertencem a esta visita.';
+  end if;
+
+  insert into visit_photos (visit_id, storage_path)
+  select p_visit_id, unnest(p_fotos);
+
+  if v_apos_correcao and v_visita_anterior_id is not null then
+    insert into visit_photos (visit_id, storage_path)
+    select p_visit_id, storage_path
+    from visit_photos
+    where visit_id = v_visita_anterior_id;
+  end if;
+
+  if p_resultado = 'concluido' then
+    select coalesce(sum(qtd * preco_unit), 0)
+      into v_valor_materiais
+      from visit_materials_used
+      where visit_id = p_visit_id;
+
+    v_efetivo_mao_obra_tipo := case
+      when p_mao_obra_tipo is not null then p_mao_obra_tipo
+      when v_apos_correcao then v_prev_mao_obra_tipo
+      else null
+    end;
+
+    select valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias,
+           valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao
+      into v_valor_primeira_hora, v_valor_hora_adicional, v_valor_dia_completo, v_valor_2_dias,
+           v_valor_visita_orcamento, v_valor_taxa_deslocacao
+      from org_settings where organization_id = v_org_id;
+
+    v_valor_mao_obra := case v_efetivo_mao_obra_tipo
+      when 'visita_orcamento' then coalesce(v_valor_visita_orcamento, 0)
+      when 'taxa_deslocacao' then coalesce(v_valor_taxa_deslocacao, 0)
+      when '1h' then coalesce(v_valor_primeira_hora, 0)
+      when '2h' then coalesce(v_valor_primeira_hora, 0) + 1 * coalesce(v_valor_hora_adicional, 0)
+      when '3h' then coalesce(v_valor_primeira_hora, 0) + 2 * coalesce(v_valor_hora_adicional, 0)
+      when '4h' then coalesce(v_valor_primeira_hora, 0) + 3 * coalesce(v_valor_hora_adicional, 0)
+      when '5h' then coalesce(v_valor_primeira_hora, 0) + 4 * coalesce(v_valor_hora_adicional, 0)
+      when '6h' then coalesce(v_valor_primeira_hora, 0) + 5 * coalesce(v_valor_hora_adicional, 0)
+      when '7h' then coalesce(v_valor_primeira_hora, 0) + 6 * coalesce(v_valor_hora_adicional, 0)
+      when '8h' then coalesce(v_valor_dia_completo, 0)
+      when 'dia_completo' then coalesce(v_valor_dia_completo, 0)
+      when '2dias' then coalesce(v_valor_2_dias, 0)
+      else 0
+    end;
+
+    update visits set valor_calculado = v_valor_materiais + v_valor_mao_obra where id = p_visit_id;
+
+    update services
+      set valor = v_valor_materiais + v_valor_mao_obra
+      where id = v_service_id and (valor = 0 or v_apos_correcao);
+  end if;
+
+  v_novo_estado := case when p_resultado = 'concluido' then 'aguarda_validacao' else p_resultado end;
+
+  if p_resultado = 'nova_visita' then
+    update services
+      set estado = v_novo_estado,
+          data_agendada = p_nova_data_agendada,
+          hora_agendada = p_nova_hora_agendada
+      where id = v_service_id;
+  else
+    update services
+      set estado = v_novo_estado
+      where id = v_service_id;
+  end if;
+
+  insert into service_events (organization_id, service_id, tipo, descricao, utilizador)
+  values (
+    v_org_id, v_service_id,
+    p_resultado,
+    case
+      when p_resultado = 'concluido' and v_apos_correcao
+        then 'Técnico marcou como concluído após correção — aguarda validação do Admin. Justificação: ' || p_justificacao_correcao
+      when p_resultado = 'concluido' then 'Técnico marcou como concluído — aguarda validação do Admin.'
+      when p_resultado = 'nova_visita' and p_nova_data_agendada is not null
+        then 'Técnico pediu nova visita — já agendada com o cliente para ' || p_nova_data_agendada || ' ' || coalesce(p_nova_hora_agendada::text, '') || '.'
+      when p_resultado = 'nova_visita' then 'Técnico pediu nova visita — cliente ainda não combinou data.'
+      else 'Técnico marcou como não foi possível realizar.'
+    end,
+    auth.uid()
+  );
+end;
+$$;
+
+grant execute on function tech_finish_visit(uuid, text, text, jsonb, text[], text, text, date, time, text, text, numeric, text, boolean, text, boolean, text, text) to authenticated;
+
+create or replace function finance_marcar_faturado(p_service_id uuid, p_valor numeric, p_referencia text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_org_id uuid;
+  v_estado text;
+  v_faturacao_estado text;
+begin
+  if my_role() not in ('ADMIN','SUPER_ADMIN','FINANCE') then
+    raise exception 'Sem permissão.';
+  end if;
+  if p_referencia is null or length(trim(p_referencia)) = 0 then
+    raise exception 'Referência da fatura é obrigatória.';
+  end if;
+  if p_valor is null or p_valor < 0 then
+    raise exception 'O valor da fatura tem de ser um número igual ou superior a 0.';
+  end if;
+
+  select organization_id, estado, faturacao_estado into v_org_id, v_estado, v_faturacao_estado
+  from services where id = p_service_id and organization_id = my_org();
+
+  if v_org_id is null then
+    raise exception 'Serviço não encontrado.';
+  end if;
+  if v_estado != 'concluido' or v_faturacao_estado != 'por_faturar' then
+    raise exception 'Este serviço não está pronto para faturar.';
+  end if;
+
+  update services
+    set faturacao_estado = 'faturado',
+        faturacao_valor = p_valor,
+        faturacao_referencia = p_referencia,
+        faturacao_data = current_date,
+        faturacao_utilizador = auth.uid()
+    where id = p_service_id;
+end;
+$$;
+grant execute on function finance_marcar_faturado(uuid, numeric, text) to authenticated;
+
+commit;
+
+-- =============================================================================
 -- FIM. Depois de aplicar isto em produção:
 --   - Os BLOCOS 6, 7, 8, 10–19 desta sessão, a página de Relatórios do
 --     f3b2177, e toda a auditoria "APP" (Dashboard/Atenção, Agenda,
