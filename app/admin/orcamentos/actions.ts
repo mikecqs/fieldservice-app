@@ -456,6 +456,25 @@ export async function aceitarOrcamento(formData: FormData) {
     .single();
   if (error || !service) throw new Error(error?.message || "Não foi possível criar o serviço.");
 
+  // Migra as linhas de "materiais" (e deslocação/outros) do orçamento para
+  // "materiais planeados" do serviço — o técnico já os vê pré-preenchidos
+  // no fecho (mesmo mecanismo de adicionarMaterialPlaneado), podendo
+  // sempre editar/remover/acrescentar antes de submeter. Nunca a linha de
+  // "mão de obra": no fecho o técnico escolhe sempre a duração à parte, com
+  // o preço a vir das taxas já configuradas em Configurações — nunca do
+  // valor que estava fixado no orçamento.
+  const materiaisOrcamento = (budget.budget_items ?? []).filter((item: any) => item.tipo !== "mao_obra");
+  if (materiaisOrcamento.length > 0) {
+    await supabase.from("service_materials_planned").insert(
+      materiaisOrcamento.map((item: any) => ({
+        service_id: service.id,
+        nome: item.descricao,
+        qtd: item.qtd,
+        preco_venda: item.valor_unit,
+      }))
+    );
+  }
+
   await supabase.from("budgets").update({ estado: "aceite", service_id: service.id }).eq("id", id);
   if (budget.request_id) {
     await supabase.from("requests").update({ estado: "convertido" }).eq("id", budget.request_id);
