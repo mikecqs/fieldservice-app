@@ -59,11 +59,14 @@ export function ServicoDetalheClient({
   const [aGuardar, setAGuardar] = useState(false);
   const [resultado, setResultado] = useState<"concluido" | "nova_visita" | "nao_realizado">("concluido");
   const [trabalho, setTrabalho] = useState("");
-  // Numa correção começa vazia de propósito: os materiais do fecho anterior
-  // já ficam gravados na visita nova pelo servidor (tech_finish_visit),
-  // sem precisar de serem repetidos aqui — só o que for realmente novo.
+  // Numa correção começa pré-preenchida com os materiais do fecho anterior
+  // (editável diretamente aqui — nunca duplicada de novo pelo servidor,
+  // ver tech_finish_visit) — é o único campo do fecho anterior que o
+  // técnico pode mesmo alterar, além da justificação.
   const [materiaisLinhas, setMateriaisLinhas] = useState<LinhaMaterial[]>(() =>
-    isCorrecao ? [] : materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
+    isCorrecao
+      ? (visitaAnterior?.materiais ?? []).map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_unit ?? 0) }))
+      : materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
   );
   const [maoObraTipo, setMaoObraTipo] = useState("");
   const [maoObraDetalhe, setMaoObraDetalhe] = useState("");
@@ -474,18 +477,6 @@ export function ServicoDetalheClient({
                     </p>
                   </div>
                 )}
-                {visitaAnterior.materiais.length > 0 && (
-                  <div>
-                    <span className="block text-[11px] font-medium text-neutral-400">Materiais utilizados</span>
-                    <ul className="list-disc pl-4 text-sm text-neutral-300">
-                      {visitaAnterior.materiais.map((m, i) => (
-                        <li key={i}>
-                          {m.nome} × {m.qtd}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
                 {visitaAnterior.fotosUrls.length > 0 && (
                   <div>
                     <span className="block text-[11px] font-medium text-neutral-400">Fotos</span>
@@ -497,9 +488,9 @@ export function ServicoDetalheClient({
                   </div>
                 )}
                 <p className="text-[11px] text-neutral-500">
-                  Tudo isto mantém-se associado ao serviço, mesmo depois de corrigires. Só precisas de escrever a
-                  justificação abaixo — os outros campos ficam opcionais, preenche-os apenas se quiseres atualizar
-                  ou acrescentar algo.
+                  Trabalho realizado, problema identificado e mão de obra só ficam aqui para consulta — não são
+                  editáveis. Os materiais estão pré-preenchidos abaixo e podes ajustá-los. Só precisas de escrever a
+                  justificação para reabrir.
                 </p>
               </div>
             )}
@@ -566,11 +557,9 @@ export function ServicoDetalheClient({
               </div>
             </div>
 
-            {resultado === "concluido" && !isInstalacao && (
+            {resultado === "concluido" && !isInstalacao && !isCorrecao && (
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-300">
-                  Problema identificado {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
-                </span>
+                <span className="mb-1 block text-xs font-medium text-neutral-300">Problema identificado (obrigatório)</span>
                 <textarea
                   rows={2}
                   value={problemaIdentificado}
@@ -581,12 +570,10 @@ export function ServicoDetalheClient({
               </label>
             )}
 
-            {resultado === "concluido" && isInstalacao && (
+            {resultado === "concluido" && isInstalacao && !isCorrecao && (
               <div className="grid grid-cols-3 gap-2">
                 <label className="col-span-2 block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">
-                    Equipamento instalado {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
-                  </span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">Equipamento instalado (obrigatório)</span>
                   <input
                     value={equipamentoInstalado}
                     onChange={(e) => setEquipamentoInstalado(e.target.value)}
@@ -595,7 +582,7 @@ export function ServicoDetalheClient({
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">Qtd {isCorrecao ? "(opcional)" : "(obrigatório)"}</span>
+                  <span className="mb-1 block text-xs font-medium text-neutral-300">Qtd (obrigatório)</span>
                   <input
                     type="number"
                     min="1"
@@ -608,22 +595,20 @@ export function ServicoDetalheClient({
               </div>
             )}
 
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-neutral-300">
-                {isCorrecao
-                  ? "Trabalho realizado (opcional — atualiza se quiseres)"
-                  : resultado === "concluido"
-                  ? "Trabalho realizado (obrigatório)"
-                  : "Notas (obrigatório)"}
-              </span>
-              <textarea
-                rows={3}
-                value={trabalho}
-                onChange={(e) => setTrabalho(e.target.value)}
-                className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
-                placeholder="Descreve o que foi feito…"
-              />
-            </label>
+            {!isCorrecao && (
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-neutral-300">
+                  {resultado === "concluido" ? "Trabalho realizado (obrigatório)" : "Notas (obrigatório)"}
+                </span>
+                <textarea
+                  rows={3}
+                  value={trabalho}
+                  onChange={(e) => setTrabalho(e.target.value)}
+                  className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
+                  placeholder="Descreve o que foi feito…"
+                />
+              </label>
+            )}
 
             <div>
               <span className="mb-1 block text-xs font-medium text-neutral-300">Fotos (opcional)</span>
@@ -735,25 +720,25 @@ export function ServicoDetalheClient({
                   </button>
                 </div>
 
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-neutral-300">
-                    Mão de obra {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
-                  </span>
-                  <select
-                    value={maoObraTipo}
-                    onChange={(e) => setMaoObraTipo(e.target.value)}
-                    className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
-                  >
-                    <option value="">Seleciona…</option>
-                    {MAO_OBRA_OPCOES.map(([val, lbl]) => (
-                      <option key={val} value={val}>
-                        {lbl}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {!isCorrecao && (
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-neutral-300">Mão de obra (obrigatório)</span>
+                    <select
+                      value={maoObraTipo}
+                      onChange={(e) => setMaoObraTipo(e.target.value)}
+                      className="w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+                    >
+                      <option value="">Seleciona…</option>
+                      {MAO_OBRA_OPCOES.map(([val, lbl]) => (
+                        <option key={val} value={val}>
+                          {lbl}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
 
-                {maoObraTipo === "outro" && (
+                {!isCorrecao && maoObraTipo === "outro" && (
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-neutral-300">Descreve a mão de obra</span>
                     <input
@@ -765,28 +750,35 @@ export function ServicoDetalheClient({
                   </label>
                 )}
 
-                {(totalMateriais > 0 || maoObraTipo) && (
-                  <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-neutral-400">Materiais</span>
-                      <span className="font-medium text-neutral-200">{formatEuros(totalMateriais)}</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-sm">
-                      <span className="text-neutral-400">Mão de obra</span>
-                      <span className="font-medium text-neutral-200">{formatEuros(totalMaoObra)}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
-                      <span className="font-semibold text-white">Total do serviço</span>
-                      <span className="font-semibold text-white">{formatEuros(totalMateriais + totalMaoObra)}</span>
-                    </div>
-                  </div>
-                )}
+                {isCorrecao
+                  ? totalMateriais > 0 && (
+                      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-semibold text-white">Total de materiais</span>
+                          <span className="font-semibold text-white">{formatEuros(totalMateriais)}</span>
+                        </div>
+                      </div>
+                    )
+                  : (totalMateriais > 0 || maoObraTipo) && (
+                      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-neutral-400">Materiais</span>
+                          <span className="font-medium text-neutral-200">{formatEuros(totalMateriais)}</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-sm">
+                          <span className="text-neutral-400">Mão de obra</span>
+                          <span className="font-medium text-neutral-200">{formatEuros(totalMaoObra)}</span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between border-t border-neutral-800 pt-2 text-sm">
+                          <span className="font-semibold text-white">Total do serviço</span>
+                          <span className="font-semibold text-white">{formatEuros(totalMateriais + totalMaoObra)}</span>
+                        </div>
+                      </div>
+                    )}
 
-                {isInstalacao && (
+                {isInstalacao && !isCorrecao && (
                   <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-neutral-300">
-                      Testes realizados {isCorrecao ? "(opcional — atualiza se mudou)" : "(obrigatório)"}
-                    </span>
+                    <span className="mb-1 block text-xs font-medium text-neutral-300">Testes realizados (obrigatório)</span>
                     <textarea
                       rows={2}
                       value={testesRealizados}
