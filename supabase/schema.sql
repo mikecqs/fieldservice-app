@@ -173,7 +173,7 @@ alter table client_equipment enable row level security;
 
 create policy "admin manages client_equipment" on client_equipment for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 create policy "finance reads client_equipment" on client_equipment for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
@@ -319,7 +319,7 @@ alter table catalog_items enable row level security;
 
 create policy "admin manages catalog_items" on catalog_items for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 -- técnico só lê (para preçar materiais no fecho da OS), nunca gere o catálogo.
 create policy "technician reads catalog_items" on catalog_items for select
@@ -594,7 +594,7 @@ create policy "admin can update profiles in own org"
 -- org_settings
 create policy "admin manages org_settings" on org_settings for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 create policy "super admin all org_settings" on org_settings for all
   using (is_super_admin()) with check (is_super_admin());
 
@@ -604,21 +604,41 @@ create policy "technician reads org_settings" on org_settings for select
   using (organization_id = my_org() and my_role() = 'TECHNICIAN');
 
 -- clients
-create policy "admin manages clients" on clients for all
+-- Auditoria de segurança — Finding A: esta linha era "for all" (incluindo
+-- DELETE). A app nunca apaga clientes (nem nenhuma das outras 4 tabelas
+-- abaixo com o mesmo padrão) — só soft-delete existe onde há eliminação
+-- (client_equipment.eliminado). Um DELETE direto aqui apagaria em cascata
+-- request_events/budget_events/service_events/service_validations/visits/
+-- visit_photos/visit_materials_used ligados, quebrando a garantia descrita
+-- na secção 5 do CLAUDE.md de que o histórico "nunca é apagado" — essa
+-- garantia só cobre UPDATE/DELETE direto nas próprias tabelas de eventos,
+-- nunca uma cascata disparada ao apagar o registo pai. Sem nenhum SELECT/
+-- INSERT/UPDATE afetado — ADMIN continua com acesso total a tudo o resto.
+create policy "admin selects clients" on clients for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts clients" on clients for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates clients" on clients for update
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 create policy "finance reads clients" on clients for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- client_addresses
 create policy "admin manages client_addresses" on client_addresses for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 -- requests
-create policy "admin manages requests" on requests for all
+-- Mesmo motivo de "clients" acima (Finding A) — nunca DELETE direto, só
+-- SELECT/INSERT/UPDATE.
+create policy "admin selects requests" on requests for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts requests" on requests for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates requests" on requests for update
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 create policy "finance reads requests" on requests for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
 
@@ -693,21 +713,35 @@ where r.organization_id = my_org() and my_role() = 'ATENDIMENTO';
 grant select on requests_status_atendimento_view to authenticated;
 
 -- budgets / budget_items
-create policy "admin manages budgets" on budgets for all
+-- Mesmo motivo de "clients"/"requests" acima (Finding A) — nunca DELETE
+-- direto, só SELECT/INSERT/UPDATE.
+create policy "admin selects budgets" on budgets for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts budgets" on budgets for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates budgets" on budgets for update
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 create policy "finance reads budgets" on budgets for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
 create policy "admin manages budget_items" on budget_items for all
-  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  using (
+    organization_id = my_org()
+    and my_role() in ('ADMIN','SUPER_ADMIN')
+    and exists (select 1 from budgets b where b.id = budget_id and b.organization_id = my_org())
+  )
+  with check (
+    organization_id = my_org()
+    and my_role() in ('ADMIN','SUPER_ADMIN')
+    and exists (select 1 from budgets b where b.id = budget_id and b.organization_id = my_org())
+  );
 create policy "finance reads budget_items" on budget_items for select
   using (organization_id = my_org() and my_role() = 'FINANCE');
 
 -- purchases / purchase_items
 create policy "admin manages purchases" on purchases for all
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 create policy "admin manages purchase_items" on purchase_items for all
   using (
     exists (select 1 from purchases p where p.id = purchase_id and p.organization_id = my_org())
@@ -736,9 +770,15 @@ grant select, insert on service_validations to authenticated;
 -- Técnicos NÃO têm policy de SELECT aqui: só conseguem ler via
 -- `services_technician_view` (abaixo), que expõe apenas colunas seguras.
 -- ---------------------------------------------------------------------------
-create policy "admin manages services" on services for all
+-- Mesmo motivo de "clients"/"requests"/"budgets" acima (Finding A) — nunca
+-- DELETE direto, só SELECT/INSERT/UPDATE.
+create policy "admin selects services" on services for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts services" on services for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates services" on services for update
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 -- FINANCE só lê — as únicas mutações que lhe interessam (validar, rejeitar,
 -- marcar faturado) passam sempre pelas RPCs finance_* mais abaixo, nunca por
 -- UPDATE direto (evita que consiga alterar valor, técnicos, cliente, etc.).
@@ -779,9 +819,17 @@ create policy "technician reads materials of own services" on service_materials_
 -- VISITS — admin vê tudo da empresa; técnico só cria/edita visitas dos
 -- serviços que lhe foram atribuídos (nunca de outros técnicos ou serviços).
 -- ---------------------------------------------------------------------------
-create policy "admin manages visits" on visits for all
+-- Mesmo motivo de "clients"/"requests"/"budgets"/"services" acima (Finding
+-- A) — nunca DELETE direto, só SELECT/INSERT/UPDATE. Apagar uma visita em
+-- cascata levaria consigo visit_photos/visit_materials_used, o histórico
+-- real do que o técnico fez.
+create policy "admin selects visits" on visits for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin inserts visits" on visits for insert
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+create policy "admin updates visits" on visits for update
   using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'))
-  with check (organization_id = my_org());
+  with check (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
 
 create policy "technician selects own service visits" on visits for select
   using (
@@ -1247,6 +1295,21 @@ begin
         justificacao_correcao = p_justificacao_correcao
     where id = p_visit_id;
 
+  -- Auditoria de segurança — a validação de qtd/preco_unit >= 0 só existia
+  -- em concluirVisita (app/tecnico/actions.ts), nunca aqui dentro. Como a
+  -- RPC é `grant execute ... to authenticated`, um técnico conseguia
+  -- chamá-la diretamente (supabase.rpc(...)) com valores negativos/NaN em
+  -- p_materiais, poluindo visit_materials_used e o valor calculado do
+  -- serviço (usado depois em faturação). Mesma regra já aplicada em
+  -- adicionarItem (orçamentos).
+  if exists (
+    select 1 from jsonb_array_elements(p_materiais) as item
+    where coalesce((item->>'qtd')::numeric, 1) < 0
+       or coalesce((item->>'preco_unit')::numeric, 0) < 0
+  ) then
+    raise exception 'Quantidade e preço dos materiais têm de ser números iguais ou superiores a 0.';
+  end if;
+
   insert into visit_materials_used (visit_id, nome, qtd, preco_unit)
   select p_visit_id, item->>'nome', coalesce((item->>'qtd')::numeric, 1), coalesce((item->>'preco_unit')::numeric, 0)
   from jsonb_array_elements(p_materiais) as item;
@@ -1491,6 +1554,13 @@ begin
   if p_referencia is null or length(trim(p_referencia)) = 0 then
     raise exception 'Referência da fatura é obrigatória.';
   end if;
+  -- Auditoria de segurança — esta RPC é `grant execute ... to
+  -- authenticated`; sem isto, um FINANCE conseguia chamá-la diretamente
+  -- (supabase.rpc(...)) com um valor negativo/NaN, nunca validado só pela
+  -- Server Action (app/admin/faturacao/actions.ts).
+  if p_valor is null or p_valor < 0 then
+    raise exception 'O valor da fatura tem de ser um número igual ou superior a 0.';
+  end if;
 
   select organization_id, estado, faturacao_estado into v_org_id, v_estado, v_faturacao_estado
   from services where id = p_service_id and organization_id = my_org();
@@ -1505,7 +1575,7 @@ begin
   -- O evento 'faturado' em service_events já não é inserido aqui — o
   -- trigger services_log_faturacao_change (abaixo) trata disso sozinho,
   -- para qualquer UPDATE que mude faturacao_estado, venha desta RPC ou de
-  -- um UPDATE direto do ADMIN (que tem RLS `for all` em services) — nunca
+  -- um UPDATE direto do ADMIN (que continua com UPDATE via RLS) — nunca
   -- duas fontes divergentes do mesmo evento, e nunca uma alteração de
   -- faturação sem rasto no histórico, seja qual for o caminho.
   update services
@@ -1848,6 +1918,26 @@ begin
   end;
 end;
 $$;
+
+-- Auditoria de segurança — esta função é SECURITY DEFINER e, ao contrário
+-- de tech_finish_visit/finance_*/etc. (todas com `grant execute ... to
+-- authenticated` explícito e SEM grant nenhum a mais ninguém), esta nunca
+-- teve nenhum grant/revoke escrito aqui. O Postgres concede EXECUTE a
+-- PUBLIC por omissão em toda função nova — e "authenticated"/"anon" são
+-- ambos membros implícitos de PUBLIC — por isso, sem este revoke, QUALQUER
+-- utilizador autenticado (de qualquer organização, com qualquer role) ou
+-- mesmo anónimo conseguia chamar isto diretamente via
+-- POST /rest/v1/rpc/enqueue_sheets_sync com um p_org_id à escolha: a função
+-- nunca valida que p_org_id é o da própria organização (não faz sentido
+-- validar isso — quem a chama legitimamente são os triggers abaixo, nunca
+-- um pedido de fora), permitindo poluir a fila de sync de QUALQUER empresa
+-- e disparar pedidos HTTP reais (com o segredo verdadeiro) contra
+-- /api/integrations/google-sheets/process em nome dela. Os triggers que a
+-- chamam continuam a funcionar sem qualquer grant extra: são também
+-- SECURITY DEFINER e correm com o privilégio do dono da função (que tem
+-- sempre EXECUTE nas suas próprias funções, independentemente de grants a
+-- PUBLIC).
+revoke execute on function enqueue_sheets_sync(uuid, text, uuid, text) from public, anon, authenticated;
 
 create or replace function notify_sheets_sync()
 returns trigger
