@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { calcularOrcamento } from "@/lib/orcamento";
 import { TIPO_LABEL } from "@/lib/orcamento-item-tipo";
+import { embutirLogo } from "@/lib/pdf-logo";
 
 // Gera o PDF profissional do orçamento a pedido (não fica gravado nenhum
 // ficheiro — cada download é construído na hora a partir dos dados atuais).
@@ -22,7 +23,7 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
 
   const { data: org } = await supabase
     .from("organizations")
-    .select("nome, nif")
+    .select("nome, nif, logo_path")
     .eq("id", orcamento.organization_id)
     .single();
 
@@ -41,11 +42,21 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   let y = 800;
   const margem = 50;
 
-  // Cabeçalho: marca "nX" (mesma identidade visual usada em toda a app) + nome da empresa.
-  page.drawRectangle({ x: margem, y: y - 24, width: 32, height: 32, color: laranja });
-  page.drawText("nX", { x: margem + 6, y: y - 15, size: 14, font: fontBold, color: rgb(1, 1, 1) });
-  page.drawText(org?.nome ?? "—", { x: margem + 42, y: y - 6, size: 14, font: fontBold, color: cinzaEscuro });
-  if (org?.nif) page.drawText(`NIF: ${org.nif}`, { x: margem + 42, y: y - 22, size: 9, font: fontRegular, color: cinza });
+  // Cabeçalho: logotipo real da empresa (Configurações) quando existir,
+  // senão a marca "nX" genérica (mesma identidade visual do resto da app).
+  const logo = await embutirLogo(pdf, supabase, org?.logo_path);
+  if (logo) {
+    const alturaLogo = 32;
+    const larguraLogo = (logo.width / logo.height) * alturaLogo;
+    page.drawImage(logo, { x: margem, y: y - 24, width: larguraLogo, height: alturaLogo });
+    page.drawText(org?.nome ?? "—", { x: margem + larguraLogo + 10, y: y - 6, size: 14, font: fontBold, color: cinzaEscuro });
+    if (org?.nif) page.drawText(`NIF: ${org.nif}`, { x: margem + larguraLogo + 10, y: y - 22, size: 9, font: fontRegular, color: cinza });
+  } else {
+    page.drawRectangle({ x: margem, y: y - 24, width: 32, height: 32, color: laranja });
+    page.drawText("nX", { x: margem + 6, y: y - 15, size: 14, font: fontBold, color: rgb(1, 1, 1) });
+    page.drawText(org?.nome ?? "—", { x: margem + 42, y: y - 6, size: 14, font: fontBold, color: cinzaEscuro });
+    if (org?.nif) page.drawText(`NIF: ${org.nif}`, { x: margem + 42, y: y - 22, size: 9, font: fontRegular, color: cinza });
+  }
 
   y -= 60;
   page.drawText(`ORÇAMENTO Nº ${orcamento.numero}`, { x: margem, y, size: 18, font: fontBold, color: cinzaEscuro });

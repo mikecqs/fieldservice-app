@@ -19,6 +19,7 @@ export async function guardarConfiguracoes(formData: FormData) {
   const valor_mao_obra_2_dias = Number(formData.get("valor_mao_obra_2_dias") || 0);
   const valor_mao_obra_visita_orcamento = Number(formData.get("valor_mao_obra_visita_orcamento") || 0);
   const valor_mao_obra_taxa_deslocacao = Number(formData.get("valor_mao_obra_taxa_deslocacao") || 0);
+  const valor_mao_obra_orcamento = Number(formData.get("valor_mao_obra_orcamento") || 0);
   for (const [campo, valor] of [
     ["Visita para Orçamento", valor_mao_obra_visita_orcamento],
     ["Taxa de Deslocação", valor_mao_obra_taxa_deslocacao],
@@ -26,6 +27,7 @@ export async function guardarConfiguracoes(formData: FormData) {
     ["hora adicional", valor_mao_obra_hora_adicional],
     ["dia completo", valor_mao_obra_dia_completo],
     ["2 dias completos", valor_mao_obra_2_dias],
+    ["mão de obra em orçamentos", valor_mao_obra_orcamento],
   ] as const) {
     if (!Number.isFinite(valor) || valor < 0) {
       throw new Error(`O preço da mão de obra (${campo}) tem de ser um número igual ou superior a 0.`);
@@ -42,8 +44,51 @@ export async function guardarConfiguracoes(formData: FormData) {
       valor_mao_obra_2_dias,
       valor_mao_obra_visita_orcamento,
       valor_mao_obra_taxa_deslocacao,
+      valor_mao_obra_orcamento,
     })
     .eq("organization_id", organizationId);
 
+  revalidatePath("/admin/configuracoes");
+}
+
+// Logotipo usado nos PDFs de orçamento/fecho de serviço (lib/pdf-fecho.ts,
+// app/admin/orcamentos/[id]/pdf/route.ts) em vez do quadrado "nX" genérico.
+// Só PNG/JPEG (pdf-lib só sabe embutir estes dois formatos), caminho sempre
+// "{organization_id}/logo.<ext>" — nunca acumula ficheiros órfãos: remove o
+// anterior primeiro se a extensão mudar (ex: trocou de .png para .jpg).
+export async function guardarLogotipo(formData: FormData) {
+  const organizationId = await getOrgId();
+  const supabase = await createClient();
+  const file = formData.get("logo") as File | null;
+  if (!file || file.size === 0) {
+    throw new Error("Escolhe um ficheiro de imagem.");
+  }
+  if (file.type !== "image/png" && file.type !== "image/jpeg") {
+    throw new Error("O logotipo tem de ser PNG ou JPEG.");
+  }
+
+  const ext = file.type === "image/png" ? "png" : "jpg";
+  const path = `${organizationId}/logo.${ext}`;
+
+  const { data: orgAtual } = await supabase.from("organizations").select("logo_path").eq("id", organizationId).single();
+  if (orgAtual?.logo_path && orgAtual.logo_path !== path) {
+    await supabase.storage.from("logos").remove([orgAtual.logo_path]);
+  }
+
+  const { error: upErr } = await supabase.storage.from("logos").upload(path, file, { upsert: true, contentType: file.type });
+  if (upErr) throw new Error(upErr.message);
+
+  await supabase.from("organizations").update({ logo_path: path }).eq("id", organizationId);
+  revalidatePath("/admin/configuracoes");
+}
+
+export async function removerLogotipo() {
+  const organizationId = await getOrgId();
+  const supabase = await createClient();
+  const { data: orgAtual } = await supabase.from("organizations").select("logo_path").eq("id", organizationId).single();
+  if (orgAtual?.logo_path) {
+    await supabase.storage.from("logos").remove([orgAtual.logo_path]);
+  }
+  await supabase.from("organizations").update({ logo_path: null }).eq("id", organizationId);
   revalidatePath("/admin/configuracoes");
 }
