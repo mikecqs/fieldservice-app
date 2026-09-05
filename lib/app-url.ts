@@ -9,8 +9,18 @@
 // APP_URL (sem prefixo NEXT_PUBLIC_) de propósito: esta função só é chamada
 // a partir de código server-only (Server Actions/route handlers), nunca do
 // browser — não há motivo para o valor ser incluído no bundle do cliente.
+// Remove sempre uma barra final — APP_URL com "/" no fim (ex:
+// "https://exemplo.pt/") produzia "https://exemplo.pt//api/..." em qualquer
+// link construído por concatenação (`${appUrl()}/...`), causando
+// redirect_uri_mismatch no OAuth do Google Sheets mesmo com o valor
+// "correto" registado na Google Cloud Console — a barra dupla é um URI
+// diferente aos olhos da Google.
+function semBarraFinal(url: string): string {
+  return url.replace(/\/+$/, "");
+}
+
 export function appUrl(): string {
-  if (process.env.APP_URL) return process.env.APP_URL;
+  if (process.env.APP_URL) return semBarraFinal(process.env.APP_URL);
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:3000";
 }
