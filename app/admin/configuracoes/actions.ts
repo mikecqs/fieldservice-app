@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { getOrgId } from "@/lib/auth";
+import { getOrgId, getOrgIdAndRole } from "@/lib/auth";
 
 export async function guardarConfiguracoes(formData: FormData) {
   const organizationId = await getOrgId();
@@ -54,7 +54,14 @@ export async function guardarConfiguracoes(formData: FormData) {
 // "{organization_id}/logo.<ext>" — nunca acumula ficheiros órfãos: remove o
 // anterior primeiro se a extensão mudar (ex: trocou de .png para .jpg).
 export async function guardarLogotipo(formData: FormData) {
-  const organizationId = await getOrgId();
+  // O upload em si já fica bloqueado pela policy do Storage para quem não
+  // for ADMIN/SUPER_ADMIN, mas o update a seguir usa createAdminClient()
+  // (contorna RLS, ver comentário abaixo) — sem este check explícito, essa
+  // escrita deixaria de ter qualquer gate de role.
+  const { organizationId, role } = await getOrgIdAndRole();
+  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+    throw new Error("Sem permissão para alterar o logotipo.");
+  }
   const supabase = await createClient();
   const file = formData.get("logo") as File | null;
   if (!file || file.size === 0) {
@@ -88,7 +95,14 @@ export async function guardarLogotipo(formData: FormData) {
 }
 
 export async function removerLogotipo() {
-  const organizationId = await getOrgId();
+  // Mesmo motivo do check em guardarLogotipo: a remoção do ficheiro no
+  // Storage falhava silenciosamente para quem não fosse ADMIN/SUPER_ADMIN
+  // (ignorado abaixo), mas sem este check o update via createAdminClient()
+  // limpava `logo_path` na mesma, sem nenhum gate de role.
+  const { organizationId, role } = await getOrgIdAndRole();
+  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+    throw new Error("Sem permissão para remover o logotipo.");
+  }
   const supabase = await createClient();
   const { data: orgAtual } = await supabase.from("organizations").select("logo_path").eq("id", organizationId).single();
   if (orgAtual?.logo_path) {
