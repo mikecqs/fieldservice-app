@@ -1266,18 +1266,19 @@ begin
   -- (por orçamento aceite ou introduzido manualmente em "Novo Serviço"),
   -- isso continua a ser decisão do Admin no fecho de faturação.
   --
-  -- BLOCO 14 — única exceção, deliberada: quando services.valor ainda está
-  -- no valor por omissão (0). É sempre o caso de um serviço criado
+  -- BLOCO 14 — duas exceções, deliberadas: (1) quando services.valor ainda
+  -- está no valor por omissão (0) — é sempre o caso de um serviço criado
   -- diretamente a partir de um Pedido tipo "Agendamento" ou do popup
-  -- "criar novo" da Agenda — nenhum dos dois fluxos tem campo de preço,
-  -- por isso nunca há nada para "substituir": é a primeira vez que existe
-  -- um valor real (nunca inventado, é sempre materiais+mão de obra
+  -- "criar novo" da Agenda — nenhum dos dois fluxos tem campo de preço, por
+  -- isso nunca há nada para "substituir": é a primeira vez que existe um
+  -- valor real (nunca inventado, é sempre materiais+mão de obra
   -- efetivamente registados pelo técnico) para gravar. Um serviço vindo de
-  -- orçamento aceite nunca tem valor exatamente 0 (vem de
-  -- calcularOrcamento), por isso nunca é afetado por este update — e, numa
-  -- correção, o primeiro fecho já deixou valor != 0, por isso o "Preço
-  -- atual" (services.valor) nunca muda no refecho, mesmo que os materiais/
-  -- mão de obra tenham mudado.
+  -- orçamento aceite nunca tem valor exatamente 0 (vem de calcularOrcamento),
+  -- por isso nunca é afetado por este caso. (2) quando esta visita é uma
+  -- correção (v_apos_correcao) — o refecho pode legitimamente mudar
+  -- materiais/mão de obra (ex: técnico usou mais uma peça), por isso o
+  -- "Preço atual" atualiza sempre para refletir o valor corrigido, mesmo
+  -- que já não estivesse a 0.
   if p_resultado = 'concluido' then
     select coalesce(sum(qtd * preco_unit), 0)
       into v_valor_materiais
@@ -1321,7 +1322,7 @@ begin
 
     update services
       set valor = v_valor_materiais + v_valor_mao_obra
-      where id = v_service_id and valor = 0;
+      where id = v_service_id and (valor = 0 or v_apos_correcao);
   end if;
 
   -- 'concluido' fica a aguardar validação do Admin antes de ir para
