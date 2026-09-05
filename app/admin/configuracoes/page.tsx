@@ -16,7 +16,7 @@ export default async function ConfiguracoesPage(
   const { data: settings } = await supabase
     .from("org_settings")
     .select(
-      "followup_dias_default, valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao, valor_mao_obra_orcamento"
+      "followup_dias_default, valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao"
     )
     .eq("organization_id", organizationId)
     .single();
@@ -56,7 +56,8 @@ export default async function ConfiguracoesPage(
             <span className="mb-1 block text-xs font-medium text-neutral-300">Preços da mão de obra</span>
             <p className="mb-2 text-xs text-neutral-500">
               Usados automaticamente pelo Técnico ao fechar um serviço, consoante a duração escolhida (1h a 2 dias
-              completos). O Técnico nunca introduz o preço manualmente.
+              completos), e também na linha "Mão de Obra - Serviços Externos" dos Orçamentos (mesma tabela de
+              preços, mesma duração à escolha). Nenhum dos dois introduz o preço manualmente.
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <label className="block">
@@ -126,25 +127,6 @@ export default async function ConfiguracoesPage(
                 />
               </label>
             </div>
-          </div>
-
-          <div>
-            <span className="mb-1 block text-xs font-medium text-neutral-300">Mão de obra em Orçamentos</span>
-            <p className="mb-2 text-xs text-neutral-500">
-              Preço por unidade da linha "Mão de Obra - Serviços Externos" nos orçamentos — ao adicionares essa
-              linha, a descrição e o preço ficam automáticos, só escolhes a quantidade.
-            </p>
-            <label className="block w-40">
-              <span className="mb-1 block text-[11px] text-neutral-400">Preço por unidade (€)</span>
-              <input
-                name="valor_mao_obra_orcamento"
-                type="number"
-                step="1"
-                min="0"
-                defaultValue={settings?.valor_mao_obra_orcamento ?? 0}
-                className="w-full rounded-md border border-neutral-700 px-3 py-2 text-sm"
-              />
-            </label>
           </div>
 
           <p className="rounded-md border border-neutral-800 bg-neutral-800 p-3 text-xs text-neutral-400">

@@ -10,6 +10,7 @@ import { registarEventoOrcamento } from "@/lib/budget-events";
 import { podeEditarItensOrcamento, podeMarcarEnviado, podeAceitarOrcamento, podeAvancarParaEstado } from "@/lib/orcamento-estado";
 import { TIPO_VISITA_ORCAMENTO } from "@/lib/servico-estado";
 import { escreverAgendamentoServico } from "@/lib/agendamento-servico";
+import { calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib/mao-obra";
 
 export async function criarOrcamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -140,8 +141,32 @@ export async function adicionarItem(formData: FormData) {
   const tipo = String(formData.get("tipo") || "");
   const descricao = String(formData.get("descricao") || "");
   const qtd = Number(formData.get("qtd") || 1);
-  const valor_unit = Number(formData.get("valor_unit") || 0);
   if (!budget_id || !descricao) return;
+
+  // Mão de obra nunca confia no preço vindo do cliente (pode ser alterado
+  // via devtools no input escondido) — recalcula sempre no servidor a partir
+  // das mesmas taxas configuradas em Configurações/org_settings que o
+  // Técnico usa no fecho de OS (lib/mao-obra.ts), pela duração escolhida.
+  let valor_unit = Number(formData.get("valor_unit") || 0);
+  if (tipo === "mao_obra") {
+    const duracao = String(formData.get("duracao_mao_obra") || "");
+    const { data: settings } = await supabase
+      .from("org_settings")
+      .select(
+        "valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao"
+      )
+      .eq("organization_id", organizationId)
+      .single();
+    const precos: PrecosMaoObra = {
+      primeiraHora: settings?.valor_mao_obra_primeira_hora ?? 0,
+      horaAdicional: settings?.valor_mao_obra_hora_adicional ?? 0,
+      diaCompleto: settings?.valor_mao_obra_dia_completo ?? 0,
+      doisDias: settings?.valor_mao_obra_2_dias ?? 0,
+      visitaOrcamento: settings?.valor_mao_obra_visita_orcamento ?? 0,
+      taxaDeslocacao: settings?.valor_mao_obra_taxa_deslocacao ?? 0,
+    };
+    valor_unit = calcularPrecoMaoObra(duracao, precos);
+  }
 
   await inserirItensOrcamento(supabase, organizationId, budget_id, [{ tipo, descricao, qtd, valor_unit }]);
   revalidatePath(`/admin/orcamentos/${budget_id}`);

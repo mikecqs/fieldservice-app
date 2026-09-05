@@ -11,6 +11,7 @@ import { AdicionarItemForm } from "./AdicionarItemForm";
 import { ESTADOS_ORCAMENTO_TERMINAIS } from "@/lib/orcamento-estado";
 import { ESTADO_LABEL, ESTADO_COLOR, ESTADO_COLOR_FALLBACK } from "@/lib/orcamento-visual";
 import { TIPO_LABEL } from "@/lib/orcamento-item-tipo";
+import type { PrecosMaoObra } from "@/lib/mao-obra";
 
 export default async function OrcamentoDetalhePage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -29,8 +30,25 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
       .eq("budget_id", params.id)
       .order("created_at", { ascending: false }),
     supabase.from("profiles").select("id, nome").eq("organization_id", organizationId).eq("role", "TECHNICIAN").order("nome"),
-    supabase.from("org_settings").select("valor_mao_obra_orcamento").eq("organization_id", organizationId).single(),
+    supabase
+      .from("org_settings")
+      .select(
+        "valor_mao_obra_primeira_hora, valor_mao_obra_hora_adicional, valor_mao_obra_dia_completo, valor_mao_obra_2_dias, valor_mao_obra_visita_orcamento, valor_mao_obra_taxa_deslocacao"
+      )
+      .eq("organization_id", organizationId)
+      .single(),
   ]);
+
+  // Mesmas taxas configuradas em Configurações e já usadas pelo Técnico no
+  // fecho de OS (lib/mao-obra.ts) — nunca uma tabela de preços paralela.
+  const precosMaoObra: PrecosMaoObra = {
+    primeiraHora: settings?.valor_mao_obra_primeira_hora ?? 0,
+    horaAdicional: settings?.valor_mao_obra_hora_adicional ?? 0,
+    diaCompleto: settings?.valor_mao_obra_dia_completo ?? 0,
+    doisDias: settings?.valor_mao_obra_2_dias ?? 0,
+    visitaOrcamento: settings?.valor_mao_obra_visita_orcamento ?? 0,
+    taxaDeslocacao: settings?.valor_mao_obra_taxa_deslocacao ?? 0,
+  };
 
   if (!orcamento) notFound();
 
@@ -211,7 +229,7 @@ export default async function OrcamentoDetalhePage(props: { params: Promise<{ id
         </div>
 
         {orcamento.estado === "rascunho" && (
-          <AdicionarItemForm budgetId={orcamento.id} catalogo={catalogo ?? []} valorMaoObraOrcamento={settings?.valor_mao_obra_orcamento ?? 0} />
+          <AdicionarItemForm budgetId={orcamento.id} catalogo={catalogo ?? []} precosMaoObra={precosMaoObra} />
         )}
       </div>
 
