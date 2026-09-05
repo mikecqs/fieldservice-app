@@ -2,37 +2,44 @@
 
 import { useRef, useState } from "react";
 import { adicionarItem, adicionarItensCatalogo } from "../actions";
+import { MAO_OBRA_OPCOES, calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib/mao-obra";
 
 type CatalogItem = { id: string; referencia: string; descricao: string; preco_venda: number };
 
-// Mesma descrição fixa sempre que o tipo é "mao_obra" — o Admin só escolhe
-// a quantidade, o preço vem sempre de org_settings.valor_mao_obra_orcamento
-// (Configurações), exatamente como o Técnico nunca escolhe preço no fecho
-// de OS, só a duração.
+// Mesma descrição fixa sempre que o tipo é "mao_obra" — o Admin só escolhe a
+// duração (exatamente como o Técnico no fecho de OS, que também nunca digita
+// preço nem quantidade, só escolhe a duração); o preço vem sempre das taxas
+// já configuradas em Configurações (org_settings, as mesmas usadas pelo
+// Técnico), nunca de um valor novo digitado aqui.
 const DESCRICAO_MAO_OBRA = "Mão de Obra - Serviços Externos";
 
 export function AdicionarItemForm({
   budgetId,
   catalogo,
-  valorMaoObraOrcamento,
+  precosMaoObra,
 }: {
   budgetId: string;
   catalogo: CatalogItem[];
-  valorMaoObraOrcamento: number;
+  precosMaoObra: PrecosMaoObra;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [tipo, setTipo] = useState("mao_obra");
-  const [descricao, setDescricao] = useState(DESCRICAO_MAO_OBRA);
-  const [valorUnit, setValorUnit] = useState(String(valorMaoObraOrcamento));
+  const [duracaoMaoObra, setDuracaoMaoObra] = useState("1h");
+  // Descrição/valor só são usados (e livremente editáveis) para tipos que não
+  // sejam "mao_obra" — nunca partilhados com o cálculo automático acima, para
+  // nunca haver texto/preço residual ao mudar de tipo (bug corrigido: mudar
+  // de "Mão de obra" para "Materiais" deixava para trás a descrição e o
+  // preço da mão de obra, porque antes eram o mesmo state para os dois).
+  const [descricao, setDescricao] = useState("");
+  const [valorUnit, setValorUnit] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const isMaoObra = tipo === "mao_obra";
+  const valorMaoObraCalculado = calcularPrecoMaoObra(duracaoMaoObra, precosMaoObra);
 
   function mudarTipo(novoTipo: string) {
     setTipo(novoTipo);
-    if (novoTipo === "mao_obra") {
-      setDescricao(DESCRICAO_MAO_OBRA);
-      setValorUnit(String(valorMaoObraOrcamento));
-    }
+    setDescricao("");
+    setValorUnit("");
   }
 
   // Onda 3 (Etapa 3) — seleção múltipla do catálogo: estado próprio,
@@ -76,8 +83,9 @@ export function AdicionarItemForm({
     try {
       await adicionarItem(formData);
       setTipo("mao_obra");
-      setDescricao(DESCRICAO_MAO_OBRA);
-      setValorUnit(String(valorMaoObraOrcamento));
+      setDuracaoMaoObra("1h");
+      setDescricao("");
+      setValorUnit("");
       formRef.current?.reset();
     } catch (e: any) {
       setErro(e?.message || "Não foi possível adicionar a linha.");
@@ -144,36 +152,60 @@ export function AdicionarItemForm({
           <option value="deslocacao">Deslocação</option>
           <option value="outros">Outros</option>
         </select>
-        <input
-          name="descricao"
-          placeholder="Descrição"
-          required
-          readOnly={isMaoObra}
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-          className={`col-span-2 rounded-md border border-neutral-700 px-2 py-1.5 text-xs ${isMaoObra ? "bg-neutral-800 text-neutral-400" : ""}`}
-        />
-        <input
-          name="qtd"
-          type="number"
-          step="0.1"
-          defaultValue="1"
-          placeholder="Qtd"
-          className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
-        />
-        <input
-          name="valor_unit"
-          type="number"
-          step="1"
-          placeholder="€ unit."
-          readOnly={isMaoObra}
-          value={valorUnit}
-          onChange={(e) => setValorUnit(e.target.value)}
-          className={`rounded-md border border-neutral-700 px-2 py-1.5 text-xs ${isMaoObra ? "bg-neutral-800 text-neutral-400" : ""}`}
-        />
+
+        {isMaoObra ? (
+          <>
+            <input type="hidden" name="descricao" value={DESCRICAO_MAO_OBRA} />
+            <input type="hidden" name="qtd" value="1" />
+            <input type="hidden" name="duracao_mao_obra" value={duracaoMaoObra} />
+            <select
+              value={duracaoMaoObra}
+              onChange={(e) => setDuracaoMaoObra(e.target.value)}
+              className="col-span-2 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+            >
+              {MAO_OBRA_OPCOES.filter(([valor]) => valor !== "outro").map(([valor, label]) => (
+                <option key={valor} value={valor}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <div className="col-span-2 flex items-center rounded-md border border-neutral-800 bg-neutral-800 px-2 py-1.5 text-xs text-neutral-300 sm:col-span-2">
+              {valorMaoObraCalculado.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+            </div>
+          </>
+        ) : (
+          <>
+            <input
+              name="descricao"
+              placeholder="Descrição"
+              required
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              className="col-span-2 rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+            />
+            <input
+              name="qtd"
+              type="number"
+              step="0.1"
+              defaultValue="1"
+              placeholder="Qtd"
+              className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+            />
+            <input
+              name="valor_unit"
+              type="number"
+              step="1"
+              placeholder="€ unit."
+              value={valorUnit}
+              onChange={(e) => setValorUnit(e.target.value)}
+              className="rounded-md border border-neutral-700 px-2 py-1.5 text-xs"
+            />
+          </>
+        )}
+
         {isMaoObra && (
           <p className="col-span-2 -mt-1 text-[11px] text-neutral-500 sm:col-span-5">
-            Descrição e preço da mão de obra são automáticos (definidos em Configurações) — só a quantidade é editável.
+            Descrição e preço da mão de obra são automáticos (taxas definidas em Configurações) — só a duração é editável.
           </p>
         )}
         <button className="col-span-2 mt-1 rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200 sm:col-span-5">

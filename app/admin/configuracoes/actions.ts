@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 
 export async function guardarConfiguracoes(formData: FormData) {
@@ -19,7 +19,6 @@ export async function guardarConfiguracoes(formData: FormData) {
   const valor_mao_obra_2_dias = Number(formData.get("valor_mao_obra_2_dias") || 0);
   const valor_mao_obra_visita_orcamento = Number(formData.get("valor_mao_obra_visita_orcamento") || 0);
   const valor_mao_obra_taxa_deslocacao = Number(formData.get("valor_mao_obra_taxa_deslocacao") || 0);
-  const valor_mao_obra_orcamento = Number(formData.get("valor_mao_obra_orcamento") || 0);
   for (const [campo, valor] of [
     ["Visita para Orçamento", valor_mao_obra_visita_orcamento],
     ["Taxa de Deslocação", valor_mao_obra_taxa_deslocacao],
@@ -27,7 +26,6 @@ export async function guardarConfiguracoes(formData: FormData) {
     ["hora adicional", valor_mao_obra_hora_adicional],
     ["dia completo", valor_mao_obra_dia_completo],
     ["2 dias completos", valor_mao_obra_2_dias],
-    ["mão de obra em orçamentos", valor_mao_obra_orcamento],
   ] as const) {
     if (!Number.isFinite(valor) || valor < 0) {
       throw new Error(`O preço da mão de obra (${campo}) tem de ser um número igual ou superior a 0.`);
@@ -44,7 +42,6 @@ export async function guardarConfiguracoes(formData: FormData) {
       valor_mao_obra_2_dias,
       valor_mao_obra_visita_orcamento,
       valor_mao_obra_taxa_deslocacao,
-      valor_mao_obra_orcamento,
     })
     .eq("organization_id", organizationId);
 
@@ -78,7 +75,15 @@ export async function guardarLogotipo(formData: FormData) {
   const { error: upErr } = await supabase.storage.from("logos").upload(path, file, { upsert: true, contentType: file.type });
   if (upErr) throw new Error(upErr.message);
 
-  await supabase.from("organizations").update({ logo_path: path }).eq("id", organizationId);
+  // organizations só tem policy de UPDATE para SUPER_ADMIN ("super admin
+  // full access to organizations") — o ADMIN só tem SELECT ("members can
+  // read own organization"). Sem createAdminClient() aqui, o upload do
+  // ficheiro funcionava mas este update ficava silenciosamente sem efeito
+  // (0 linhas afetadas, sem erro), e o logotipo nunca aparecia nos PDFs.
+  // Filtra sempre por organizationId (nunca vindo do cliente) — só este
+  // campo é escrito, nunca nome/nif/ativa.
+  const admin = createAdminClient();
+  await admin.from("organizations").update({ logo_path: path }).eq("id", organizationId);
   revalidatePath("/admin/configuracoes");
 }
 
@@ -89,6 +94,7 @@ export async function removerLogotipo() {
   if (orgAtual?.logo_path) {
     await supabase.storage.from("logos").remove([orgAtual.logo_path]);
   }
-  await supabase.from("organizations").update({ logo_path: null }).eq("id", organizationId);
+  const admin = createAdminClient();
+  await admin.from("organizations").update({ logo_path: null }).eq("id", organizationId);
   revalidatePath("/admin/configuracoes");
 }
