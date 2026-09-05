@@ -10,6 +10,7 @@ import { MAO_OBRA_OPCOES, calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib
 import { rotuloTipoServico } from "@/lib/servico-estado";
 import { METODOS_PAGAMENTO } from "@/lib/faturacao-opcoes";
 import { createClient } from "@/lib/supabase/client";
+import { extensaoPorMime } from "@/lib/upload-mime";
 
 function formatEuros(v: number) {
   return v.toLocaleString("pt-PT", { style: "currency", currency: "EUR" });
@@ -311,11 +312,15 @@ export function ServicoDetalheClient({
 
       // Fotos são sempre opcionais: uma foto que falhe o upload (sem rede,
       // por exemplo) nunca impede o resto do fecho — só fica de fora do
-      // array enviado à RPC.
+      // array enviado à RPC. Extensão do ficheiro guardado vem sempre do
+      // MIME type real (nunca do nome que o ficheiro trazia — Finding 4):
+      // um MIME fora da lista aceite pelo bucket "visitas" nem tenta
+      // fazer upload.
       const fotosEnviadas: string[] = [];
       for (let i = 0; i < fotos.length; i++) {
         const { file } = fotos[i];
-        const ext = file.name.split(".").pop() || "jpg";
+        const ext = extensaoPorMime(file.type);
+        if (!ext) continue;
         const path = `${organizationId}/${idParaSubmeter}/${Date.now()}-${i}.${ext}`;
         const { error: upErr } = await supabase.storage.from("visitas").upload(path, file, { contentType: file.type });
         if (!upErr) fotosEnviadas.push(path);

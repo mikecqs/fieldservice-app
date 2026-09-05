@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getOrgId } from "@/lib/auth";
 import { assertPertenceAOrg, assertMoradaPertenceCliente } from "@/lib/tenant-guard";
+import { extensaoPorMime } from "@/lib/upload-mime";
 
 export async function criarEquipamento(formData: FormData) {
   const organizationId = await getOrgId();
@@ -36,11 +37,13 @@ export async function criarEquipamento(formData: FormData) {
   if (error || !equip) throw new Error(error?.message || "Não foi possível criar o equipamento.");
 
   // Fotografia opcional — guardada sempre sob "{organization_id}/..." porque
-  // é isso que a policy de storage verifica (ver schema.sql).
+  // é isso que a policy de storage verifica (ver schema.sql). Extensão vem
+  // sempre do MIME type real (nunca do nome do ficheiro — Finding 4): um
+  // MIME fora da lista aceite pelo bucket "equipamentos" nem tenta upload.
   const foto = formData.get("foto") as File | null;
-  if (foto && foto.size > 0) {
-    const ext = foto.name.split(".").pop() || "jpg";
-    const path = `${organizationId}/${equip.id}.${ext}`;
+  const extFoto = foto ? extensaoPorMime(foto.type) : null;
+  if (foto && foto.size > 0 && extFoto) {
+    const path = `${organizationId}/${equip.id}.${extFoto}`;
     const { error: upErr } = await supabase.storage
       .from("equipamentos")
       .upload(path, foto, { upsert: true, contentType: foto.type });
