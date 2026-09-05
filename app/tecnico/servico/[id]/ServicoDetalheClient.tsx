@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, MapPin, Phone, Lock, CheckCircle2, X, Camera } from "lucide-react";
-import { iniciarServico, concluirVisita, obterVisitaAberta, sugerirMaoObraDaVisita } from "../../actions";
+import { iniciarServico, concluirVisita, obterVisitaAberta, obterContextoCorrecao, sugerirMaoObraDaVisita } from "../../actions";
 import { Badge } from "@/components/ui/Badge";
 import { MAO_OBRA_OPCOES, calcularPrecoMaoObra, type PrecosMaoObra } from "@/lib/mao-obra";
 import { rotuloTipoServico } from "@/lib/servico-estado";
@@ -37,7 +37,7 @@ export function ServicoDetalheClient({
   precosMaoObra,
   visitaAbertaId,
   organizationId,
-  visitaAnterior,
+  visitaAnterior: visitaAnteriorInicial,
 }: {
   servico: any;
   materiaisPrevistos: { nome: string; qtd: number; preco_venda: number }[];
@@ -49,10 +49,17 @@ export function ServicoDetalheClient({
 }) {
   const router = useRouter();
   const supabase = createClient();
-  // Só há mesmo uma correção em curso quando existe fecho anterior + motivo
-  // de rejeição — nunca confundir com o primeiro fecho de sempre.
-  const isCorrecao = !!visitaAnterior && !!servico.motivo_correcao;
   const isInstalacao = servico.tipo === "Instalação";
+  // "servico.motivo_correcao" fica preenchido para sempre depois da primeira
+  // rejeição do serviço (nunca volta a null) — sozinho não distingue "esta
+  // visita concreta é uma reabertura de correção" de "este serviço já foi
+  // rejeitado alguma vez, mas esta reabertura é normal". Usado só como
+  // primeira estimativa (para o estado inicial de materiaisLinhas abaixo);
+  // abrirFinalizar() confirma sempre a verdade a partir de
+  // visits.apos_correcao (a mesma fonte que tech_finish_visit usa) antes de
+  // mostrar o formulário de fecho — nunca confiar só nesta estimativa.
+  const [isCorrecao, setIsCorrecao] = useState(() => !!visitaAnteriorInicial && !!servico.motivo_correcao);
+  const [visitaAnterior, setVisitaAnterior] = useState<VisitaAnterior | null>(visitaAnteriorInicial);
   const [visitaId, setVisitaId] = useState<string | null>(visitaAbertaId);
   const [aFinalizar, setAFinalizar] = useState(false);
   const [aAbrirFinalizar, setAAbrirFinalizar] = useState(false);
@@ -158,6 +165,30 @@ export function ServicoDetalheClient({
         return;
       }
       setVisitaId(id);
+
+      // Reconfirma sempre se ESTA visita concreta é uma correção diretamente
+      // a partir de visits.apos_correcao (nunca do servico.motivo_correcao
+      // recebido por prop, que fica preenchido para sempre depois da
+      // primeira rejeição e não distingue reaberturas normais de
+      // reaberturas de correção) — é exatamente o mesmo valor que
+      // tech_finish_visit vai usar para exigir ou não a justificação, por
+      // isso nunca podem discordar.
+      try {
+        const contexto = await obterContextoCorrecao(id);
+        setIsCorrecao(contexto.aposCorrecao);
+        setVisitaAnterior(contexto.visitaAnterior);
+        setMateriaisLinhas(
+          contexto.aposCorrecao
+            ? (contexto.visitaAnterior?.materiais ?? []).map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_unit ?? 0) }))
+            : materiaisPrevistos.map((m) => ({ nome: m.nome, qtd: String(m.qtd), precoUnit: String(m.preco_venda ?? 0) }))
+        );
+        if (contexto.aposCorrecao) setQuantidadeInstalada("");
+      } catch {
+        // Falha rara (sem rede) — mantém a estimativa inicial em vez de
+        // impedir o fecho do serviço; o servidor continua a validar tudo de
+        // qualquer forma no fecho real.
+      }
+
       // Onda 2: sugere a mão de obra a partir da duração real da visita —
       // só se o Técnico ainda não tiver escolhido nada (nunca substitui uma
       // escolha manual já feita, mesmo que ele volte atrás e reabra o
