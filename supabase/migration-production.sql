@@ -1967,6 +1967,49 @@ grant execute on function finance_marcar_faturado(uuid, numeric, text) to authen
 commit;
 
 -- =============================================================================
+-- Redução do "ADMIN todo-poderoso" (Grupo 1 — sem custo funcional).
+-- Confirmado por grep que nenhuma Server Action do Admin escreve em
+-- visits/visit_materials_used/visit_photos, nem nas colunas faturacao_* de
+-- services por fora das RPCs finance_* — este acesso direto era só
+-- superfície de ataque latente (um ADMIN comprometido, ou uma chamada
+-- direta à API, alterando o histórico real do técnico ou uma fatura sem
+-- passar pela validação). Reduzido sem tirar nenhuma funcionalidade.
+-- =============================================================================
+begin;
+
+drop policy if exists "admin manages visits" on visits;
+drop policy if exists "admin selects visits" on visits;
+drop policy if exists "admin inserts visits" on visits;
+drop policy if exists "admin updates visits" on visits;
+create policy "admin selects visits" on visits for select
+  using (organization_id = my_org() and my_role() in ('ADMIN','SUPER_ADMIN'));
+
+drop policy if exists "admin manages visit_materials_used" on visit_materials_used;
+drop policy if exists "admin selects visit_materials_used" on visit_materials_used;
+create policy "admin selects visit_materials_used" on visit_materials_used for select
+  using (
+    exists (
+      select 1 from visits v where v.id = visit_id and v.organization_id = my_org()
+    ) and my_role() in ('ADMIN','SUPER_ADMIN')
+  );
+
+drop policy if exists "admin manages visit_photos" on visit_photos;
+drop policy if exists "admin selects visit_photos" on visit_photos;
+create policy "admin selects visit_photos" on visit_photos for select
+  using (
+    exists (select 1 from visits v where v.id = visit_id and v.organization_id = my_org())
+    and my_role() in ('ADMIN','SUPER_ADMIN')
+  );
+
+revoke update (
+  faturacao_estado, faturacao_data, faturacao_valor, faturacao_referencia,
+  faturacao_utilizador, faturacao_metodo_pagamento, faturacao_liquidado_data,
+  faturacao_liquidado_utilizador
+) on services from authenticated;
+
+commit;
+
+-- =============================================================================
 -- FIM. Depois de aplicar isto em produção:
 --   - Os BLOCOS 6, 7, 8, 10–19 desta sessão, a página de Relatórios do
 --     f3b2177, e toda a auditoria "APP" (Dashboard/Atenção, Agenda,
