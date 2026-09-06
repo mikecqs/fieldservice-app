@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ESTADO_LABEL, ESTADO_COLOR } from "@/lib/orcamento-visual";
+import { ESTADO_LABEL as SERVICO_ESTADO_LABEL, ESTADO_COLOR as SERVICO_ESTADO_COLOR } from "../servicos/estados";
 
 export type OrcamentoResumo = {
   id: string;
@@ -12,6 +13,12 @@ export type OrcamentoResumo = {
   clients: { nome: string } | null;
   iva_percent: number;
   total: number;
+  // Estado ATUAL do Serviço criado ao aceitar (null se ainda não existir
+  // nenhum, ou se o orçamento nunca foi aceite) — nunca substitui o estado
+  // "aceite" do orçamento (que é histórico e nunca muda), é só uma nota
+  // informativa do que aconteceu depois.
+  servicoId: string | null;
+  servicoEstado: string | null;
 };
 
 type Grupo = "ativo" | "aceite" | "concluido";
@@ -92,9 +99,18 @@ export function OrcamentosLista({ orcamentos }: { orcamentos: OrcamentoResumo[] 
                         </div>
                         <div className="text-[10px] text-neutral-500">c/ IVA ({o.iva_percent}%)</div>
                       </div>
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[o.estado] ?? ""}`}>
-                        {ESTADO_LABEL[o.estado] ?? o.estado}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${ESTADO_COLOR[o.estado] ?? ""}`}>
+                          {ESTADO_LABEL[o.estado] ?? o.estado}
+                        </span>
+                        {o.servicoEstado && (
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${SERVICO_ESTADO_COLOR[o.servicoEstado] ?? "bg-neutral-800 text-neutral-400"}`}
+                          >
+                            Serviço: {SERVICO_ESTADO_LABEL[o.servicoEstado] ?? o.servicoEstado}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </Link>
                 ))}
