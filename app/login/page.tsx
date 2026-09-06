@@ -35,7 +35,7 @@ export default function LoginPage() {
           <TareoMark size={36} />
           <div>
             <div className="text-sm font-bold leading-tight text-white">Tareo</div>
-            <div className="text-xs leading-tight text-neutral-400">Gestão de terreno</div>
+            <div className="text-xs leading-tight text-neutral-400">Gestão operacional para empresas de serviços</div>
           </div>
         </div>
 
