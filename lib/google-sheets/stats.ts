@@ -6,7 +6,7 @@ function toISO(d: Date) {
 }
 
 // Reaproveita exatamente a mesma lógica já testada do Dashboard Financeiro
-// da Tareo (lib/financeiro.ts) — nunca recalcula estatísticas de outra
+// do Serv (lib/financeiro.ts) — nunca recalcula estatísticas de outra
 // forma. organizationId é passado explicitamente porque este código corre
 // com o cliente service role (ignora RLS): é o único filtro de isolamento
 // aqui, por isso as 3 chamadas abaixo têm sempre de o levar.
@@ -23,7 +23,7 @@ export async function writeStats(admin: any, accessToken: string, spreadsheetId:
 
   // Contagens instantâneas de orçamentos (não são "do período", são o
   // estado atual) — pedidas à parte por não fazerem parte do dashboard
-  // financeiro interno da Tareo.
+  // financeiro interno do Serv.
   const { data: orcamentos } = await admin.from("budgets").select("estado").eq("organization_id", organizationId);
   const pendentes = (orcamentos ?? []).filter((o: any) => o.estado === "aguarda_resposta" || o.estado === "enviado" || o.estado === "followup").length;
   const aceites = (orcamentos ?? []).filter((o: any) => o.estado === "aceite").length;

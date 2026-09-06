@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { TareoMark } from "@/components/TareoMark";
+import { ServMark } from "@/components/ServMark";
 
 export default function RedefinirPasswordPage() {
   const supabase = createClient();
@@ -56,9 +56,11 @@ export default function RedefinirPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4">
       <div className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-2">
-          <TareoMark size={36} />
+          <ServMark size={36} />
           <div>
-            <div className="text-sm font-bold leading-tight text-white">Tareo</div>
+            <div className="text-sm font-bold leading-tight text-white">
+              Serv <span className="text-[10px] font-normal text-neutral-500">by Tareo</span>
+            </div>
             <div className="text-xs leading-tight text-neutral-400">Nova password</div>
           </div>
         </div>

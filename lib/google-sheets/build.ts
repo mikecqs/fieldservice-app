@@ -6,7 +6,7 @@ import { writeStats } from "./stats";
 // e o Dashboard/Estatísticas inicial. Chamado uma única vez, no momento em
 // que a integração é ligada (callback do OAuth).
 export async function buildCompanySpreadsheet(admin: any, accessToken: string, organizationId: string, empresaNome: string) {
-  const title = `Tareo — ${empresaNome}`;
+  const title = `Serv — ${empresaNome}`;
   const { spreadsheetId, sheets } = await createSpreadsheet(accessToken, title, [...SHEET_NAMES]);
   const sheetIdByName = new Map<string, number>(sheets.map((s: any) => [s.properties.title, s.properties.sheetId]));
 
@@ -37,7 +37,7 @@ export async function buildCompanySpreadsheet(admin: any, accessToken: string, o
 
 async function writeDashboardSkeleton(accessToken: string, spreadsheetId: string) {
   const values = [
-    ["Dashboard de gestão — Tareo"],
+    ["Dashboard de gestão — Serv"],
     [""],
     ["Os números abaixo atualizam-se automaticamente a cada sincronização (Hoje / Este mês / Este ano)."],
     ["Para analisar um período específico ou cruzar com registos individuais, usa as folhas Serviços, Visitas, Orçamentos e Histórico — todas têm o ID de cada registo para permitir esse cruzamento."],

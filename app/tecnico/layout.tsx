@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { SignOutButton } from "@/components/SignOutButton";
-import { TareoMark } from "@/components/TareoMark";
+import { ServMark } from "@/components/ServMark";
 
 // Reparem no que NÃO existe aqui: não há nenhum botão "ver como Admin", nem
 // link para nenhuma rota /admin/*. Isso não é uma omissão de design — mesmo
@@ -14,7 +14,7 @@ export default async function TecnicoLayout({ children }: { children: React.Reac
     <div className="mx-auto min-h-screen max-w-md bg-neutral-950">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-4 text-white">
         <div className="flex items-center gap-2.5">
-          <TareoMark size={30} />
+          <ServMark size={30} />
           <div>
             <div className="text-[11px] leading-tight text-neutral-500">Olá,</div>
             <div className="text-base font-bold leading-tight">{profile?.nome}</div>

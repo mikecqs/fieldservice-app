@@ -8,15 +8,15 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "Tareo", body: event.data ? event.data.text() : "" };
+    data = { title: "Serv", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "Tareo";
+  const title = data.title || "Serv";
   const options = {
     body: data.body || "",
     icon: "/icon.svg",
     badge: "/icon.svg",
-    tag: data.tag || "tareo-notification",
+    tag: data.tag || "serv-notification",
     data: { url: data.url || "/tecnico" },
   };
 

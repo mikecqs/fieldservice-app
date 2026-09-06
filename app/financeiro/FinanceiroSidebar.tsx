@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
-import { TareoMark } from "@/components/TareoMark";
+import { ServMark } from "@/components/ServMark";
 
 const NAV = [
   { href: "/financeiro", label: "Dashboard" },
@@ -29,7 +29,7 @@ export function FinanceiroSidebar({ orgNome, nome }: { orgNome: string; nome?: s
             <path d="M3 6h18M3 12h18M3 18h18" strokeLinecap="round" />
           </svg>
         </button>
-        <span className="text-sm font-bold">Tareo · Financeiro</span>
+        <span className="text-sm font-bold">Serv · Financeiro</span>
         <span className="w-[22px]" />
       </div>
 
@@ -43,9 +43,11 @@ export function FinanceiroSidebar({ orgNome, nome }: { orgNome: string; nome?: s
         }`}
       >
         <div className="flex items-center gap-2 px-4 py-4">
-          <TareoMark size={32} />
+          <ServMark size={32} />
           <div>
-            <div className="text-sm font-bold leading-tight text-white">Tareo</div>
+            <div className="text-sm font-bold leading-tight text-white">
+              Serv <span className="text-[10px] font-normal text-neutral-500">by Tareo</span>
+            </div>
             <div className="text-[11px] leading-tight text-neutral-400">{orgNome}</div>
           </div>
         </div>

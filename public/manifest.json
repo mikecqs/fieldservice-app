@@ -1,7 +1,7 @@
 {
-  "name": "Tareo",
-  "short_name": "Tareo",
-  "description": "Gestão de terreno Tareo",
+  "name": "Serv by Tareo",
+  "short_name": "Serv",
+  "description": "Gestão de terreno — Serv by Tareo",
   "start_url": "/tecnico",
   "display": "standalone",
   "background_color": "#0a0a0a",
