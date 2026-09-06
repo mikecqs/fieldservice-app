@@ -4,7 +4,7 @@ export function ProductCard({ produto }: { produto: Produto }) {
   return (
     <div className="group flex h-full flex-col rounded-2xl border border-edge bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:border-edge-subtle">
       <span className="text-sm font-medium text-muted-foreground">
-        Produto {produto.numero}
+        by Tareo
       </span>
       <h3 className="mt-3 text-xl font-semibold tracking-tight text-white">
         {produto.nome}

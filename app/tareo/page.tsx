@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Nav } from "@/components/tareo/Nav";
+import { TareoBackground } from "@/components/tareo/TareoBackground";
 import { Hero } from "@/components/tareo/Hero";
 import { Intro } from "@/components/tareo/Intro";
 import { Produtos } from "@/components/tareo/Produtos";
@@ -38,6 +39,7 @@ export const metadata: Metadata = {
 export default function TareoPage() {
   return (
     <div className="bg-surface-base text-white">
+      <TareoBackground />
       <Nav />
       <main>
         <Hero />

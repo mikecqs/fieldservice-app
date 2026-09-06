@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { LegalHeader } from "@/components/tareo/LegalHeader";
 import { ContactoCta } from "@/components/tareo/ContactoCta";
 import { TareoFooter } from "@/components/tareo/TareoFooter";
+import { TareoBackground } from "@/components/tareo/TareoBackground";
 
 // Página institucional partilhada entre a Tareo e o Serv (ver CLAUDE.md
 // secção 12) — acessível a partir de tareo.pt e de serv.tareo.pt sem
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
 export default function ContactoPage() {
   return (
     <div className="flex min-h-screen flex-col bg-surface-base text-white">
+      <TareoBackground />
       <LegalHeader />
       <main className="flex-1">
         <ContactoCta />

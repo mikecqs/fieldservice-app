@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LegalHeader } from "@/components/tareo/LegalHeader";
 import { TareoFooter } from "@/components/tareo/TareoFooter";
+import { TareoBackground } from "@/components/tareo/TareoBackground";
 
 // Página institucional partilhada entre a Tareo e o Serv (ver CLAUDE.md
 // secção 12) — acessível a partir de tareo.pt e de serv.tareo.pt sem
@@ -25,6 +26,7 @@ function Seccao({ titulo, children }: { titulo: string; children: React.ReactNod
 export default function TermosPage() {
   return (
     <div className="flex min-h-screen flex-col bg-surface-base text-white">
+      <TareoBackground />
       <LegalHeader />
       <main className="flex-1 px-6 py-16">
         <div className="mx-auto max-w-2xl">
