@@ -24,7 +24,20 @@ import { NextResponse, type NextRequest } from "next/server";
 // inteira — mas a cookie inválida continuava no browser, e o próprio
 // middleware bloqueava o acesso a /login só por essa cookie "existir",
 // prendendo o utilizador até limpar as cookies manualmente.
+// Quando o domínio institucional tareo.pt estiver ligado a este projeto na
+// Vercel (a par de serv.tareo.pt, que continua a servir a app normalmente —
+// ligação de domínios feita manualmente na Vercel, fora do alcance deste
+// código), a raiz desse domínio deve mostrar a landing da Tareo em vez de
+// redirecionar para /login. `/tareo` continua a funcionar em qualquer
+// domínio (já fora do matcher abaixo), isto só trata do caminho "/".
+const TAREO_MARKETING_HOSTS = ["tareo.pt", "www.tareo.pt"];
+
 export async function middleware(request: NextRequest) {
+  const hostname = request.headers.get("host")?.split(":")[0] ?? "";
+  if (TAREO_MARKETING_HOSTS.includes(hostname) && request.nextUrl.pathname === "/") {
+    return NextResponse.rewrite(new URL("/tareo", request.url));
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -91,7 +104,12 @@ export const config = {
   // principal") antes de sequer existir sessão — sem esta exceção o
   // middleware respondia com um redirect para /login em vez do ficheiro,
   // partindo silenciosamente as notificações push.
+  // /tareo fica de fora também: é a landing institucional da empresa-mãe
+  // (app/tareo/page.tsx), pensada para ser aberta por link direto sem conta
+  // nexIA — nunca ligada a partir de nenhum menu da aplicação. `noindex,
+  // nofollow` no metadata da própria página é o que a mantém fora dos
+  // motores de busca, não esta exceção.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|tareo|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
