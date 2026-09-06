@@ -77,6 +77,12 @@ export default function LoginPage() {
             Esqueceu-se da password?
           </Link>
         </div>
+
+        <p className="mt-6 text-center text-[11px] leading-relaxed text-neutral-600">
+          Ao continuar, aceitas os{" "}
+          <Link href="/termos" className="underline hover:text-neutral-400">Termos</Link> e a{" "}
+          <Link href="/privacidade" className="underline hover:text-neutral-400">Política de Privacidade</Link>.
+        </p>
       </div>
     </div>
   );

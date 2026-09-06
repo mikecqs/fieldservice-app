@@ -1,15 +1,16 @@
 import { TareoWordmark } from "./TareoWordmark";
 
+// Rodapé partilhado por /tareo, /contacto, /privacidade e /termos — por
+// isso "Produtos"/"Sobre" usam sempre o caminho completo para a landing
+// (funcionam também quando o rodapé aparece numa página que não tem esses
+// elementos na própria página).
 const LINKS = [
-  { href: "#produtos", label: "Produtos" },
-  { href: "#visao", label: "Sobre" },
-  { href: "#contacto", label: "Contacto" },
+  { href: "/tareo#produtos", label: "Produtos" },
+  { href: "/tareo#visao", label: "Sobre" },
+  { href: "/contacto", label: "Contacto" },
+  { href: "/privacidade", label: "Política de Privacidade" },
+  { href: "/termos", label: "Termos" },
 ];
-
-// "Política de Privacidade" e "Termos" ainda não existem como páginas
-// reais — ficam listados (o pedido pede a estrutura) mas sem link, com uma
-// etiqueta discreta, em vez de apontar para uma rota inventada.
-const LINKS_PENDENTES = ["Política de Privacidade", "Termos"];
 
 export function TareoFooter() {
   return (
@@ -31,11 +32,6 @@ export function TareoFooter() {
             >
               {link.label}
             </a>
-          ))}
-          {LINKS_PENDENTES.map((label) => (
-            <span key={label} className="text-sm text-muted-foreground/60">
-              {label}
-            </span>
           ))}
         </div>
       </div>

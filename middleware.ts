@@ -106,10 +106,14 @@ export const config = {
   // partindo silenciosamente as notificações push.
   // /tareo fica de fora também: é a landing institucional da empresa-mãe
   // (app/tareo/page.tsx), pensada para ser aberta por link direto sem conta
-  // nexIA — nunca ligada a partir de nenhum menu da aplicação. `noindex,
+  // Serv — nunca ligada a partir de nenhum menu da aplicação. `noindex,
   // nofollow` no metadata da própria página é o que a mantém fora dos
   // motores de busca, não esta exceção.
+  // /contacto, /privacidade e /termos ficam de fora pela mesma razão:
+  // páginas institucionais partilhadas entre a Tareo e o Serv (ver
+  // CLAUDE.md secção 12), acessíveis sem sessão a partir de qualquer um
+  // dos dois domínios.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|tareo|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.json|tareo|contacto|privacidade|termos|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
