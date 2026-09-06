@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { NexiaMark } from "@/components/NexiaMark";
+import { TareoMark } from "@/components/TareoMark";
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -32,9 +32,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4">
       <div className="w-full max-w-sm rounded-xl border border-neutral-800 bg-neutral-900 p-8 shadow-sm">
         <div className="mb-6 flex items-center gap-2">
-          <NexiaMark size={36} />
+          <TareoMark size={36} />
           <div>
-            <div className="text-sm font-bold leading-tight text-white">nexIA</div>
+            <div className="text-sm font-bold leading-tight text-white">Tareo</div>
             <div className="text-xs leading-tight text-neutral-400">Gestão de terreno</div>
           </div>
         </div>

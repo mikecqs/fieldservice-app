@@ -81,7 +81,7 @@ export function ExportarFinanceiroExcel({ stats, range }: { stats: Stats; range:
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(valores), "Valores");
 
-    XLSX.writeFile(wb, `estatisticas-nexia-${range.desde}-a-${range.ate}.xlsx`);
+    XLSX.writeFile(wb, `estatisticas-tareo-${range.desde}-a-${range.ate}.xlsx`);
   };
 
   return (

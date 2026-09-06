@@ -1,7 +1,7 @@
 {
-  "name": "nexIA",
-  "short_name": "nexIA",
-  "description": "Gestão de terreno nexIA",
+  "name": "Tareo",
+  "short_name": "Tareo",
+  "description": "Gestão de terreno Tareo",
   "start_url": "/tecnico",
   "display": "standalone",
   "background_color": "#0a0a0a",

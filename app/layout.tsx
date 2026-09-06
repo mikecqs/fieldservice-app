@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "nexIA",
-  description: "nexIA — gestão inteligente de serviços técnicos no terreno",
+  title: "Tareo",
+  description: "Tareo — gestão inteligente de serviços técnicos no terreno",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "nexIA" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Tareo" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

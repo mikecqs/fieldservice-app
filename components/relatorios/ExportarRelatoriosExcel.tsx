@@ -88,7 +88,7 @@ export function ExportarRelatoriosExcel({ range, stats, tecnicos, tiposServico, 
   const exportarAtual = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetResumo(range, stats)), "Resumo");
-    XLSX.writeFile(wb, `relatorio-nexia-${range.desde}-a-${range.ate}.xlsx`);
+    XLSX.writeFile(wb, `relatorio-tareo-${range.desde}-a-${range.ate}.xlsx`);
   };
 
   const exportarTodos = () => {
@@ -100,13 +100,13 @@ export function ExportarRelatoriosExcel({ range, stats, tecnicos, tiposServico, 
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetMateriais(materiais)), "Materiais");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetAgenda(agenda)), "Agenda");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetDados(linhas)), "Dados detalhados");
-    XLSX.writeFile(wb, `relatorios-completo-nexia-${range.desde}-a-${range.ate}.xlsx`);
+    XLSX.writeFile(wb, `relatorios-completo-tareo-${range.desde}-a-${range.ate}.xlsx`);
   };
 
   const exportarDados = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetDados(linhas)), "Dados detalhados");
-    XLSX.writeFile(wb, `dados-detalhados-nexia-${range.desde}-a-${range.ate}.xlsx`);
+    XLSX.writeFile(wb, `dados-detalhados-tareo-${range.desde}-a-${range.ate}.xlsx`);
   };
 
   return (
