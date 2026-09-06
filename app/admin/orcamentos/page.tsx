@@ -6,12 +6,20 @@ export default async function OrcamentosPage() {
   const supabase = await createClient();
   const { data: orcamentos } = await supabase
     .from("budgets")
-    .select("id, numero, estado, criado_em, enviado_em, iva_percent, clients(nome), budget_items(qtd, valor_unit)")
+    .select(
+      "id, numero, estado, criado_em, enviado_em, iva_percent, clients(nome), budget_items(qtd, valor_unit), services(id, estado, created_at)"
+    )
     .order("created_at", { ascending: false });
 
   const orcamentosComTotal = (orcamentos ?? []).map((o: any) => {
     const { total } = calcularOrcamento(o.budget_items ?? [], o.iva_percent);
-    return { ...o, total };
+    // Um orçamento aceite pode, em teoria, ter mais do que um Serviço ligado
+    // (ex: "nova visita" cria um serviço adicional) — mostramos sempre o
+    // mais recente, nunca uma lista, para a etiqueta ficar simples de ler.
+    const servicos = (o.services ?? []) as { id: string; estado: string; created_at: string }[];
+    const servicoRecente =
+      servicos.length > 0 ? [...servicos].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))[0] : null;
+    return { ...o, total, servicoId: servicoRecente?.id ?? null, servicoEstado: servicoRecente?.estado ?? null };
   });
 
   return (
