@@ -1,4 +1,4 @@
-# CLAUDE.md — nexIA (fieldservice-app)
+# CLAUDE.md — Serv by Tareo (fieldservice-app)
 
 Contexto permanente para sessões futuras do Claude Code neste repositório.
 Este ficheiro é um resumo funcional — para detalhe exaustivo do schema ver
@@ -9,23 +9,41 @@ desta sessão (nada disso existia no código nesse momento), mas entretanto
 outra sessão implementou mesmo Web Push, tornando essa descrição específica
 retroativamente exata (ver secção 10) — coincidência, não prova de
 fiabilidade geral do documento. Continua a nunca assumir que algo descrito
-em `RESUMOTECNICOnexIA.md` existe sem verificar contra o código.
+em `RESUMOTECNICOnexIA.md` existe sem verificar contra o código. O nome
+desse ficheiro é também um artefacto histórico — o produto chamava-se
+nexIA nessa altura; o ficheiro nunca foi renomeado, só o produto (ver
+secção 1).
 
 ## 1. Objetivo e natureza da aplicação
 
-nexIA é uma aplicação SaaS **multi-tenant** (multi-empresa) de gestão de
-serviços técnicos no terreno ("field service management"): pedidos de
-cliente → orçamento → agendamento → execução por técnico → validação →
-faturação. Cada empresa (tenant) só vê os seus próprios dados.
+**Este repositório (fieldservice-app) é o produto "Serv"** — um SaaS
+**multi-tenant** (multi-empresa) de gestão de serviços técnicos no
+terreno ("field service management"): pedidos de cliente → orçamento →
+agendamento → execução por técnico → validação → faturação. Cada empresa
+(tenant) só vê os seus próprios dados.
+
+**Histórico do nome** (para não estranhar código/commits antigos):
+chamava-se **nexIA**; uma sessão anterior renomeou tudo para **Tareo**;
+depois, ao criar-se a landing institucional da empresa-mãe em `/tareo`
+(ver secção 12), o produto foi renomeado outra vez para **"Serv"** (com
+"by Tareo" como assinatura), para não colidir com o nome da própria
+empresa-mãe. **Tareo é a marca-mãe multi-produto** (vários SaaS
+planeados); **Serv é só este produto** (Produto 01 no catálogo da
+landing, `components/tareo/produtos-data.ts`). Regra prática: nunca
+reintroduzir "nexIA"; usar "Tareo" sozinho só dentro de `app/tareo/*` e
+`components/tareo/*` — em qualquer outro sítio da app principal (login,
+sidebars, PWA, títulos) o nome é "Serv" ou "Serv by Tareo".
 
 ## 2. Stack e arquitetura
 
-- **Next.js 14 (App Router)** — Server Components para leitura, Server
+- **Next.js 15 (App Router)** — Server Components para leitura, Server
   Actions para escrita. Sem API REST/GraphQL separada (só rotas `/api/*`
   pontuais para OAuth/webhook/cron do Google Sheets).
 - **TypeScript** (sem tipos gerados da BD — o cliente Supabase é usado de
   forma solta, `any` é comum e aceite neste projeto), **React 18**,
-  **Tailwind CSS** (tema escuro nexIA).
+  **Tailwind CSS** (tema escuro; tokens semânticos `surface`/`edge`/
+  `muted` em `tailwind.config.ts`, ainda só adotados em `components/ui/*`
+  — o resto da app continua a usar classes `neutral-*` diretamente).
 - **Supabase (Postgres)** — `@supabase/ssr` + `@supabase/supabase-js`;
   autenticação via Supabase Auth; lógica de negócio crítica em funções SQL
   `SECURITY DEFINER` (RPCs).
@@ -37,6 +55,9 @@ faturação. Cada empresa (tenant) só vê os seus próprios dados.
   e foi corrigida. Continua a confirmar no dashboard da Vercel se ficaste
   com dúvidas, em vez de assumir — não há forma de verificar isto por
   ferramenta a partir de uma sessão Claude Code (sem acesso à conta Vercel).
+  Dois domínios de produção apontam para este mesmo projeto Vercel —
+  `serv.tareo.pt` (esta app) e `tareo.pt` (landing da Tareo) — ver
+  secção 12 para a arquitetura de domínios e onde o DNS é gerido.
 - Sincronização assíncrona orientada a eventos (Google Sheets) via triggers
   Postgres + `pg_net`/`pg_cron`, não polling. Web Push (ver secção 10) é
   diferente: `pg_cron` faz polling a cada minuto a uma condição de estado,
@@ -63,10 +84,20 @@ app/financeiro/*    área da role FINANCE (leitura + faturação)
 app/tecnico/*       área do Técnico (mobile-first)
 app/super-admin/*   gestão de empresas/tenants (role SUPER_ADMIN)
 app/api/*           OAuth/webhook/cron do Google Sheets
-middleware.ts       gate leve de sessão (só verifica cookie existe)
+app/tareo/*         landing institucional privada da Tareo (empresa-mãe) —
+                    isolada, nunca partilha layout/menu com o resto da
+                    app (ver secção 12)
+app/contacto/*      página de contacto — partilhada Tareo/Serv (secção 12)
+app/privacidade/*   Política de Privacidade (rascunho) — partilhada (secção 12)
+app/termos/*        Termos de Utilização (rascunho) — partilhada (secção 12)
+middleware.ts       gate leve de sessão (só verifica cookie existe) +
+                    reescrita por domínio para a landing da Tareo (secção 12)
 components/pedidos/ PedidoModal, PedidoDetalheConteudo, NovoPedidoForm —
                     partilhados entre /admin/pedidos, /admin/clientes e
                     /atendimento/pedidos (ver secção 8.1/8.2)
+components/ServMark.tsx  marca do Serv (login/sidebars/layouts da app
+                    principal) — components/tareo/TareoWordmark.tsx é a
+                    marca (textual) da Tareo, só usada em app/tareo
 lib/auth.ts         requireRole, getOrgId, getOrgIdAndRole, homeForRole
 lib/financeiro.ts   motor central de estatísticas (getFinanceiroStats)
 lib/servico-estado.ts    regras de transição de Serviço/OS
@@ -406,6 +437,22 @@ Todo o percurso é gravado em `service_events`/`budget_events`/
   decidido.
 - **Compras**: `parcial` e `cancelada` sem fluxo/UI dedicados (ver 8.6) —
   lacuna registada, não implementada, à espera de decisão de produto.
+- **Contacto, Política de Privacidade e Termos existem como rascunho**
+  (`app/contacto`, `app/privacidade`, `app/termos` — ver secção 12),
+  **não como conteúdo legal definitivo**. Ambos os documentos legais têm
+  um aviso visível de "documento em preparação" e placeholders explícitos
+  (`[nome legal, NIF e morada da entidade — a definir]`) em vez de dados
+  inventados, porque a Tareo ainda não tem entidade legal formalmente
+  decidida (confirmado com o Miguel em 2026-09-06). O contacto continua
+  sem canal real (`ContactoCta.tsx` só revela uma nota) — Miguel decidiu
+  não usar ainda o email `@tareo.pt` disponível. **Antes de publicar isto
+  publicamente (tirar o noindex) é preciso**: (1) decidir a entidade legal
+  e substituir os placeholders, (2) revisão por advogado, (3) decidir um
+  canal de contacto real.
+- **`tareo.pt` (domínio raiz) em transição** — `serv.tareo.pt` já
+  verificado e em produção na Vercel (confirmado 2026-09-06); o registo
+  DNS de `tareo.pt` (raiz, para apontar para a landing) ainda estava a
+  ser configurado em dominios.pt nessa data. Ver secção 12.
 - **Google Sheets** não testado ponta-a-ponta em produção — falta
   `GOOGLE_SHEETS_CLIENT_ID`/`SECRET` no Vercel.
 - **Materiais previsto vs. utilizado** casados por nome de texto (sem FK)
@@ -456,3 +503,63 @@ Todo o percurso é gravado em `service_events`/`budget_events`/
 - Ao adicionar um módulo novo, seguir o padrão existente (`page.tsx`
   Server Component + `actions.ts` Server Actions, `lib/*-estado.ts` se
   houver estado), não inventar um novo.
+- **Nunca reintroduzir "nexIA"** nem usar "Tareo" sozinho fora de
+  `app/tareo/*`/`components/tareo/*` — a app principal chama-se "Serv"
+  ou "Serv by Tareo" (ver secção 1 e secção 12).
+- **Não inventar conteúdo legal/contactos** (Política de Privacidade,
+  Termos, morada, NIF, email/telefone de contacto) para a Tareo nem para
+  o Serv — nenhum destes existe ainda de forma real (ver secção 10);
+  documentar como pendente em vez de preencher com texto placeholder que
+  pareça definitivo.
+
+## 12. Tareo — landing institucional e arquitetura de domínios
+
+- `app/tareo/page.tsx` + `components/tareo/*` — landing institucional
+  **privada** da Tareo (empresa-mãe multi-produto; ver secção 1 para o
+  histórico de nomes). Apresenta a Tareo como empresa de software (não
+  como a app de field service), com um catálogo modular de produtos.
+- Rota deliberadamente isolada: **sem link em nenhum menu/sidebar** da
+  app principal, **excluída do portão de sessão** do middleware
+  (`config.matcher` em `middleware.ts` — exceção `tareo`, mesmo padrão
+  já usado para `sw.js`/`manifest.json`), com `robots: noindex, nofollow`
+  no metadata da própria página enquanto estiver em modo privado (sem
+  pedido explícito para a tornar pública/indexável, manter assim).
+- Ícone e manifest próprios, para não herdar os do Serv: `app/tareo/
+  icon.svg` (favicon só desta rota, convenção de ficheiro do Next.js) e
+  `manifest: undefined` no metadata da página (sem isto herdava o
+  `manifest.json` do Serv — nome errado se alguém tentasse "adicionar ao
+  ecrã principal" a partir da landing).
+- `components/tareo/produtos-data.ts` é a **única fonte** do catálogo de
+  produtos — cada produto é um objeto independente (cartão em
+  `ProductCard.tsx`); acrescentar "Produto 04+" é só adicionar uma
+  entrada, nunca implica tocar no layout da secção. Só o Produto 01
+  ("Serv") tem `href` real (`/login`, que já existe); os restantes ficam
+  sem `href` ("Em breve") em vez de apontar para rotas inventadas.
+- Contacto: placeholder (`components/tareo/ContactoCta.tsx` — o botão
+  "Falar com a Tareo" revela uma nota, não um `mailto:`/formulário real)
+  — ver secção 10 para o estado disto e de Política de Privacidade/Termos.
+- **`app/contacto`, `app/privacidade`, `app/termos`** — páginas
+  institucionais **partilhadas** entre a Tareo e o Serv (decisão
+  explícita do Miguel: um único conjunto de páginas, não duplicado por
+  produto), acessíveis sem sessão a partir de qualquer um dos dois
+  domínios (excluídas do matcher do middleware, tal como `/tareo`).
+  `/contacto` reutiliza o mesmo `ContactoCta.tsx` da landing (nunca duplica
+  o botão/placeholder). `/privacidade` e `/termos` são rascunhos com aviso
+  visível — ver secção 10 para o que falta antes de serem definitivos.
+  Ligadas a partir do rodapé da Tareo (`TareoFooter.tsx`) e do ecrã de
+  login do Serv (`app/login/page.tsx`).
+- **Arquitetura de domínios** — um único projeto Vercel serve os dois:
+  - `tareo.pt` (raiz) → landing da Tareo. `middleware.ts` reescreve `/`
+    para `/tareo` quando o `Host` do pedido é `tareo.pt`/`www.tareo.pt`
+    (`TAREO_MARKETING_HOSTS`). `/tareo` continua acessível por esse
+    caminho em qualquer domínio (já fora do matcher do middleware).
+  - `serv.tareo.pt` → esta app normalmente (login, admin, técnico, etc.),
+    sem nenhuma alteração de comportamento.
+  - DNS de `tareo.pt` gerido em **dominios.pt** (fora da Vercel). **O
+    domínio já tem email próprio (`@tareo.pt`, registos MX)** — nunca
+    sugerir delegar os nameservers para a Vercel (partiria o email);
+    usar sempre o registo A (raiz) ou CNAME (subdomínio) específico que
+    a própria Vercel indica ao adicionar cada domínio no projeto.
+  - Estado em 2026-09-06: `serv.tareo.pt` verificado e em produção;
+    `tareo.pt` (raiz) com o registo DNS ainda a ser configurado/propagar
+    — confirmar estado atual antes de assumir.
