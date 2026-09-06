@@ -8,15 +8,15 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "nexIA", body: event.data ? event.data.text() : "" };
+    data = { title: "Tareo", body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "nexIA";
+  const title = data.title || "Tareo";
   const options = {
     body: data.body || "",
     icon: "/icon.svg",
     badge: "/icon.svg",
-    tag: data.tag || "nexia-notification",
+    tag: data.tag || "tareo-notification",
     data: { url: data.url || "/tecnico" },
   };
 
