@@ -523,7 +523,7 @@ alter table tech_delay_notifications enable row level security;
 --   create extension if not exists pg_cron;
 --   select cron.schedule('tech-delay-check', '* * * * *', $$
 --     select net.http_post(
---       url := 'https://fieldservice-app-nine.vercel.app/api/push/check-delays',
+--       url := 'https://tareo.pt/api/push/check-delays',
 --       headers := jsonb_build_object('Content-Type','application/json','x-sync-secret','<PUSH_CHECK_SECRET>'),
 --       body := '{}'::jsonb
 --     );
@@ -795,7 +795,7 @@ begin
 
   begin
     perform net.http_post(
-      url := 'https://fieldservice-app-nine.vercel.app/api/integrations/google-sheets/process',
+      url := 'https://tareo.pt/api/integrations/google-sheets/process',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-sync-secret', v_secret),
       body := jsonb_build_object('organization_id', p_org_id)
     );
