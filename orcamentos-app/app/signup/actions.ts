@@ -22,16 +22,28 @@ export async function criarConta(formData: FormData): Promise<{ erro?: string; v
     return { erro: error.message === "User already registered" ? "Já existe uma conta com este email." : "Não foi possível criar a conta." };
   }
 
-  // Sem sessão imediata = confirmação de email ativa no projeto Supabase;
-  // a empresa só pode ser criada (RLS exige auth.uid()) depois do primeiro
-  // login já autenticado — ver /signup/completar.
-  if (!data.session) {
+  let session = data.session;
+
+  // Com "Confirm email" desligado no projeto Supabase, o utilizador já
+  // fica confirmado na hora, mas signUp() nem sempre devolve a sessão
+  // diretamente nesse caso — um signIn explícito a seguir (já temos a
+  // password em mãos, na mesma Server Action) resolve sem pedir nada
+  // extra ao utilizador.
+  if (!session) {
+    const { data: signInData } = await supabase.auth.signInWithPassword({ email, password });
+    session = signInData.session;
+  }
+
+  // Só chega aqui sem sessão se a confirmação de email estiver mesmo
+  // ativa no projeto (signInWithPassword falha para um utilizador por
+  // confirmar) — nesse caso é genuinamente preciso esperar pelo email.
+  if (!session) {
     return { verificarEmail: true };
   }
 
   const { error: erroEmpresa } = await supabase
     .from("companies")
-    .insert({ nome: nomeEmpresa, user_id: data.user!.id });
+    .insert({ nome: nomeEmpresa, user_id: session.user.id });
 
   if (erroEmpresa) {
     return { erro: "Conta criada, mas houve um erro a criar a empresa. Volte a entrar." };
