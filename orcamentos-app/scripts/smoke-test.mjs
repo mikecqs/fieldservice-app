@@ -56,8 +56,12 @@ async function main() {
     erro(`bucket 'logos' não encontrado (status ${respBucket.status})`);
   }
 
-  // 3. Signup de um utilizador descartável
-  const emailTeste = `smoke-test-${Date.now()}@example.com`;
+  // 3. Signup de um utilizador descartável — "example.com"/"test"/"invalid"
+  // são domínios reservados (RFC 2606) e o Supabase Auth recusa-os
+  // explicitamente ("email_address_invalid"), mesmo só por formato, sem
+  // sequer tentar enviar nada — por isso usa-se um domínio inventado mas
+  // não reservado.
+  const emailTeste = `smoke-test-${Date.now()}@orcamentos-smoke-test.dev`;
   const passwordTeste = `Teste-${Math.random().toString(36).slice(2)}!9`;
 
   const respSignup = await fetch(`${url}/auth/v1/signup`, {
