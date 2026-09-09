@@ -56,12 +56,14 @@ async function main() {
     erro(`bucket 'logos' não encontrado (status ${respBucket.status})`);
   }
 
-  // 3. Signup de um utilizador descartável — "example.com"/"test"/"invalid"
-  // são domínios reservados (RFC 2606) e o Supabase Auth recusa-os
-  // explicitamente ("email_address_invalid"), mesmo só por formato, sem
-  // sequer tentar enviar nada — por isso usa-se um domínio inventado mas
-  // não reservado.
-  const emailTeste = `smoke-test-${Date.now()}@orcamentos-smoke-test.dev`;
+  // 3. Signup de um utilizador descartável — o Supabase Auth valida o
+  // domínio do email (parece verificar registos MX, não só o formato):
+  // tanto "example.com" (reservado, RFC 2606) como um domínio inventado
+  // sem DNS ("orcamentos-smoke-test.dev") foram recusados com
+  // "email_address_invalid". mailinator.com é um domínio real com MX
+  // válido, feito precisamente para testes automatizados (caixa pública,
+  // sem entregar nada a uma pessoa real).
+  const emailTeste = `smoke-test-${Date.now()}@mailinator.com`;
   const passwordTeste = `Teste-${Math.random().toString(36).slice(2)}!9`;
 
   const respSignup = await fetch(`${url}/auth/v1/signup`, {
