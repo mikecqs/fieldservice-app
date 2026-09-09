@@ -19,8 +19,15 @@ export async function criarConta(formData: FormData): Promise<{ erro?: string; v
   const { data, error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
-    return { erro: error.message === "User already registered" ? "Já existe uma conta com este email." : "Não foi possível criar a conta." };
+    return { erro: error.message === "User already registered" ? "Já existe uma conta com este email. Entre em /login." : "Não foi possível criar a conta." };
   }
+
+  // O Supabase Auth nunca confirma explicitamente que o email já tinha
+  // conta (proteção contra enumeração) — devolve sucesso "vazio"
+  // (user.identities: []), sem sessão nem erro. Sem isto, um re-signup
+  // com email já registado caía sempre na mensagem "verifique o email",
+  // mesmo quando a verdadeira causa era outra (conta já existente).
+  const contaJaExistia = (data.user?.identities?.length ?? 1) === 0;
 
   let session = data.session;
 
@@ -34,10 +41,12 @@ export async function criarConta(formData: FormData): Promise<{ erro?: string; v
     session = signInData.session;
   }
 
-  // Só chega aqui sem sessão se a confirmação de email estiver mesmo
-  // ativa no projeto (signInWithPassword falha para um utilizador por
-  // confirmar) — nesse caso é genuinamente preciso esperar pelo email.
   if (!session) {
+    if (contaJaExistia) {
+      return { erro: "Já existe uma conta com este email. Entre em /login." };
+    }
+    // Só chega aqui se a confirmação de email estiver mesmo ativa no
+    // projeto — nesse caso é genuinamente preciso esperar pelo email.
     return { verificarEmail: true };
   }
 
@@ -45,7 +54,10 @@ export async function criarConta(formData: FormData): Promise<{ erro?: string; v
     .from("companies")
     .insert({ nome: nomeEmpresa, user_id: session.user.id });
 
-  if (erroEmpresa) {
+  // 23505 = unique_violation — já existe uma empresa para este
+  // utilizador (ex: voltou a submeter o formulário depois de já ter
+  // conseguido criar a conta); não é um erro real, só avança.
+  if (erroEmpresa && erroEmpresa.code !== "23505") {
     return { erro: "Conta criada, mas houve um erro a criar a empresa. Volte a entrar." };
   }
 

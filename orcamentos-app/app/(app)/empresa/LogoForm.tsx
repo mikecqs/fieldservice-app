@@ -28,12 +28,12 @@ export default function LogoForm({ logoUrl }: { logoUrl: string | null }) {
 
   return (
     <div>
-      <h2 className="mb-1 text-sm font-semibold text-slate-700">Logotipo</h2>
-      <p className="mb-3 text-xs text-slate-500">Usado no PDF dos orçamentos. PNG ou JPEG.</p>
+      <h2 className="mb-1 text-sm font-semibold text-neutral-200">Logotipo</h2>
+      <p className="mb-3 text-xs text-muted-foreground">Usado no PDF dos orçamentos. PNG ou JPEG.</p>
 
       {logoUrl && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logoUrl} alt="Logotipo atual" className="mb-3 h-16 rounded-md border border-slate-200 bg-white p-1 object-contain" />
+        <img src={logoUrl} alt="Logotipo atual" className="mb-3 h-16 rounded-md border border-edge bg-white p-1 object-contain" />
       )}
 
       <form ref={formRef} action={onSubmit} className="flex flex-wrap items-center gap-2">
@@ -42,12 +42,12 @@ export default function LogoForm({ logoUrl }: { logoUrl: string | null }) {
           type="file"
           accept="image/png,image/jpeg"
           required
-          className="text-xs text-slate-600 file:mr-2 file:rounded-md file:border file:border-slate-300 file:bg-slate-50 file:px-3 file:py-1.5 file:text-xs file:text-slate-700"
+          className="text-xs text-muted file:mr-2 file:rounded-md file:border file:border-edge file:bg-surface-raised file:px-3 file:py-1.5 file:text-xs file:text-neutral-200"
         />
         <button
           type="submit"
           disabled={aGuardar}
-          className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+          className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-neutral-200 disabled:opacity-50"
         >
           {aGuardar ? "A guardar..." : "Guardar logotipo"}
         </button>
@@ -56,13 +56,13 @@ export default function LogoForm({ logoUrl }: { logoUrl: string | null }) {
             type="button"
             onClick={onRemover}
             disabled={aRemover}
-            className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            className="rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-500/10 disabled:opacity-50"
           >
             {aRemover ? "A remover..." : "Remover"}
           </button>
         )}
       </form>
-      {erro && <p className="mt-2 text-xs text-red-600">{erro}</p>}
+      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
     </div>
   );
 }

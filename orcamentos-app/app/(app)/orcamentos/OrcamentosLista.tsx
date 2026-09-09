@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ESTADOS_ORCAMENTO, ROTULOS_ESTADO, type EstadoOrcamento } from "@/lib/orcamento-estado";
+import EstadoBadge from "../EstadoBadge";
 
 export type OrcamentoLinha = {
   id: string;
@@ -86,19 +87,19 @@ export default function OrcamentosLista({
           value={termo}
           onChange={(e) => setTermo(e.target.value)}
           placeholder="Pesquisar por cliente, empresa, telefone, morada, NIF..."
-          className="min-w-[260px] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+          className="min-w-[260px] flex-1 rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:border-edge-subtle focus:outline-none"
         />
         <select
           value={ordenacao}
           onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+          className="rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white focus:border-edge-subtle focus:outline-none"
         >
           <option value="recentes">Mais recentes</option>
           <option value="antigos">Mais antigos</option>
           <option value="valor_desc">Valor (maior primeiro)</option>
           <option value="valor_asc">Valor (menor primeiro)</option>
         </select>
-        <label className="flex items-center gap-2 text-sm text-slate-600">
+        <label className="flex items-center gap-2 text-sm text-muted">
           <input
             type="checkbox"
             checked={soAtrasados}
@@ -112,8 +113,8 @@ export default function OrcamentosLista({
         <button
           type="button"
           onClick={() => setEstadoFiltro("todos")}
-          className={`rounded-full px-3 py-1 text-xs font-medium ${
-            estadoFiltro === "todos" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            estadoFiltro === "todos" ? "bg-white text-neutral-950" : "bg-surface-raised text-muted hover:text-white"
           }`}
         >
           Todos ({linhas.length})
@@ -123,8 +124,8 @@ export default function OrcamentosLista({
             key={estado}
             type="button"
             onClick={() => setEstadoFiltro(estado)}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              estadoFiltro === estado ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              estadoFiltro === estado ? "bg-white text-neutral-950" : "bg-surface-raised text-muted hover:text-white"
             }`}
           >
             {ROTULOS_ESTADO[estado]} ({linhas.filter((l) => l.estado === estado).length})
@@ -132,10 +133,10 @@ export default function OrcamentosLista({
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-edge bg-surface">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-left text-slate-400">
+            <tr className="border-b border-edge text-left text-muted-foreground">
               <th className="px-4 py-3">Nº</th>
               <th className="px-4 py-3">Cliente</th>
               <th className="px-4 py-3">Estado</th>
@@ -145,38 +146,36 @@ export default function OrcamentosLista({
           </thead>
           <tbody>
             {filtradas.map((linha) => (
-              <tr key={linha.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+              <tr key={linha.id} className="border-b border-edge/60 last:border-0 hover:bg-surface-raised">
                 <td className="px-4 py-3">
-                  <Link href={`/orcamentos/${linha.id}`} className="font-medium text-brand-600 hover:underline">
+                  <Link href={`/orcamentos/${linha.id}`} className="font-medium text-white hover:underline">
                     {linha.numero}
                   </Link>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="text-slate-800">{linha.clienteNome}</div>
+                  <div className="text-neutral-200">{linha.clienteNome}</div>
                   {linha.clienteEmpresa && (
-                    <div className="text-xs text-slate-400">{linha.clienteEmpresa}</div>
+                    <div className="text-xs text-muted-foreground">{linha.clienteEmpresa}</div>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                    {ROTULOS_ESTADO[linha.estado as EstadoOrcamento] ?? linha.estado}
-                  </span>
+                  <EstadoBadge estado={linha.estado} />
                 </td>
                 <td className="px-4 py-3">
                   {linha.followupEm ? (
-                    <span className={estaAtrasado(linha) ? "font-medium text-red-600" : "text-slate-600"}>
+                    <span className={estaAtrasado(linha) ? "font-medium text-red-400" : "text-muted"}>
                       {linha.followupEm}
                     </span>
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <span className="text-muted-foreground">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right text-slate-800">{linha.total.toFixed(2)} €</td>
+                <td className="px-4 py-3 text-right text-neutral-200">{linha.total.toFixed(2)} €</td>
               </tr>
             ))}
             {filtradas.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                   Nenhum orçamento encontrado.
                 </td>
               </tr>

@@ -48,10 +48,10 @@ export default async function OrcamentosPage({
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">Orçamentos</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-white">Orçamentos</h1>
         <Link
           href="/orcamentos/novo"
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-transform duration-200 hover:scale-[1.02] hover:bg-neutral-200"
         >
           Novo orçamento
         </Link>

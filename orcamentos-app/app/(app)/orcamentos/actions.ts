@@ -59,6 +59,24 @@ export async function criarOrcamento(formData: FormData): Promise<{ erro?: strin
     return { erro: "Selecione ou crie um cliente." };
   }
 
+  if (clientId !== "novo") {
+    // Nunca confiar no clientId vindo do formulário sem confirmar que é
+    // mesmo um cliente desta empresa — evita ligar um orçamento a um
+    // client_id de outra empresa (a FK não sabe nada de organization_id,
+    // só a RLS de `clients` sabe, e essa só filtra leituras/joins, não
+    // impede a referência ficar gravada em `budgets.client_id`).
+    const { data: clienteExistente } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("id", idCliente)
+      .eq("company_id", empresa.id)
+      .maybeSingle();
+
+    if (!clienteExistente) {
+      return { erro: "Cliente inválido." };
+    }
+  }
+
   const { data: orcamento, error } = await supabase
     .from("budgets")
     .insert({
@@ -115,7 +133,12 @@ export async function removerItem(budgetId: string, itemId: string): Promise<{ e
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("budget_items").delete().eq("id", itemId);
+  // Filtra também por budget_id (não só o id do item): a RLS já impede
+  // apagar um item de outra empresa, mas sem este filtro seria possível
+  // apagar, a partir de um orçamento em rascunho, um item que na
+  // verdade pertence a outro orçamento já enviado/bloqueado da mesma
+  // empresa (bastava passar o par budgetId/itemId errado).
+  const { error } = await supabase.from("budget_items").delete().eq("id", itemId).eq("budget_id", budgetId);
 
   if (error) {
     return { erro: "Não foi possível remover o item." };

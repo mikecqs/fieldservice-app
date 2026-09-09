@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { createClient } from "@/lib/supabase/server";
 import { requireCompany } from "@/lib/auth";
 import { calcularOrcamento } from "@/lib/orcamento";
 import { embutirLogo } from "@/lib/pdf-logo";
+
+// Helvetica (fonte StandardFonts usada aqui) só suporta a codificação
+// WinAnsi — Latin-1 e pouco mais. Qualquer carácter fora disso (emoji,
+// CJK, símbolos colados de outra fonte) faz o pdf-lib lançar uma exceção
+// a meio da geração, rebentando o pedido inteiro com 500. Substituir por
+// "?" garante que o PDF sai sempre, mesmo que algum campo tenha um
+// carácter exótico — nunca falha silenciosamente o resto do documento.
+function t(texto: string | null | undefined): string {
+  if (!texto) return "";
+  return Array.from(texto)
+    .map((ch) => (ch.codePointAt(0)! <= 0xff ? ch : "?"))
+    .join("");
+}
 
 // Gera o PDF do orçamento a pedido — nunca fica gravado, cada download é
 // construído na hora a partir dos dados atuais. RLS garante que só a
@@ -50,24 +63,29 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   const margem = 50;
   const largura = 595.28;
 
+  const desenhar = (
+    texto: string,
+    opts: { x: number; y: number; size: number; font: PDFFont; color: ReturnType<typeof rgb> }
+  ) => page.drawText(t(texto), opts);
+
   const logo = await embutirLogo(pdf, supabase, empresa.logo_path);
   if (logo) {
     const alturaLogo = 32;
     const larguraLogo = (logo.width / logo.height) * alturaLogo;
     page.drawImage(logo, { x: margem, y: y - 24, width: larguraLogo, height: alturaLogo });
-    page.drawText(empresa.nome, { x: margem + larguraLogo + 10, y: y - 6, size: 14, font: fontBold, color: escuro });
-    if (empresa.nif) page.drawText(`NIF: ${empresa.nif}`, { x: margem + larguraLogo + 10, y: y - 22, size: 9, font: fontRegular, color: cinza });
+    desenhar(empresa.nome, { x: margem + larguraLogo + 10, y: y - 6, size: 14, font: fontBold, color: escuro });
+    if (empresa.nif) desenhar(`NIF: ${empresa.nif}`, { x: margem + larguraLogo + 10, y: y - 22, size: 9, font: fontRegular, color: cinza });
   } else {
     page.drawRectangle({ x: margem, y: y - 24, width: 32, height: 32, color: azul });
-    page.drawText(empresa.nome.slice(0, 2).toUpperCase(), { x: margem + 4, y: y - 15, size: 12, font: fontBold, color: rgb(1, 1, 1) });
-    page.drawText(empresa.nome, { x: margem + 42, y: y - 6, size: 14, font: fontBold, color: escuro });
-    if (empresa.nif) page.drawText(`NIF: ${empresa.nif}`, { x: margem + 42, y: y - 22, size: 9, font: fontRegular, color: cinza });
+    desenhar(empresa.nome.slice(0, 2).toUpperCase(), { x: margem + 4, y: y - 15, size: 12, font: fontBold, color: rgb(1, 1, 1) });
+    desenhar(empresa.nome, { x: margem + 42, y: y - 6, size: 14, font: fontBold, color: escuro });
+    if (empresa.nif) desenhar(`NIF: ${empresa.nif}`, { x: margem + 42, y: y - 22, size: 9, font: fontRegular, color: cinza });
   }
   if (empresa.endereco) {
-    page.drawText(empresa.endereco, { x: largura - margem - 200, y: y - 6, size: 8, font: fontRegular, color: cinza });
+    desenhar(empresa.endereco, { x: largura - margem - 200, y: y - 6, size: 8, font: fontRegular, color: cinza });
   }
   if (empresa.telefone || empresa.email) {
-    page.drawText([empresa.telefone, empresa.email].filter(Boolean).join(" · "), {
+    desenhar([empresa.telefone, empresa.email].filter(Boolean).join(" · "), {
       x: largura - margem - 200,
       y: y - 18,
       size: 8,
@@ -77,41 +95,41 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   }
 
   y -= 60;
-  page.drawText(`ORÇAMENTO Nº ${orcamento.numero}`, { x: margem, y, size: 18, font: fontBold, color: escuro });
-  page.drawText(`Data: ${String(orcamento.criado_em).slice(0, 10)}`, { x: largura - margem - 120, y, size: 10, font: fontRegular, color: cinza });
+  desenhar(`ORÇAMENTO Nº ${orcamento.numero}`, { x: margem, y, size: 18, font: fontBold, color: escuro });
+  desenhar(`Data: ${String(orcamento.criado_em).slice(0, 10)}`, { x: largura - margem - 120, y, size: 10, font: fontRegular, color: cinza });
 
   y -= 30;
-  page.drawText("Cliente", { x: margem, y, size: 9, font: fontBold, color: cinza });
+  desenhar("Cliente", { x: margem, y, size: 9, font: fontBold, color: cinza });
   y -= 14;
-  page.drawText(cliente?.nome ?? "—", { x: margem, y, size: 11, font: fontRegular, color: escuro });
+  desenhar(cliente?.nome ?? "—", { x: margem, y, size: 11, font: fontRegular, color: escuro });
   if (cliente?.empresa) {
     y -= 14;
-    page.drawText(cliente.empresa, { x: margem, y, size: 10, font: fontRegular, color: cinza });
+    desenhar(cliente.empresa, { x: margem, y, size: 10, font: fontRegular, color: cinza });
   }
   if (cliente?.morada) {
     y -= 14;
-    page.drawText(cliente.morada, { x: margem, y, size: 10, font: fontRegular, color: cinza });
+    desenhar(cliente.morada, { x: margem, y, size: 10, font: fontRegular, color: cinza });
   }
   if (cliente?.nif) {
     y -= 14;
-    page.drawText(`NIF: ${cliente.nif}`, { x: margem, y, size: 10, font: fontRegular, color: cinza });
+    desenhar(`NIF: ${cliente.nif}`, { x: margem, y, size: 10, font: fontRegular, color: cinza });
   }
 
   y -= 30;
   const colX = { desc: margem, qtd: 330, unit: 390, total: 470 };
   page.drawRectangle({ x: margem, y: y - 6, width: largura - margem * 2, height: 20, color: rgb(0.95, 0.96, 0.98) });
-  page.drawText("Descrição", { x: colX.desc + 4, y, size: 9, font: fontBold, color: escuro });
-  page.drawText("Qtd", { x: colX.qtd, y, size: 9, font: fontBold, color: escuro });
-  page.drawText("Preço unit.", { x: colX.unit, y, size: 9, font: fontBold, color: escuro });
-  page.drawText("Total", { x: colX.total, y, size: 9, font: fontBold, color: escuro });
+  desenhar("Descrição", { x: colX.desc + 4, y, size: 9, font: fontBold, color: escuro });
+  desenhar("Qtd", { x: colX.qtd, y, size: 9, font: fontBold, color: escuro });
+  desenhar("Preço unit.", { x: colX.unit, y, size: 9, font: fontBold, color: escuro });
+  desenhar("Total", { x: colX.total, y, size: 9, font: fontBold, color: escuro });
   y -= 24;
 
   for (const item of items) {
     const linhaTotal = Number(item.quantidade) * Number(item.valor_unitario);
-    page.drawText(item.descricao.slice(0, 55), { x: colX.desc + 4, y, size: 9, font: fontRegular, color: escuro });
-    page.drawText(String(item.quantidade), { x: colX.qtd, y, size: 9, font: fontRegular, color: escuro });
-    page.drawText(Number(item.valor_unitario).toFixed(2) + " €", { x: colX.unit, y, size: 9, font: fontRegular, color: escuro });
-    page.drawText(linhaTotal.toFixed(2) + " €", { x: colX.total, y, size: 9, font: fontRegular, color: escuro });
+    desenhar(item.descricao.slice(0, 55), { x: colX.desc + 4, y, size: 9, font: fontRegular, color: escuro });
+    desenhar(String(item.quantidade), { x: colX.qtd, y, size: 9, font: fontRegular, color: escuro });
+    desenhar(Number(item.valor_unitario).toFixed(2) + " €", { x: colX.unit, y, size: 9, font: fontRegular, color: escuro });
+    desenhar(linhaTotal.toFixed(2) + " €", { x: colX.total, y, size: 9, font: fontRegular, color: escuro });
     y -= 18;
     if (y < 200) break; // orçamentos muito longos ficam truncados numa página só — suficiente para o caso de uso atual
   }
@@ -121,8 +139,8 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   y -= 20;
 
   const linhaValor = (label: string, valor: number, destaque = false) => {
-    page.drawText(label, { x: colX.unit, y, size: destaque ? 12 : 10, font: destaque ? fontBold : fontRegular, color: destaque ? escuro : cinza });
-    page.drawText(valor.toFixed(2) + " €", { x: colX.total, y, size: destaque ? 12 : 10, font: destaque ? fontBold : fontRegular, color: escuro });
+    desenhar(label, { x: colX.unit, y, size: destaque ? 12 : 10, font: destaque ? fontBold : fontRegular, color: destaque ? escuro : cinza });
+    desenhar(valor.toFixed(2) + " €", { x: colX.total, y, size: destaque ? 12 : 10, font: destaque ? fontBold : fontRegular, color: escuro });
     y -= destaque ? 20 : 16;
   };
   linhaValor("Subtotal", subtotal);
@@ -131,10 +149,10 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
 
   if (orcamento.condicoes) {
     y -= 20;
-    page.drawText("Condições", { x: margem, y, size: 9, font: fontBold, color: cinza });
+    desenhar("Condições", { x: margem, y, size: 9, font: fontBold, color: cinza });
     y -= 14;
     for (const linha of quebrarLinhas(orcamento.condicoes, 95)) {
-      page.drawText(linha, { x: margem, y, size: 9, font: fontRegular, color: escuro });
+      desenhar(linha, { x: margem, y, size: 9, font: fontRegular, color: escuro });
       y -= 13;
       if (y < 40) break;
     }

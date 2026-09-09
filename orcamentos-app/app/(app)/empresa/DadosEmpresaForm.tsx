@@ -16,71 +16,52 @@ export default function DadosEmpresaForm({ empresa }: { empresa: Company }) {
     else setGuardado(true);
   }
 
+  const inputClasses =
+    "mt-1 w-full rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:border-edge-subtle focus:outline-none";
+
   return (
     <form action={onSubmit} className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
-          <label className="block text-xs text-slate-500">Nome da empresa *</label>
-          <input
-            name="nome"
-            defaultValue={empresa.nome}
-            required
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          />
+          <label className="block text-xs text-muted-foreground">Nome da empresa *</label>
+          <input name="nome" defaultValue={empresa.nome} required className={inputClasses} />
         </div>
         <div>
-          <label className="block text-xs text-slate-500">NIF</label>
-          <input
-            name="nif"
-            defaultValue={empresa.nif ?? ""}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          />
+          <label className="block text-xs text-muted-foreground">NIF</label>
+          <input name="nif" defaultValue={empresa.nif ?? ""} className={inputClasses} />
         </div>
         <div>
-          <label className="block text-xs text-slate-500">Telefone</label>
-          <input
-            name="telefone"
-            defaultValue={empresa.telefone ?? ""}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          />
+          <label className="block text-xs text-muted-foreground">Telefone</label>
+          <input name="telefone" defaultValue={empresa.telefone ?? ""} className={inputClasses} />
         </div>
         <div>
-          <label className="block text-xs text-slate-500">Email</label>
-          <input
-            name="email"
-            type="email"
-            defaultValue={empresa.email ?? ""}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          />
+          <label className="block text-xs text-muted-foreground">Email</label>
+          <input name="email" type="email" defaultValue={empresa.email ?? ""} className={inputClasses} />
         </div>
         <div className="sm:col-span-2">
-          <label className="block text-xs text-slate-500">Endereço</label>
-          <input
-            name="endereco"
-            defaultValue={empresa.endereco ?? ""}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
-          />
+          <label className="block text-xs text-muted-foreground">Endereço</label>
+          <input name="endereco" defaultValue={empresa.endereco ?? ""} className={inputClasses} />
         </div>
       </div>
 
       <div>
-        <label className="block text-xs text-slate-500">Condições padrão</label>
+        <label className="block text-xs text-muted-foreground">Condições padrão</label>
         <textarea
           name="condicoesPadrao"
           defaultValue={empresa.condicoes_padrao ?? ""}
           rows={4}
           placeholder="Ex: Pagamento a 30 dias. Garantia de 12 meses. Orçamento válido 30 dias."
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+          className={inputClasses}
         />
-        <p className="mt-1 text-xs text-slate-400">Usadas como texto inicial em cada novo orçamento (editável por orçamento).</p>
+        <p className="mt-1 text-xs text-muted-foreground">Usadas como texto inicial em cada novo orçamento (editável por orçamento).</p>
       </div>
 
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
-      {guardado && !erro && <p className="text-sm text-emerald-600">Guardado.</p>}
+      {erro && <p className="text-sm text-red-400">{erro}</p>}
+      {guardado && !erro && <p className="text-sm text-emerald-400">Guardado.</p>}
 
       <button
         type="submit"
-        className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-transform duration-200 hover:scale-[1.02] hover:bg-neutral-200"
       >
         Guardar
       </button>

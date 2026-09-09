@@ -31,24 +31,24 @@ export default async function CompletarSignupPage({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold text-slate-900">Falta um passo</h1>
-        <p className="mb-6 text-sm text-slate-500">
+    <main className="flex min-h-screen items-center justify-center bg-surface-base px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-edge bg-surface p-8">
+        <h1 className="mb-1 text-xl font-semibold tracking-tight text-white">Falta um passo</h1>
+        <p className="mb-6 text-sm text-muted">
           Indique o nome da sua empresa para concluir a criação da conta.
         </p>
         <form action={completarEmpresa} className="space-y-4">
-          {erro && <p className="text-sm text-red-600">Não foi possível concluir. Tente novamente.</p>}
+          {erro && <p className="text-sm text-red-400">Não foi possível concluir. Tente novamente.</p>}
           <input
             name="nomeEmpresa"
             type="text"
             required
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            className="w-full rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:border-edge-subtle focus:outline-none"
             placeholder="Nome da empresa"
           />
           <button
             type="submit"
-            className="w-full rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="w-full rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 hover:bg-neutral-200"
           >
             Concluir
           </button>

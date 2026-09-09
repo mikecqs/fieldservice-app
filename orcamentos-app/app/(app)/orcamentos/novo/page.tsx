@@ -15,14 +15,14 @@ export default async function NovoOrcamentoPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <div className="mb-6 flex items-center gap-2 text-sm text-slate-500">
-        <Link href="/orcamentos" className="hover:underline">
+      <div className="mb-6 flex items-center gap-2 text-sm text-muted">
+        <Link href="/orcamentos" className="hover:text-white hover:underline">
           Orçamentos
         </Link>
         <span>/</span>
-        <span className="text-slate-800">Novo</span>
+        <span className="text-white">Novo</span>
       </div>
-      <h1 className="mb-6 text-lg font-semibold text-slate-900">Novo orçamento</h1>
+      <h1 className="mb-6 text-lg font-semibold tracking-tight text-white">Novo orçamento</h1>
       <NovoOrcamentoForm clientes={clientes ?? []} />
     </div>
   );

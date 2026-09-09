@@ -68,7 +68,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-lg font-semibold text-slate-900">Dashboard</h1>
+      <h1 className="text-lg font-semibold tracking-tight text-white">Dashboard</h1>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <CartaoKpi titulo="Valor em pipeline" valor={`${valorPipeline.toFixed(2)} €`} nota="Rascunho + enviado + follow-up" />
@@ -86,24 +86,24 @@ export default async function DashboardPage() {
         <CartaoKpi titulo="Follow-up hoje" valor={String(followupsHoje)} nota="Ver em Follow-up" />
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Por estado</h2>
+      <section className="rounded-2xl border border-edge bg-surface p-6">
+        <h2 className="mb-4 text-sm font-semibold text-neutral-200">Por estado</h2>
         <div className="flex flex-wrap gap-3">
           {ESTADOS_ORCAMENTO.map((estado) => (
             <Link
               key={estado}
               href={`/orcamentos?estado=${estado}`}
-              className="rounded-lg border border-slate-200 px-4 py-3 text-center hover:bg-slate-50"
+              className="rounded-xl border border-edge px-4 py-3 text-center transition-colors hover:border-edge-subtle hover:bg-surface-raised"
             >
-              <div className="text-xl font-semibold text-slate-900">{contagemPorEstado[estado]}</div>
-              <div className="text-xs text-slate-500">{ROTULOS_ESTADO[estado]}</div>
+              <div className="text-xl font-semibold text-white">{contagemPorEstado[estado]}</div>
+              <div className="text-xs text-muted">{ROTULOS_ESTADO[estado]}</div>
             </Link>
           ))}
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Últimos 6 meses</h2>
+      <section className="rounded-2xl border border-edge bg-surface p-6">
+        <h2 className="mb-4 text-sm font-semibold text-neutral-200">Últimos 6 meses</h2>
         <DashboardChart dados={meses} />
       </section>
     </div>
@@ -122,10 +122,10 @@ function CartaoKpi({
   destaque?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border bg-white p-5 ${destaque ? "border-red-300" : "border-slate-200"}`}>
-      <div className="text-xs text-slate-500">{titulo}</div>
-      <div className={`mt-1 text-2xl font-semibold ${destaque ? "text-red-600" : "text-slate-900"}`}>{valor}</div>
-      <div className="mt-1 text-xs text-slate-400">{nota}</div>
+    <div className={`rounded-2xl border bg-surface p-5 ${destaque ? "border-red-500/30" : "border-edge"}`}>
+      <div className="text-xs text-muted">{titulo}</div>
+      <div className={`mt-1 text-2xl font-semibold ${destaque ? "text-red-400" : "text-white"}`}>{valor}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{nota}</div>
     </div>
   );
 }

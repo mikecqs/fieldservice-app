@@ -33,14 +33,14 @@ export default function AcoesEstado({
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">Ações</h2>
+    <section className="rounded-2xl border border-edge bg-surface p-6">
+      <h2 className="mb-3 text-sm font-semibold text-neutral-200">Ações</h2>
       <div className="flex flex-wrap items-end gap-3">
         {podeMarcarEnviado({ estado }) && (
           <button
             type="button"
             onClick={() => executar(() => marcarEnviado(budgetId))}
-            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+            className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-transform duration-200 hover:scale-[1.02] hover:bg-neutral-200"
           >
             Marcar enviado
           </button>
@@ -49,12 +49,12 @@ export default function AcoesEstado({
         {podeMarcarFollowup({ estado }) && (
           <div className="flex items-end gap-2">
             <div>
-              <label className="block text-xs text-slate-500">Data do follow-up</label>
+              <label className="block text-xs text-muted-foreground">Data do follow-up</label>
               <input
                 type="date"
                 value={dataFollowup}
                 onChange={(e) => setDataFollowup(e.target.value)}
-                className="mt-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                className="mt-1 rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white focus:border-edge-subtle focus:outline-none"
               />
             </div>
             <button
@@ -64,7 +64,7 @@ export default function AcoesEstado({
                 formData.set("followupEm", dataFollowup);
                 executar(() => marcarFollowup(budgetId, formData));
               }}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-md border border-edge-subtle px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-surface-raised"
             >
               Marcar follow-up
             </button>
@@ -75,7 +75,7 @@ export default function AcoesEstado({
           <button
             type="button"
             onClick={() => executar(() => aceitarOrcamento(budgetId))}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+            className="rounded-md bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
           >
             Marcar aceite
           </button>
@@ -85,7 +85,7 @@ export default function AcoesEstado({
           <button
             type="button"
             onClick={() => executar(() => recusarOrcamento(budgetId))}
-            className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+            className="rounded-md border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
           >
             Marcar recusado
           </button>
@@ -95,13 +95,13 @@ export default function AcoesEstado({
           <button
             type="button"
             onClick={() => executar(() => cancelarOrcamento(budgetId))}
-            className="rounded-md px-4 py-2 text-sm font-medium text-slate-500 hover:bg-slate-50"
+            className="rounded-md px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-raised hover:text-muted"
           >
             Cancelar orçamento
           </button>
         )}
       </div>
-      {erro && <p className="mt-3 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mt-3 text-sm text-red-400">{erro}</p>}
     </section>
   );
 }

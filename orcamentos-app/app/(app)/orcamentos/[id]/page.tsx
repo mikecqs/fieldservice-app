@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireCompany } from "@/lib/auth";
 import { calcularOrcamento } from "@/lib/orcamento";
-import { ROTULOS_ESTADO } from "@/lib/orcamento-estado";
+import EstadoBadge from "../../EstadoBadge";
 import ItensEditor from "./ItensEditor";
 import DetalhesForm from "./DetalhesForm";
 import AcoesEstado from "./AcoesEstado";
@@ -43,30 +43,28 @@ export default async function OrcamentoDetalhePage({ params }: { params: Promise
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <div className="mb-2 flex items-center gap-2 text-sm text-slate-500">
-          <Link href="/orcamentos" className="hover:underline">
+        <div className="mb-2 flex items-center gap-2 text-sm text-muted">
+          <Link href="/orcamentos" className="hover:text-white hover:underline">
             Orçamentos
           </Link>
           <span>/</span>
-          <span className="text-slate-800">{orcamento.numero}</span>
+          <span className="text-white">{orcamento.numero}</span>
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">{orcamento.numero}</h1>
-            <p className="text-sm text-slate-500">
+            <h1 className="text-lg font-semibold tracking-tight text-white">{orcamento.numero}</h1>
+            <p className="text-sm text-muted">
               {cliente.nome}
               {cliente.empresa ? ` — ${cliente.empresa}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-              {ROTULOS_ESTADO[orcamento.estado as keyof typeof ROTULOS_ESTADO] ?? orcamento.estado}
-            </span>
+            <EstadoBadge estado={orcamento.estado} />
             <a
               href={`/orcamentos/${orcamento.id}/pdf`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-md border border-edge-subtle px-3 py-1.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-surface-raised"
             >
               Ver PDF
             </a>
@@ -74,23 +72,23 @@ export default async function OrcamentoDetalhePage({ params }: { params: Promise
         </div>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-700">Cliente</h2>
-        <dl className="grid grid-cols-1 gap-2 text-sm text-slate-600 sm:grid-cols-2">
+      <section className="rounded-2xl border border-edge bg-surface p-6">
+        <h2 className="mb-3 text-sm font-semibold text-neutral-200">Cliente</h2>
+        <dl className="grid grid-cols-1 gap-2 text-sm text-muted sm:grid-cols-2">
           <div>
-            <dt className="text-slate-400">Telefone</dt>
+            <dt className="text-muted-foreground">Telefone</dt>
             <dd>{cliente.telefone || "—"}</dd>
           </div>
           <div>
-            <dt className="text-slate-400">Email</dt>
+            <dt className="text-muted-foreground">Email</dt>
             <dd>{cliente.email || "—"}</dd>
           </div>
           <div>
-            <dt className="text-slate-400">Morada</dt>
+            <dt className="text-muted-foreground">Morada</dt>
             <dd>{cliente.morada || "—"}</dd>
           </div>
           <div>
-            <dt className="text-slate-400">NIF</dt>
+            <dt className="text-muted-foreground">NIF</dt>
             <dd>{cliente.nif || "—"}</dd>
           </div>
         </dl>

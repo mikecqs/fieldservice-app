@@ -15,13 +15,13 @@ export default async function EmpresaPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-lg font-semibold text-slate-900">Empresa</h1>
+      <h1 className="text-lg font-semibold tracking-tight text-white">Empresa</h1>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="rounded-2xl border border-edge bg-surface p-6">
         <LogoForm logoUrl={logoUrl} />
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="rounded-2xl border border-edge bg-surface p-6">
         <DadosEmpresaForm empresa={empresa} />
       </section>
     </div>

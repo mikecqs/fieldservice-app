@@ -35,12 +35,12 @@ export default function ItensEditor({
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="mb-3 text-sm font-semibold text-slate-700">Itens</h2>
+    <section className="rounded-2xl border border-edge bg-surface p-6">
+      <h2 className="mb-3 text-sm font-semibold text-neutral-200">Itens</h2>
 
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left text-slate-400">
+          <tr className="border-b border-edge text-left text-muted-foreground">
             <th className="py-2">Descrição</th>
             <th className="py-2 text-right">Qtd</th>
             <th className="py-2 text-right">Valor unit.</th>
@@ -50,11 +50,11 @@ export default function ItensEditor({
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.id} className="border-b border-slate-100">
-              <td className="py-2">{item.descricao}</td>
-              <td className="py-2 text-right">{item.quantidade}</td>
-              <td className="py-2 text-right">{item.valor_unitario.toFixed(2)} €</td>
-              <td className="py-2 text-right">
+            <tr key={item.id} className="border-b border-edge/60">
+              <td className="py-2 text-neutral-200">{item.descricao}</td>
+              <td className="py-2 text-right text-neutral-200">{item.quantidade}</td>
+              <td className="py-2 text-right text-neutral-200">{item.valor_unitario.toFixed(2)} €</td>
+              <td className="py-2 text-right text-neutral-200">
                 {(item.quantidade * item.valor_unitario).toFixed(2)} €
               </td>
               {editavel && (
@@ -62,7 +62,7 @@ export default function ItensEditor({
                   <button
                     type="button"
                     onClick={() => onRemover(item.id)}
-                    className="text-xs text-red-600 hover:underline"
+                    className="text-xs text-red-400 hover:underline"
                   >
                     Remover
                   </button>
@@ -72,7 +72,7 @@ export default function ItensEditor({
           ))}
           {items.length === 0 && (
             <tr>
-              <td colSpan={editavel ? 5 : 4} className="py-4 text-center text-slate-400">
+              <td colSpan={editavel ? 5 : 4} className="py-4 text-center text-muted-foreground">
                 Ainda não há itens.
               </td>
             </tr>
@@ -86,7 +86,7 @@ export default function ItensEditor({
             name="descricao"
             placeholder="Descrição"
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            className="rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:border-edge-subtle focus:outline-none"
           />
           <input
             name="quantidade"
@@ -94,7 +94,7 @@ export default function ItensEditor({
             step="0.01"
             defaultValue={1}
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            className="rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white focus:border-edge-subtle focus:outline-none"
           />
           <input
             name="valorUnitario"
@@ -102,30 +102,30 @@ export default function ItensEditor({
             step="0.01"
             placeholder="Valor unit. €"
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            className="rounded-md border border-edge bg-surface-raised px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:border-edge-subtle focus:outline-none"
           />
           <button
             type="submit"
-            className="rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            className="rounded-md border border-edge-subtle px-3 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-surface-raised"
           >
             Adicionar
           </button>
         </form>
       )}
 
-      {erro && <p className="mt-2 text-sm text-red-600">{erro}</p>}
+      {erro && <p className="mt-2 text-sm text-red-400">{erro}</p>}
 
       <div className="mt-4 flex justify-end">
         <dl className="w-56 space-y-1 text-sm">
-          <div className="flex justify-between text-slate-600">
+          <div className="flex justify-between text-muted">
             <dt>Subtotal</dt>
             <dd>{totais.subtotal.toFixed(2)} €</dd>
           </div>
-          <div className="flex justify-between text-slate-600">
+          <div className="flex justify-between text-muted">
             <dt>IVA ({ivaPercent}%)</dt>
             <dd>{totais.ivaValor.toFixed(2)} €</dd>
           </div>
-          <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold text-slate-900">
+          <div className="flex justify-between border-t border-edge pt-1 font-semibold text-white">
             <dt>Total</dt>
             <dd>{totais.total.toFixed(2)} €</dd>
           </div>

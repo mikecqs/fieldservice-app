@@ -53,8 +53,8 @@ export default async function FollowUpPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-lg font-semibold text-slate-900">Follow-up</h1>
-      <p className="mb-6 text-sm text-slate-500">
+      <h1 className="mb-2 text-lg font-semibold tracking-tight text-white">Follow-up</h1>
+      <p className="mb-6 text-sm text-muted">
         Orçamentos enviados que ainda estão à espera de resposta do cliente.
       </p>
       <FollowUpLista linhas={linhas} />

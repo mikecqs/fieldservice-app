@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ROTULOS_ESTADO, type EstadoOrcamento } from "@/lib/orcamento-estado";
 import { aceitarOrcamento, marcarFollowup, recusarOrcamento } from "../orcamentos/actions";
+import EstadoBadge from "../EstadoBadge";
 
 export type FollowUpLinha = {
   id: string;
@@ -53,7 +53,7 @@ export default function FollowUpLista({ linhas }: { linhas: FollowUpLinha[] }) {
 
   if (linhas.length === 0) {
     return (
-      <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-slate-400">
+      <p className="rounded-2xl border border-edge bg-surface p-6 text-center text-muted-foreground">
         Não há orçamentos à espera de follow-up.
       </p>
     );
@@ -61,38 +61,38 @@ export default function FollowUpLista({ linhas }: { linhas: FollowUpLinha[] }) {
 
   return (
     <div className="space-y-3">
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {erro && <p className="text-sm text-red-400">{erro}</p>}
       {linhas.map((linha) => {
         const atrasado = estaAtrasado(linha, hoje);
         return (
           <div
             key={linha.id}
-            className={`rounded-xl border bg-white p-4 ${atrasado ? "border-red-300" : "border-slate-200"}`}
+            className={`rounded-2xl border bg-surface p-5 ${atrasado ? "border-red-500/30" : "border-edge"}`}
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <Link href={`/orcamentos/${linha.id}`} className="font-medium text-brand-600 hover:underline">
+                <Link href={`/orcamentos/${linha.id}`} className="font-medium text-white hover:underline">
                   {linha.numero}
                 </Link>
-                <span className="ml-2 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                  {ROTULOS_ESTADO[linha.estado as EstadoOrcamento] ?? linha.estado}
+                <span className="ml-2 align-middle">
+                  <EstadoBadge estado={linha.estado} />
                 </span>
-                <div className="mt-1 text-sm text-slate-600">
+                <div className="mt-1 text-sm text-muted">
                   {linha.clienteNome}
                   {linha.clienteEmpresa ? ` — ${linha.clienteEmpresa}` : ""}
                   {linha.clienteTelefone ? ` · ${linha.clienteTelefone}` : ""}
                 </div>
                 <div className="mt-1 text-xs">
                   {linha.followupEm ? (
-                    <span className={atrasado ? "font-medium text-red-600" : "text-slate-500"}>
+                    <span className={atrasado ? "font-medium text-red-400" : "text-muted-foreground"}>
                       Follow-up: {linha.followupEm} {atrasado && "(atrasado)"}
                     </span>
                   ) : (
-                    <span className="text-slate-400">Sem follow-up marcado</span>
+                    <span className="text-muted-foreground">Sem follow-up marcado</span>
                   )}
                 </div>
               </div>
-              <div className="text-right text-sm font-medium text-slate-800">{linha.total.toFixed(2)} €</div>
+              <div className="text-right text-sm font-medium text-white">{linha.total.toFixed(2)} €</div>
             </div>
 
             <div className="mt-3 flex flex-wrap items-end gap-2">
@@ -100,26 +100,26 @@ export default function FollowUpLista({ linhas }: { linhas: FollowUpLinha[] }) {
                 type="date"
                 value={novaData[linha.id] ?? linha.followupEm ?? ""}
                 onChange={(e) => setNovaData((prev) => ({ ...prev, [linha.id]: e.target.value }))}
-                className="rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                className="rounded-md border border-edge bg-surface-raised px-2 py-1.5 text-sm text-white focus:border-edge-subtle focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => onMarcarFollowup(linha.id)}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-md border border-edge-subtle px-3 py-1.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-surface-raised"
               >
                 Marcar follow-up
               </button>
               <button
                 type="button"
                 onClick={() => onAceitar(linha.id)}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
               >
                 Aceite
               </button>
               <button
                 type="button"
                 onClick={() => onRecusar(linha.id)}
-                className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                className="rounded-md border border-red-500/30 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
               >
                 Recusado
               </button>
