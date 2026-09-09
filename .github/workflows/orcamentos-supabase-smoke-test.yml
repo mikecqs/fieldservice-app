@@ -1,20 +1,13 @@
 name: orcamentos-app — Supabase smoke test
 
-# workflow_dispatch só fica disponível via API/UI depois deste ficheiro
-# existir no branch default — por isso, enquanto isto vive só no branch
-# de feature, também aceita push *só neste branch específico*, para dar
-# para testar sem tocar em master (que dispara deploy de produção via
-# Vercel). O fieldservice-app (Serv) não tem CI/CD (ver CLAUDE.md secção
-# 10); este workflow é deliberadamente isolado a orcamentos-app/ e nunca
-# corre a partir de master/outros branches.
+# Só manual. Precisou de um push inicial neste branch para o GitHub
+# "conhecer" o workflow (workflow_dispatch via API só funciona depois
+# disso), mas agora já corre só por despoletar manual — nunca a partir
+# de master/outros branches, e nunca sozinho num push. O fieldservice-app
+# (Serv) não tem CI/CD (ver CLAUDE.md secção 10); este workflow é
+# deliberadamente isolado a orcamentos-app/.
 on:
   workflow_dispatch: {}
-  push:
-    branches:
-      - claude/budget-app-microempresas-3vy68h
-    paths:
-      - "orcamentos-app/**"
-      - ".github/workflows/orcamentos-supabase-smoke-test.yml"
 
 jobs:
   smoke-test:
