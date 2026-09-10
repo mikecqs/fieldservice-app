@@ -4,8 +4,9 @@ import { useState } from "react";
 import { criarOrcamento } from "../actions";
 
 type Cliente = { id: string; nome: string; empresa: string | null; telefone: string | null };
+type Modelo = { id: string; nome: string };
 
-export default function NovoOrcamentoForm({ clientes }: { clientes: Cliente[] }) {
+export default function NovoOrcamentoForm({ clientes, modelos }: { clientes: Cliente[]; modelos: Modelo[] }) {
   const [modo, setModo] = useState<"existente" | "novo">(clientes.length ? "existente" : "novo");
   const [erro, setErro] = useState<string | null>(null);
   const [aEnviar, setAEnviar] = useState(false);
@@ -74,6 +75,23 @@ export default function NovoOrcamentoForm({ clientes }: { clientes: Cliente[] })
         )}
       </div>
 
+      {modelos.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-neutral-200">Modelo (opcional)</label>
+          <select name="templateId" defaultValue="" className={`mt-1 w-full ${inputClasses}`}>
+            <option value="">Nenhum — começar em branco</option>
+            {modelos.map((modelo) => (
+              <option key={modelo.id} value={modelo.id}>
+                {modelo.nome}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Usa os itens e as condições desse modelo como ponto de partida.
+          </p>
+        </div>
+      )}
+
       {erro && <p className="text-sm text-red-400">{erro}</p>}
 
       <button
@@ -84,7 +102,7 @@ export default function NovoOrcamentoForm({ clientes }: { clientes: Cliente[] })
         {aEnviar ? "A criar..." : "Criar orçamento"}
       </button>
       <p className="text-xs text-muted-foreground">
-        Os itens e as condições são adicionados no ecrã seguinte.
+        Sem modelo escolhido, os itens e as condições são adicionados no ecrã seguinte.
       </p>
     </form>
   );

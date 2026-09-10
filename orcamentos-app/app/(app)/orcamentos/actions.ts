@@ -87,20 +87,56 @@ export async function criarOrcamento(formData: FormData): Promise<{ erro?: strin
     }
   }
 
+  // Modelo opcional: se escolhido, confirma que pertence à empresa antes
+  // de o usar (mesmo cuidado do clientId acima — nunca confiar num id
+  // vindo do formulário sem validar a posse).
+  const templateId = String(formData.get("templateId") ?? "").trim();
+  let modelo: {
+    condicoes: string | null;
+    iva_percent: number;
+    validade_dias: number;
+    budget_template_items: { descricao: string; quantidade: number; valor_unitario: number }[];
+  } | null = null;
+
+  if (templateId) {
+    const { data } = await supabase
+      .from("budget_templates")
+      .select("condicoes, iva_percent, validade_dias, budget_template_items(descricao, quantidade, valor_unitario)")
+      .eq("id", templateId)
+      .eq("company_id", empresa.id)
+      .maybeSingle();
+
+    if (!data) {
+      return { erro: "Modelo inválido." };
+    }
+    modelo = data;
+  }
+
   const { data: orcamento, error } = await supabase
     .from("budgets")
     .insert({
       company_id: empresa.id,
       client_id: idCliente,
-      condicoes: empresa.condicoes_padrao ?? null,
-      iva_percent: 23,
-      validade_dias: 30,
+      condicoes: modelo ? modelo.condicoes : empresa.condicoes_padrao ?? null,
+      iva_percent: modelo ? modelo.iva_percent : 23,
+      validade_dias: modelo ? modelo.validade_dias : 30,
     })
     .select("id")
     .single();
 
   if (error || !orcamento) {
     return { erro: "Não foi possível criar o orçamento." };
+  }
+
+  if (modelo && modelo.budget_template_items.length > 0) {
+    await supabase.from("budget_items").insert(
+      modelo.budget_template_items.map((item) => ({
+        budget_id: orcamento.id,
+        descricao: item.descricao,
+        quantidade: item.quantidade,
+        valor_unitario: item.valor_unitario,
+      }))
+    );
   }
 
   await registarEvento(supabase, orcamento.id, "criado", "Orçamento criado.");

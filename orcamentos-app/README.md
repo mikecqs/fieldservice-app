@@ -3,9 +3,11 @@
 App independente (Next.js 15, dentro deste repo apenas por conveniência de
 branch — pode ser extraído para um repo próprio sem alterações) para criar
 e acompanhar orçamentos: 3 páginas principais (Orçamentos, Follow-up,
-Dashboard) + Empresa (logo, dados, condições padrão). Por orçamento:
-duplicar, partilhar por WhatsApp/email, e histórico de eventos
-(criado/enviado/follow-up/aceite/recusado/cancelado/duplicado).
+Dashboard) + Empresa (logo, dados, condições padrão, até 3 modelos de
+orçamento reutilizáveis). Por orçamento: duplicar, partilhar por
+WhatsApp/email, histórico de eventos
+(criado/enviado/follow-up/aceite/recusado/cancelado/duplicado), e
+opção de partir de um modelo ao criar.
 
 Não partilha código, base de dados nem deploy com o resto do repo
 (fieldservice-app/Serv). É o "Produto 02" do catálogo da Tareo
@@ -89,7 +91,8 @@ app/login, app/signup          autenticação (Supabase Auth, email+password)
 app/(app)/dashboard            KPIs + gráfico últimos 6 meses
 app/(app)/orcamentos           lista com filtros + detalhe/edição + PDF
 app/(app)/follow-up            orçamentos enviados/à espera, ações rápidas
-app/(app)/empresa              logo, dados da empresa, condições padrão
+app/(app)/empresa              logo, dados da empresa, condições padrão,
+                                até 3 modelos de orçamento reutilizáveis
 lib/orcamento-estado.ts        regras de transição de estado (fonte única)
 lib/orcamento.ts               cálculo de subtotal/IVA/total
 lib/pdf-logo.ts                embutir logo no PDF

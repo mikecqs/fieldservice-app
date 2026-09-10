@@ -168,7 +168,54 @@ create policy "user inserts own budget events"
   );
 
 -- ---------------------------------------------------------------------------
--- 6. Storage: bucket privado para logos das empresas
+-- 6. budget_templates (modelos base — até 3 por empresa, limite aplicado
+--    na Server Action, não aqui)
+-- ---------------------------------------------------------------------------
+create table budget_templates (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies (id) on delete cascade,
+  nome text not null,
+  condicoes text,
+  iva_percent numeric not null default 23,
+  validade_dias integer not null default 30,
+  created_at timestamptz not null default now()
+);
+
+create index budget_templates_company_id_idx on budget_templates (company_id);
+
+alter table budget_templates enable row level security;
+
+-- Configuração, não histórico — pode ser livremente editado/apagado
+-- (ao contrário de `budgets`, que nunca é apagável).
+create policy "user manages own budget templates"
+  on budget_templates for all
+  using (company_id = my_company_id())
+  with check (company_id = my_company_id());
+
+create table budget_template_items (
+  id uuid primary key default gen_random_uuid(),
+  template_id uuid not null references budget_templates (id) on delete cascade,
+  descricao text not null,
+  quantidade numeric not null default 1,
+  valor_unitario numeric not null default 0,
+  ordem integer not null default 0
+);
+
+create index budget_template_items_template_id_idx on budget_template_items (template_id);
+
+alter table budget_template_items enable row level security;
+
+create policy "user manages own budget template items"
+  on budget_template_items for all
+  using (
+    template_id in (select id from budget_templates where company_id = my_company_id())
+  )
+  with check (
+    template_id in (select id from budget_templates where company_id = my_company_id())
+  );
+
+-- ---------------------------------------------------------------------------
+-- 7. Storage: bucket privado para logos das empresas
 -- ---------------------------------------------------------------------------
 insert into storage.buckets (id, name, public)
 values ('logos', 'logos', false)
