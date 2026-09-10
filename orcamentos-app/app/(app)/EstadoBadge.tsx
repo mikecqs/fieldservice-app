@@ -9,6 +9,8 @@ const CORES: Record<EstadoOrcamento, string> = {
   enviado: "bg-sky-500/10 text-sky-400 border-sky-500/20",
   followup: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   aceite: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  servico_realizado: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+  faturado: "bg-emerald-600/10 text-emerald-300 border-emerald-600/30",
   recusado: "bg-red-500/10 text-red-400 border-red-500/20",
   cancelado: "bg-neutral-500/10 text-muted-foreground border-edge",
 };

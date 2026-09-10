@@ -24,7 +24,10 @@ type Ordenacao = "recentes" | "antigos" | "valor_desc" | "valor_asc";
 function estaAtrasado(linha: OrcamentoLinha): boolean {
   if (!linha.followupEm) return false;
   const hoje = new Date().toISOString().slice(0, 10);
-  return linha.followupEm < hoje && !["aceite", "recusado", "cancelado"].includes(linha.estado);
+  return (
+    linha.followupEm < hoje &&
+    !["aceite", "servico_realizado", "faturado", "recusado", "cancelado"].includes(linha.estado)
+  );
 }
 
 export default function OrcamentosLista({

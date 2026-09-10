@@ -9,7 +9,9 @@ import {
   podeCancelarOrcamento,
   podeEditarItensOrcamento,
   podeMarcarEnviado,
+  podeMarcarFaturado,
   podeMarcarFollowup,
+  podeMarcarServicoRealizado,
   podeRecusarOrcamento,
 } from "@/lib/orcamento-estado";
 
@@ -361,6 +363,46 @@ export async function aceitarOrcamento(budgetId: string): Promise<{ erro?: strin
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
   revalidatePath("/follow-up");
+  revalidatePath("/dashboard");
+  return {};
+}
+
+export async function marcarServicoRealizado(budgetId: string): Promise<{ erro?: string }> {
+  const orcamento = await buscarEstadoOrcamento(budgetId);
+  if (!orcamento || !podeMarcarServicoRealizado(orcamento)) {
+    return { erro: "Este orçamento não pode ser marcado como serviço realizado." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("budgets").update({ estado: "servico_realizado" }).eq("id", budgetId);
+
+  if (error) return { erro: "Não foi possível marcar o serviço como realizado." };
+
+  await registarEvento(supabase, budgetId, "servico_realizado", "Serviço marcado como realizado.");
+
+  revalidatePath(`/orcamentos/${budgetId}`);
+  revalidatePath("/orcamentos");
+  revalidatePath("/dashboard");
+  return {};
+}
+
+// Único caminho para um orçamento ficar mesmo concluído — nunca se salta
+// direto de "aceite" para aqui (podeMarcarFaturado exige "servico_realizado").
+export async function marcarFaturado(budgetId: string): Promise<{ erro?: string }> {
+  const orcamento = await buscarEstadoOrcamento(budgetId);
+  if (!orcamento || !podeMarcarFaturado(orcamento)) {
+    return { erro: "Este orçamento não pode ser marcado como faturado." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("budgets").update({ estado: "faturado" }).eq("id", budgetId);
+
+  if (error) return { erro: "Não foi possível marcar como faturado." };
+
+  await registarEvento(supabase, budgetId, "faturado", "Orçamento faturado — concluído.");
+
+  revalidatePath(`/orcamentos/${budgetId}`);
+  revalidatePath("/orcamentos");
   revalidatePath("/dashboard");
   return {};
 }

@@ -2,13 +2,24 @@
 
 import { useState } from "react";
 import {
+  ESTADOS_ORCAMENTO_TERMINAIS,
   podeAceitarOrcamento,
   podeCancelarOrcamento,
   podeMarcarEnviado,
+  podeMarcarFaturado,
   podeMarcarFollowup,
+  podeMarcarServicoRealizado,
   podeRecusarOrcamento,
 } from "@/lib/orcamento-estado";
-import { aceitarOrcamento, cancelarOrcamento, marcarEnviado, marcarFollowup, recusarOrcamento } from "../actions";
+import {
+  aceitarOrcamento,
+  cancelarOrcamento,
+  marcarEnviado,
+  marcarFaturado,
+  marcarFollowup,
+  marcarServicoRealizado,
+  recusarOrcamento,
+} from "../actions";
 
 export default function AcoesEstado({
   budgetId,
@@ -28,7 +39,7 @@ export default function AcoesEstado({
     if (resultado?.erro) setErro(resultado.erro);
   }
 
-  if (estado === "aceite" || estado === "recusado" || estado === "cancelado") {
+  if ((ESTADOS_ORCAMENTO_TERMINAIS as readonly string[]).includes(estado)) {
     return null;
   }
 
@@ -83,6 +94,26 @@ export default function AcoesEstado({
             className="rounded-md bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
           >
             Marcar aceite
+          </button>
+        )}
+
+        {podeMarcarServicoRealizado({ estado }) && (
+          <button
+            type="button"
+            onClick={() => executar(() => marcarServicoRealizado(budgetId))}
+            className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-transform duration-200 hover:scale-[1.02] hover:bg-neutral-200"
+          >
+            Serviço realizado
+          </button>
+        )}
+
+        {podeMarcarFaturado({ estado }) && (
+          <button
+            type="button"
+            onClick={() => executar(() => marcarFaturado(budgetId))}
+            className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-transform duration-200 hover:scale-[1.02] hover:bg-neutral-200"
+          >
+            Faturado
           </button>
         )}
 

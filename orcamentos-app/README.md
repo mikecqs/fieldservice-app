@@ -10,6 +10,11 @@ WhatsApp/email, histórico de eventos
 opção de partir de um modelo ao criar. Marcar como enviado agenda o
 follow-up automaticamente (dias configuráveis em Empresa).
 
+Depois de aceite, o orçamento só fica mesmo concluído ao ser marcado
+"Faturado" — passa primeiro por "Serviço realizado" (ambos os botões
+aparecem na ficha do orçamento, tal como "Marcar enviado"); nunca salta
+de aceite direto para faturado.
+
 Não partilha código, base de dados nem deploy com o resto do repo
 (fieldservice-app/Serv). É o "Produto 02" do catálogo da Tareo
 (`components/tareo/produtos-data.ts`), ainda sem `href`.
@@ -38,6 +43,11 @@ nome do ficheiro diz o que faz.
 
 Se estás a criar o projeto Supabase de raiz agora, ignora isto — o
 `schema.sql` já inclui tudo.
+
+Migração mais recente: `004_servico_realizado_faturado.sql` — acrescenta
+os estados `servico_realizado` e `faturado` ao `CHECK` de `budgets.estado`
+e `budget_events.tipo`. Necessária para quem já tinha o schema anterior
+(sem estes dois estados) em produção.
 
 ### 2. Variáveis de ambiente
 

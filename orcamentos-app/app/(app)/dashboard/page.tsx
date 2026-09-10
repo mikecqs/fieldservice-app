@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireCompany } from "@/lib/auth";
 import { calcularOrcamento } from "@/lib/orcamento";
-import { ESTADOS_ORCAMENTO, ROTULOS_ESTADO, type EstadoOrcamento } from "@/lib/orcamento-estado";
+import { ESTADOS_GANHOS, ESTADOS_ORCAMENTO, ROTULOS_ESTADO, type EstadoOrcamento } from "@/lib/orcamento-estado";
 import DashboardChart from "./DashboardChart";
 
 const ESTADOS_ATIVOS: readonly EstadoOrcamento[] = ["rascunho", "enviado", "followup"];
@@ -36,10 +36,10 @@ export default async function DashboardPage() {
     .reduce((acc, l) => acc + l.total, 0);
 
   const valorAceites = linhas
-    .filter((l) => l.estado === "aceite")
+    .filter((l) => (ESTADOS_GANHOS as readonly string[]).includes(l.estado))
     .reduce((acc, l) => acc + l.total, 0);
 
-  const aceites = contagemPorEstado.aceite;
+  const aceites = contagemPorEstado.aceite + contagemPorEstado.servico_realizado + contagemPorEstado.faturado;
   const recusados = contagemPorEstado.recusado;
   const taxaAceitacao = aceites + recusados > 0 ? (aceites / (aceites + recusados)) * 100 : null;
 
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
     const mes = meses.find((m) => m.chave === chave);
     if (!mes) continue;
     mes.criados += 1;
-    if (linha.estado === "aceite") mes.aceites += 1;
+    if ((ESTADOS_GANHOS as readonly string[]).includes(linha.estado)) mes.aceites += 1;
   }
 
   return (

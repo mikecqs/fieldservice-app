@@ -77,7 +77,7 @@ create table budgets (
     'ORC-' || lpad(nextval('budgets_numero_seq')::text, 6, '0')
   ),
   estado text not null default 'rascunho'
-    check (estado in ('rascunho', 'enviado', 'followup', 'aceite', 'recusado', 'cancelado')),
+    check (estado in ('rascunho', 'enviado', 'followup', 'aceite', 'servico_realizado', 'faturado', 'recusado', 'cancelado')),
   condicoes text,
   iva_percent numeric not null default 23,
   validade_dias integer not null default 30,
@@ -145,7 +145,7 @@ create table budget_events (
   id uuid primary key default gen_random_uuid(),
   budget_id uuid not null references budgets (id) on delete cascade,
   tipo text not null
-    check (tipo in ('criado', 'enviado', 'followup', 'aceite', 'recusado', 'cancelado', 'duplicado')),
+    check (tipo in ('criado', 'enviado', 'followup', 'aceite', 'servico_realizado', 'faturado', 'recusado', 'cancelado', 'duplicado')),
   descricao text not null,
   created_at timestamptz not null default now()
 );
