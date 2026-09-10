@@ -25,6 +25,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Unit tests (máquina de estados, validação de upload)
+        run: npm run test:unit
+
       - name: Build (com credenciais reais do Supabase)
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.ORCAMENTOS_SUPABASE_URL }}
@@ -38,3 +41,10 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.ORCAMENTOS_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ORCAMENTOS_SUPABASE_SERVICE_ROLE_KEY }}
         run: node scripts/smoke-test.mjs
+
+      - name: Security test (cross-tenant, state machine, immutability, events, templates)
+        env:
+          SUPABASE_URL: ${{ secrets.ORCAMENTOS_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.ORCAMENTOS_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.ORCAMENTOS_SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run test:security

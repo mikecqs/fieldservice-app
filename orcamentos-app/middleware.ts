@@ -40,7 +40,17 @@ export async function middleware(request: NextRequest) {
   // /dashboard.
   const isExactPublicAuthRoute = path === "/login" || path === "/signup";
 
-  if (!user && !isExactPublicAuthRoute) {
+  // /esqueci-password (pedir o link) e /reset-password (definir a nova
+  // password depois de clicar no link) nunca redirecionam por terem ou
+  // não sessão: a primeira tem de funcionar tanto para quem está como
+  // para quem não está autenticado (pode querer mudar a password mesmo
+  // com sessão ativa); a segunda só resolve se ter sessão ou não sozinha
+  // — quem não tiver (link inválido/expirado) fica na própria página, que
+  // já mostra o estado certo (ver app/reset-password/page.tsx), nunca
+  // atirado para /login sem explicação.
+  const rotaDeRecuperacaoPassword = path === "/esqueci-password" || path === "/reset-password";
+
+  if (!user && !isExactPublicAuthRoute && !rotaDeRecuperacaoPassword) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

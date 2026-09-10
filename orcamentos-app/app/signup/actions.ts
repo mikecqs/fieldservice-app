@@ -11,29 +11,31 @@ export async function criarConta(formData: FormData): Promise<{ erro?: string; v
   if (!nomeEmpresa || !email || !password) {
     return { erro: "Preencha nome da empresa, email e password." };
   }
-  if (password.length < 6) {
-    return { erro: "A password tem de ter pelo menos 6 caracteres." };
+  if (password.length < 8) {
+    return { erro: "A password tem de ter pelo menos 8 caracteres." };
   }
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
 
+  // Nunca revelar, por nenhum caminho desta função, se o email já tinha
+  // conta — só se mostram erros que não dependam de qual é o email (ex:
+  // rate limit, formato inválido), nunca "já existe uma conta com este
+  // email". Antes desta correção havia duas mensagens distintas
+  // ("já existe conta" vs. "verifique o email") que permitiam a alguém
+  // enumerar quais emails já estão registados só tentando o signup —
+  // agora os dois casos são sempre indistinguíveis para quem preenche o
+  // formulário (ver auditoria de segurança, VULN-02).
   if (error) {
     if (error.message === "User already registered") {
-      return { erro: "Já existe uma conta com este email. Entre em /login." };
+      return { verificarEmail: true };
     }
-    // Mostrar a mensagem real do Supabase em vez de um genérico "não foi
-    // possível" — já perdemos tempo a adivinhar a causa de erros
-    // parecidos (rate limit, domínio de email inválido, password fraca,
-    // etc.) por esconder o texto original.
     return { erro: `Não foi possível criar a conta: ${error.message}` };
   }
 
   // O Supabase Auth nunca confirma explicitamente que o email já tinha
-  // conta (proteção contra enumeração) — devolve sucesso "vazio"
-  // (user.identities: []), sem sessão nem erro. Sem isto, um re-signup
-  // com email já registado caía sempre na mensagem "verifique o email",
-  // mesmo quando a verdadeira causa era outra (conta já existente).
+  // conta — devolve sucesso "vazio" (user.identities: []), sem sessão nem
+  // erro, quando o email já existe.
   const contaJaExistia = (data.user?.identities?.length ?? 1) === 0;
 
   let session = data.session;
@@ -42,18 +44,16 @@ export async function criarConta(formData: FormData): Promise<{ erro?: string; v
   // fica confirmado na hora, mas signUp() nem sempre devolve a sessão
   // diretamente nesse caso — um signIn explícito a seguir (já temos a
   // password em mãos, na mesma Server Action) resolve sem pedir nada
-  // extra ao utilizador.
-  if (!session) {
+  // extra ao utilizador. Nunca tentado quando a conta já existia (não
+  // temos a certeza de que a password introduzida é a da conta real).
+  if (!session && !contaJaExistia) {
     const { data: signInData } = await supabase.auth.signInWithPassword({ email, password });
     session = signInData.session;
   }
 
   if (!session) {
-    if (contaJaExistia) {
-      return { erro: "Já existe uma conta com este email. Entre em /login." };
-    }
-    // Só chega aqui se a confirmação de email estiver mesmo ativa no
-    // projeto — nesse caso é genuinamente preciso esperar pelo email.
+    // Mesma mensagem quer a conta já existisse quer seja preciso
+    // confirmar o email de uma conta nova — indistinguível de propósito.
     return { verificarEmail: true };
   }
 

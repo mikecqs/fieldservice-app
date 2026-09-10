@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { podeEditarItensOrcamento } from "@/lib/orcamento-estado";
+import { ESTADOS_ORCAMENTO_TERMINAIS, podeEditarItensOrcamento } from "@/lib/orcamento-estado";
 import { atualizarDetalhesOrcamento } from "../actions";
 
 export default function DetalhesForm({
@@ -20,6 +20,10 @@ export default function DetalhesForm({
   ivaPercent: number;
 }) {
   const ivaEditavel = podeEditarItensOrcamento({ estado });
+  // Estado terminal (faturado/recusado/cancelado) fica congelado também
+  // ao nível da base de dados (ver migração 005) — a UI já não pode
+  // deixar submeter um update que a BD vai recusar de qualquer forma.
+  const editavel = !(ESTADOS_ORCAMENTO_TERMINAIS as readonly string[]).includes(estado);
   const [erro, setErro] = useState<string | null>(null);
   const [guardado, setGuardado] = useState(false);
 
@@ -46,6 +50,7 @@ export default function DetalhesForm({
           defaultValue={condicoes}
           rows={4}
           placeholder="Condições de pagamento, prazo de execução, garantia..."
+          disabled={!editavel}
           className={inputClasses}
         />
         <textarea
@@ -53,12 +58,19 @@ export default function DetalhesForm({
           defaultValue={notas}
           rows={2}
           placeholder="Notas internas (não aparecem no PDF)"
+          disabled={!editavel}
           className={inputClasses}
         />
         <div className="flex gap-4">
           <div>
             <label className="block text-xs text-muted-foreground">Validade (dias)</label>
-            <input name="validadeDias" type="number" defaultValue={validadeDias} className={`mt-1 w-28 ${inputClasses}`} />
+            <input
+              name="validadeDias"
+              type="number"
+              defaultValue={validadeDias}
+              disabled={!editavel}
+              className={`mt-1 w-28 ${inputClasses}`}
+            />
           </div>
           <div>
             <label className="block text-xs text-muted-foreground">IVA (%)</label>
@@ -74,12 +86,14 @@ export default function DetalhesForm({
         </div>
         {erro && <p className="text-sm text-red-400">{erro}</p>}
         {guardado && !erro && <p className="text-sm text-emerald-400">Guardado.</p>}
-        <button
-          type="submit"
-          className="rounded-md border border-edge-subtle px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-surface-raised"
-        >
-          Guardar
-        </button>
+        {editavel && (
+          <button
+            type="submit"
+            className="rounded-md border border-edge-subtle px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-surface-raised"
+          >
+            Guardar
+          </button>
+        )}
       </form>
     </section>
   );

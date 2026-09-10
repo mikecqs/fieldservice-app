@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireCompany } from "@/lib/auth";
+import { TAMANHO_MAXIMO_LOGO, detetarTipoImagem } from "@/lib/logo-validacao";
 
 export async function guardarDadosEmpresa(formData: FormData): Promise<{ erro?: string }> {
   const empresa = await requireCompany();
@@ -47,12 +48,18 @@ export async function guardarLogotipo(formData: FormData): Promise<{ erro?: stri
   if (!file || file.size === 0) {
     return { erro: "Escolha um ficheiro de imagem." };
   }
-  if (file.type !== "image/png" && file.type !== "image/jpeg") {
-    return { erro: "O logotipo tem de ser PNG ou JPEG." };
+  if (file.size > TAMANHO_MAXIMO_LOGO) {
+    return { erro: "O logotipo não pode exceder 2MB." };
   }
 
-  const ext = file.type === "image/png" ? "png" : "jpg";
-  const path = `${empresa.id}/logo.${ext}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const tipoDetetado = detetarTipoImagem(bytes);
+  if (!tipoDetetado) {
+    return { erro: "O logotipo tem de ser um PNG ou JPEG válido." };
+  }
+
+  const contentType = tipoDetetado === "png" ? "image/png" : "image/jpeg";
+  const path = `${empresa.id}/logo.${tipoDetetado}`;
 
   if (empresa.logo_path && empresa.logo_path !== path) {
     await supabase.storage.from("logos").remove([empresa.logo_path]);
@@ -60,7 +67,7 @@ export async function guardarLogotipo(formData: FormData): Promise<{ erro?: stri
 
   const { error: erroUpload } = await supabase.storage
     .from("logos")
-    .upload(path, file, { upsert: true, contentType: file.type });
+    .upload(path, bytes, { upsert: true, contentType });
 
   if (erroUpload) {
     return { erro: "Não foi possível carregar o logotipo." };

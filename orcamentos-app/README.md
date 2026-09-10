@@ -13,7 +13,15 @@ follow-up automaticamente (dias configuráveis em Empresa).
 Depois de aceite, o orçamento só fica mesmo concluído ao ser marcado
 "Faturado" — passa primeiro por "Serviço realizado" (ambos os botões
 aparecem na ficha do orçamento, tal como "Marcar enviado"); nunca salta
-de aceite direto para faturado.
+de aceite direto para faturado. Esta regra (e as restantes transições de
+estado, a imutabilidade de orçamentos faturados/recusados/cancelados, e o
+histórico de eventos) são impostas diretamente na base de dados via
+triggers Postgres, não só pela app — ver `supabase/migrations/
+005_state_machine_enforcement.sql` e a secção "Segurança" abaixo.
+
+Recuperação de password self-service (`/esqueci-password` →
+`/reset-password`, via Supabase Auth) e headers de segurança (CSP
+dimensionada aos recursos reais da app) já incluídos.
 
 Não partilha código, base de dados nem deploy com o resto do repo
 (fieldservice-app/Serv). É o "Produto 02" do catálogo da Tareo
@@ -44,10 +52,27 @@ nome do ficheiro diz o que faz.
 Se estás a criar o projeto Supabase de raiz agora, ignora isto — o
 `schema.sql` já inclui tudo.
 
-Migração mais recente: `004_servico_realizado_faturado.sql` — acrescenta
-os estados `servico_realizado` e `faturado` ao `CHECK` de `budgets.estado`
-e `budget_events.tipo`. Necessária para quem já tinha o schema anterior
-(sem estes dois estados) em produção.
+Migração mais recente: `005_state_machine_enforcement.sql` — move a
+validação da máquina de estados, a imutabilidade de orçamentos
+faturados/recusados/cancelados, a geração de `budget_events` e o limite
+de 3 modelos de orçamento de "só na app" para "imposto pela própria base
+de dados" (triggers). **Importante para quem já tem o projeto Supabase em
+produção**: sem esta migração, um pedido direto à API do Supabase
+(contornando a app) ainda conseguia saltar estados ou editar um orçamento
+já faturado — ver auditoria de segurança referida no commit. Idempotente,
+como as anteriores.
+
+Migração anterior: `004_servico_realizado_faturado.sql` — acrescenta os
+estados `servico_realizado` e `faturado` ao `CHECK` de `budgets.estado` e
+`budget_events.tipo`.
+
+### 1.2 Redirect URLs (recuperação de password)
+
+Em **Authentication → URL Configuration** do projeto Supabase, confirmar
+que `https://<domínio-do-deploy>/api/auth/confirm` está na lista de
+Redirect URLs permitidas — sem isto, o link de "Esqueci-me da password"
+pode falhar silenciosamente em produção (funciona em `localhost` por
+omissão em muitos projetos, mas não está garantido).
 
 ### 2. Variáveis de ambiente
 
@@ -99,25 +124,66 @@ uma vez, corrigido revertendo o Root Directory desse projeto).
 
 ```
 app/login, app/signup          autenticação (Supabase Auth, email+password)
+app/esqueci-password           pedir link de recuperação de password
+app/reset-password             definir nova password (a partir do link)
+app/api/auth/confirm           callback dos emails do Supabase Auth (recovery)
 app/(app)/dashboard            KPIs + gráfico últimos 6 meses
 app/(app)/orcamentos           lista com filtros + detalhe/edição + PDF
 app/(app)/follow-up            orçamentos enviados/à espera, ações rápidas
 app/(app)/empresa              logo, dados da empresa, condições padrão,
                                 até 3 modelos de orçamento reutilizáveis
-lib/orcamento-estado.ts        regras de transição de estado (fonte única)
+lib/orcamento-estado.ts        regras de transição de estado (fonte única
+                                a nível de app — replicada na BD, ver 1.1)
 lib/orcamento.ts               cálculo de subtotal/IVA/total
+lib/logo-validacao.ts          validação do logotipo por magic bytes
 lib/pdf-logo.ts                embutir logo no PDF
-supabase/schema.sql            schema + RLS + bucket "logos" (fonte de
-                                verdade para uma instalação nova)
+supabase/schema.sql            schema + RLS + triggers + bucket "logos"
+                                (fonte de verdade para uma instalação nova)
 supabase/migrations/           alterações incrementais para quem já tem
                                 o projeto Supabase criado (ver secção 1.1)
+scripts/security-test.mjs      testes de integração contra um Supabase real
+                                (isolamento, máquina de estados, imutabilidade)
 ```
+
+## Segurança
+
+- **Isolamento entre empresas**: RLS por `company_id` em todas as tabelas
+  + verificação explícita nas Server Actions sempre que um ID vem do
+  cliente (nunca confiado às cegas).
+- **Máquina de estados e imutabilidade impostas na base de dados**
+  (triggers, não só na app) — um orçamento faturado/recusado/cancelado
+  fica congelado; itens só editáveis em rascunho; `budget_events` só é
+  gerado automaticamente a partir de mudanças de estado reais, nunca
+  inserível diretamente.
+- **Headers de segurança** (CSP, X-Frame-Options, etc.) em
+  `next.config.mjs`, dimensionados aos recursos reais da app.
+- **Recuperação de password** via Supabase Auth (`/esqueci-password`).
+- **Upload de logotipo** validado por assinatura real do ficheiro (magic
+  bytes), não só pelo `Content-Type` declarado; limite de 2MB.
+
+## Testes
+
+```
+npm run test:unit       # unitários (máquina de estados, validação de upload) — sem rede
+npm run test:security   # integração contra um Supabase real — precisa de
+                         # SUPABASE_URL/SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY
+                         # e da migração 005 já aplicada
+```
+
+O workflow `orcamentos-supabase-smoke-test.yml` (manual, `workflow_dispatch`)
+corre os dois, mais o smoke test original de schema/RLS/storage.
 
 ## Limitações conhecidas
 
-- Sem testes automatizados.
+- Sem rate limiting aplicacional (login/signup/PDF) — decisão deliberada
+  por agora (Supabase Auth já limita os seus próprios endpoints); ver
+  raciocínio no relatório de implementação de segurança.
+- Sem MFA — Supabase Auth suporta, mas não está exposto na UI.
 - PDF de uma página só (orçamentos muito longos ficam truncados) — mesma
   limitação aceite no módulo equivalente do Serv.
+- Sem testes de browser/UI (só unitários + integração via API).
 - Testado ponta-a-ponta em produção (Supabase + Vercel reais): signup,
   login, criar/editar orçamento, PDF, logo — todos confirmados a
-  funcionar.
+  funcionar. O fluxo de recuperação de password e a migração 005 ainda
+  não foram testados contra o projeto Supabase de produção — ver secção
+  1.1/1.2 acima.

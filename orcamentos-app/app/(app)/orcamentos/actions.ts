@@ -25,15 +25,13 @@ async function buscarEstadoOrcamento(budgetId: string) {
   return data as { id: string; estado: string } | null;
 }
 
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
-
-// Histórico aditivo do percurso do orçamento — nunca editável/apagável
-// depois de criado (ver RLS em supabase/schema.sql). Falhar a gravar um
-// evento não deve impedir a ação principal já ter sido concluída, por
-// isso os chamadores nunca aguardam/propagam erro daqui.
-async function registarEvento(supabase: SupabaseServerClient, budgetId: string, tipo: string, descricao: string) {
-  await supabase.from("budget_events").insert({ budget_id: budgetId, tipo, descricao });
-}
+// Histórico aditivo do percurso do orçamento (budget_events) já não é
+// escrito daqui — passou a ser gerado automaticamente por triggers em
+// Postgres sempre que `budgets` é criado/muda de estado (ver migração
+// 005_state_machine_enforcement.sql). Isto fecha a lacuna em que um
+// insert direto à API do Supabase conseguia forjar um evento sem a ação
+// correspondente ter realmente acontecido — agora só existe evento se a
+// mudança de estado aconteceu de facto, na mesma transação.
 
 export async function criarOrcamento(formData: FormData): Promise<{ erro?: string }> {
   const empresa = await requireCompany();
@@ -141,8 +139,6 @@ export async function criarOrcamento(formData: FormData): Promise<{ erro?: strin
     );
   }
 
-  await registarEvento(supabase, orcamento.id, "criado", "Orçamento criado.");
-
   redirect(`/orcamentos/${orcamento.id}`);
 }
 
@@ -152,7 +148,7 @@ export async function duplicarOrcamento(budgetId: string): Promise<{ erro?: stri
 
   const { data: original } = await supabase
     .from("budgets")
-    .select("numero, client_id, condicoes, iva_percent, validade_dias, budget_items(descricao, quantidade, valor_unitario)")
+    .select("client_id, condicoes, iva_percent, validade_dias, budget_items(descricao, quantidade, valor_unitario)")
     .eq("id", budgetId)
     .eq("company_id", empresa.id)
     .maybeSingle();
@@ -163,7 +159,9 @@ export async function duplicarOrcamento(budgetId: string): Promise<{ erro?: stri
 
   // Nunca copia numero/estado/enviado_em/followup_em/notas — o duplicado
   // é sempre um orçamento novo, a começar do zero em rascunho, com o seu
-  // próprio número de sequência.
+  // próprio número de sequência. `duplicado_de_id` liga ao original só
+  // para o trigger de log (budgets_log_created) escrever o evento
+  // "duplicado" sozinho — ver migração 005.
   const { data: novoOrcamento, error } = await supabase
     .from("budgets")
     .insert({
@@ -172,6 +170,7 @@ export async function duplicarOrcamento(budgetId: string): Promise<{ erro?: stri
       condicoes: original.condicoes,
       iva_percent: original.iva_percent,
       validade_dias: original.validade_dias,
+      duplicado_de_id: budgetId,
     })
     .select("id")
     .single();
@@ -194,8 +193,6 @@ export async function duplicarOrcamento(budgetId: string): Promise<{ erro?: stri
       return { erro: "Orçamento duplicado, mas houve um erro a copiar os itens." };
     }
   }
-
-  await registarEvento(supabase, novoOrcamento.id, "duplicado", `Duplicado a partir do orçamento ${original.numero}.`);
 
   redirect(`/orcamentos/${novoOrcamento.id}`);
 }
@@ -306,13 +303,6 @@ export async function marcarEnviado(budgetId: string): Promise<{ erro?: string }
 
   if (error) return { erro: "Não foi possível marcar como enviado." };
 
-  await registarEvento(
-    supabase,
-    budgetId,
-    "enviado",
-    `Orçamento marcado como enviado. Follow-up agendado para ${followupEm}.`
-  );
-
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
   revalidatePath("/follow-up");
@@ -339,8 +329,6 @@ export async function marcarFollowup(budgetId: string, formData: FormData): Prom
 
   if (error) return { erro: "Não foi possível marcar o follow-up." };
 
-  await registarEvento(supabase, budgetId, "followup", `Follow-up marcado para ${data}.`);
-
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
   revalidatePath("/follow-up");
@@ -357,8 +345,6 @@ export async function aceitarOrcamento(budgetId: string): Promise<{ erro?: strin
   const { error } = await supabase.from("budgets").update({ estado: "aceite" }).eq("id", budgetId);
 
   if (error) return { erro: "Não foi possível marcar como aceite." };
-
-  await registarEvento(supabase, budgetId, "aceite", "Orçamento aceite.");
 
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
@@ -377,8 +363,6 @@ export async function marcarServicoRealizado(budgetId: string): Promise<{ erro?:
   const { error } = await supabase.from("budgets").update({ estado: "servico_realizado" }).eq("id", budgetId);
 
   if (error) return { erro: "Não foi possível marcar o serviço como realizado." };
-
-  await registarEvento(supabase, budgetId, "servico_realizado", "Serviço marcado como realizado.");
 
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
@@ -399,8 +383,6 @@ export async function marcarFaturado(budgetId: string): Promise<{ erro?: string 
 
   if (error) return { erro: "Não foi possível marcar como faturado." };
 
-  await registarEvento(supabase, budgetId, "faturado", "Orçamento faturado — concluído.");
-
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
   revalidatePath("/dashboard");
@@ -417,8 +399,6 @@ export async function recusarOrcamento(budgetId: string): Promise<{ erro?: strin
   const { error } = await supabase.from("budgets").update({ estado: "recusado" }).eq("id", budgetId);
 
   if (error) return { erro: "Não foi possível marcar como recusado." };
-
-  await registarEvento(supabase, budgetId, "recusado", "Orçamento marcado como recusado.");
 
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
@@ -437,8 +417,6 @@ export async function cancelarOrcamento(budgetId: string): Promise<{ erro?: stri
   const { error } = await supabase.from("budgets").update({ estado: "cancelado" }).eq("id", budgetId);
 
   if (error) return { erro: "Não foi possível cancelar." };
-
-  await registarEvento(supabase, budgetId, "cancelado", "Orçamento cancelado.");
 
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");

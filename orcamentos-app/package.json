@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:unit": "node --import tsx --test lib/**/*.test.ts",
+    "test:security": "node scripts/security-test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -24,6 +26,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
+    "tsx": "^4.23.13",
     "typescript": "^5.6.2"
   }
 }
