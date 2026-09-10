@@ -3,7 +3,9 @@
 App independente (Next.js 15, dentro deste repo apenas por conveniência de
 branch — pode ser extraído para um repo próprio sem alterações) para criar
 e acompanhar orçamentos: 3 páginas principais (Orçamentos, Follow-up,
-Dashboard) + Empresa (logo, dados, condições padrão).
+Dashboard) + Empresa (logo, dados, condições padrão). Por orçamento:
+duplicar, partilhar por WhatsApp/email, e histórico de eventos
+(criado/enviado/follow-up/aceite/recusado/cancelado/duplicado).
 
 Não partilha código, base de dados nem deploy com o resto do repo
 (fieldservice-app/Serv). É o "Produto 02" do catálogo da Tareo
@@ -21,6 +23,18 @@ Não partilha código, base de dados nem deploy com o resto do repo
 3. Em **Authentication → Providers**, confirmar que "Email" está ativo. Em
    **Authentication → Email Templates**, decidir se a confirmação de email
    fica ativa (por defeito sim — o fluxo de signup já trata os dois casos).
+
+### 1.1 Migrações (só se o projeto Supabase já existir/estiver em produção)
+
+Se já correste o `schema.sql` original e a app já tem contas/dados reais,
+**não voltes a correr o `schema.sql` completo** (ia falhar, as tabelas já
+existem). Corre em vez disso, uma única vez, os ficheiros em
+`supabase/migrations/`, por ordem numérica, no SQL Editor. Cada um é
+idempotente (pode ser corrido mais do que uma vez sem partir nada) e o
+nome do ficheiro diz o que faz.
+
+Se estás a criar o projeto Supabase de raiz agora, ignora isto — o
+`schema.sql` já inclui tudo.
 
 ### 2. Variáveis de ambiente
 
@@ -79,7 +93,10 @@ app/(app)/empresa              logo, dados da empresa, condições padrão
 lib/orcamento-estado.ts        regras de transição de estado (fonte única)
 lib/orcamento.ts               cálculo de subtotal/IVA/total
 lib/pdf-logo.ts                embutir logo no PDF
-supabase/schema.sql            schema + RLS + bucket "logos"
+supabase/schema.sql            schema + RLS + bucket "logos" (fonte de
+                                verdade para uma instalação nova)
+supabase/migrations/           alterações incrementais para quem já tem
+                                o projeto Supabase criado (ver secção 1.1)
 ```
 
 ## Limitações conhecidas
@@ -87,6 +104,6 @@ supabase/schema.sql            schema + RLS + bucket "logos"
 - Sem testes automatizados.
 - PDF de uma página só (orçamentos muito longos ficam truncados) — mesma
   limitação aceite no módulo equivalente do Serv.
-- Nunca testado ponta-a-ponta com um projeto Supabase real (sem acesso a
-  criar um a partir desta sessão) — validar login/signup/upload de
-  logo/PDF manualmente antes de considerar isto pronto para uso real.
+- Testado ponta-a-ponta em produção (Supabase + Vercel reais): signup,
+  login, criar/editar orçamento, PDF, logo — todos confirmados a
+  funcionar.

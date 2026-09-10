@@ -94,8 +94,21 @@ create index budgets_followup_em_idx on budgets (followup_em);
 
 alter table budgets enable row level security;
 
-create policy "user manages own budgets"
-  on budgets for all
+-- select/insert/update, nunca delete — histórico de orçamentos é sempre
+-- aditivo (mesmo princípio do Serv: um orçamento aceite/recusado/cancelado
+-- nunca desaparece). Itens (abaixo) continuam livremente apagáveis
+-- enquanto o orçamento está em rascunho — só o registo do orçamento em si
+-- é que nunca é eliminado.
+create policy "user reads own budgets"
+  on budgets for select
+  using (company_id = my_company_id());
+
+create policy "user inserts own budgets"
+  on budgets for insert
+  with check (company_id = my_company_id());
+
+create policy "user updates own budgets"
+  on budgets for update
   using (company_id = my_company_id())
   with check (company_id = my_company_id());
 
@@ -125,7 +138,37 @@ create policy "user manages own budget items"
   );
 
 -- ---------------------------------------------------------------------------
--- 5. Storage: bucket privado para logos das empresas
+-- 5. budget_events (histórico do percurso de cada orçamento)
+-- ---------------------------------------------------------------------------
+create table budget_events (
+  id uuid primary key default gen_random_uuid(),
+  budget_id uuid not null references budgets (id) on delete cascade,
+  tipo text not null
+    check (tipo in ('criado', 'enviado', 'followup', 'aceite', 'recusado', 'cancelado', 'duplicado')),
+  descricao text not null,
+  created_at timestamptz not null default now()
+);
+
+create index budget_events_budget_id_idx on budget_events (budget_id);
+
+alter table budget_events enable row level security;
+
+-- Só select/insert — nunca update/delete. É um registo histórico, tem de
+-- ficar imutável mesmo que o orçamento associado mude de estado depois.
+create policy "user reads own budget events"
+  on budget_events for select
+  using (
+    budget_id in (select id from budgets where company_id = my_company_id())
+  );
+
+create policy "user inserts own budget events"
+  on budget_events for insert
+  with check (
+    budget_id in (select id from budgets where company_id = my_company_id())
+  );
+
+-- ---------------------------------------------------------------------------
+-- 6. Storage: bucket privado para logos das empresas
 -- ---------------------------------------------------------------------------
 insert into storage.buckets (id, name, public)
 values ('logos', 'logos', false)

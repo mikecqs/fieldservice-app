@@ -7,18 +7,27 @@ import EstadoBadge from "../../EstadoBadge";
 import ItensEditor from "./ItensEditor";
 import DetalhesForm from "./DetalhesForm";
 import AcoesEstado from "./AcoesEstado";
+import AcoesPartilha from "./AcoesPartilha";
+import Historico from "./Historico";
 
 export default async function OrcamentoDetalhePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const empresa = await requireCompany();
   const supabase = await createClient();
 
-  const { data: orcamento } = await supabase
-    .from("budgets")
-    .select("*, clients(id, nome, empresa, telefone, email, morada, nif), budget_items(*)")
-    .eq("id", id)
-    .eq("company_id", empresa.id)
-    .maybeSingle();
+  const [{ data: orcamento }, { data: eventos }] = await Promise.all([
+    supabase
+      .from("budgets")
+      .select("*, clients(id, nome, empresa, telefone, email, morada, nif), budget_items(*)")
+      .eq("id", id)
+      .eq("company_id", empresa.id)
+      .maybeSingle(),
+    supabase
+      .from("budget_events")
+      .select("id, tipo, descricao, created_at")
+      .eq("budget_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
 
   if (!orcamento) {
     notFound();
@@ -58,17 +67,17 @@ export default async function OrcamentoDetalhePage({ params }: { params: Promise
               {cliente.empresa ? ` — ${cliente.empresa}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <EstadoBadge estado={orcamento.estado} />
-            <a
-              href={`/orcamentos/${orcamento.id}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md border border-edge-subtle px-3 py-1.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-surface-raised"
-            >
-              Ver PDF
-            </a>
-          </div>
+          <EstadoBadge estado={orcamento.estado} />
+        </div>
+        <div className="mt-4">
+          <AcoesPartilha
+            budgetId={orcamento.id}
+            numero={orcamento.numero}
+            total={totais.total}
+            clienteNome={cliente.nome}
+            clienteTelefone={cliente.telefone}
+            clienteEmail={cliente.email}
+          />
         </div>
       </div>
 
@@ -116,6 +125,8 @@ export default async function OrcamentoDetalhePage({ params }: { params: Promise
         estado={orcamento.estado}
         followupEm={orcamento.followup_em}
       />
+
+      <Historico eventos={eventos ?? []} />
     </div>
   );
 }

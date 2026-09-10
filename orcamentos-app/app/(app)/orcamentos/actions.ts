@@ -23,6 +23,16 @@ async function buscarEstadoOrcamento(budgetId: string) {
   return data as { id: string; estado: string } | null;
 }
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+// Histórico aditivo do percurso do orçamento — nunca editável/apagável
+// depois de criado (ver RLS em supabase/schema.sql). Falhar a gravar um
+// evento não deve impedir a ação principal já ter sido concluída, por
+// isso os chamadores nunca aguardam/propagam erro daqui.
+async function registarEvento(supabase: SupabaseServerClient, budgetId: string, tipo: string, descricao: string) {
+  await supabase.from("budget_events").insert({ budget_id: budgetId, tipo, descricao });
+}
+
 export async function criarOrcamento(formData: FormData): Promise<{ erro?: string }> {
   const empresa = await requireCompany();
   const supabase = await createClient();
@@ -93,7 +103,63 @@ export async function criarOrcamento(formData: FormData): Promise<{ erro?: strin
     return { erro: "Não foi possível criar o orçamento." };
   }
 
+  await registarEvento(supabase, orcamento.id, "criado", "Orçamento criado.");
+
   redirect(`/orcamentos/${orcamento.id}`);
+}
+
+export async function duplicarOrcamento(budgetId: string): Promise<{ erro?: string }> {
+  const empresa = await requireCompany();
+  const supabase = await createClient();
+
+  const { data: original } = await supabase
+    .from("budgets")
+    .select("numero, client_id, condicoes, iva_percent, validade_dias, budget_items(descricao, quantidade, valor_unitario)")
+    .eq("id", budgetId)
+    .eq("company_id", empresa.id)
+    .maybeSingle();
+
+  if (!original) {
+    return { erro: "Orçamento não encontrado." };
+  }
+
+  // Nunca copia numero/estado/enviado_em/followup_em/notas — o duplicado
+  // é sempre um orçamento novo, a começar do zero em rascunho, com o seu
+  // próprio número de sequência.
+  const { data: novoOrcamento, error } = await supabase
+    .from("budgets")
+    .insert({
+      company_id: empresa.id,
+      client_id: original.client_id,
+      condicoes: original.condicoes,
+      iva_percent: original.iva_percent,
+      validade_dias: original.validade_dias,
+    })
+    .select("id")
+    .single();
+
+  if (error || !novoOrcamento) {
+    return { erro: "Não foi possível duplicar o orçamento." };
+  }
+
+  const items = (original.budget_items ?? []) as { descricao: string; quantidade: number; valor_unitario: number }[];
+  if (items.length > 0) {
+    const { error: erroItens } = await supabase.from("budget_items").insert(
+      items.map((item) => ({
+        budget_id: novoOrcamento.id,
+        descricao: item.descricao,
+        quantidade: item.quantidade,
+        valor_unitario: item.valor_unitario,
+      }))
+    );
+    if (erroItens) {
+      return { erro: "Orçamento duplicado, mas houve um erro a copiar os itens." };
+    }
+  }
+
+  await registarEvento(supabase, novoOrcamento.id, "duplicado", `Duplicado a partir do orçamento ${original.numero}.`);
+
+  redirect(`/orcamentos/${novoOrcamento.id}`);
 }
 
 export async function adicionarItem(budgetId: string, formData: FormData): Promise<{ erro?: string }> {
@@ -195,6 +261,8 @@ export async function marcarEnviado(budgetId: string): Promise<{ erro?: string }
 
   if (error) return { erro: "Não foi possível marcar como enviado." };
 
+  await registarEvento(supabase, budgetId, "enviado", "Orçamento marcado como enviado.");
+
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
   return {};
@@ -219,6 +287,8 @@ export async function marcarFollowup(budgetId: string, formData: FormData): Prom
 
   if (error) return { erro: "Não foi possível marcar o follow-up." };
 
+  await registarEvento(supabase, budgetId, "followup", `Follow-up marcado para ${data}.`);
+
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
   revalidatePath("/follow-up");
@@ -235,6 +305,8 @@ export async function aceitarOrcamento(budgetId: string): Promise<{ erro?: strin
   const { error } = await supabase.from("budgets").update({ estado: "aceite" }).eq("id", budgetId);
 
   if (error) return { erro: "Não foi possível marcar como aceite." };
+
+  await registarEvento(supabase, budgetId, "aceite", "Orçamento aceite.");
 
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
@@ -254,6 +326,8 @@ export async function recusarOrcamento(budgetId: string): Promise<{ erro?: strin
 
   if (error) return { erro: "Não foi possível marcar como recusado." };
 
+  await registarEvento(supabase, budgetId, "recusado", "Orçamento marcado como recusado.");
+
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
   revalidatePath("/follow-up");
@@ -271,6 +345,8 @@ export async function cancelarOrcamento(budgetId: string): Promise<{ erro?: stri
   const { error } = await supabase.from("budgets").update({ estado: "cancelado" }).eq("id", budgetId);
 
   if (error) return { erro: "Não foi possível cancelar." };
+
+  await registarEvento(supabase, budgetId, "cancelado", "Orçamento cancelado.");
 
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
