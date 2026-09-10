@@ -4,19 +4,16 @@ import { createClient } from "@/lib/supabase/server";
 import { requireCompany } from "@/lib/auth";
 import { calcularOrcamento } from "@/lib/orcamento";
 import { embutirLogo } from "@/lib/pdf-logo";
+import { textoSeguroPdf } from "@/lib/pdf-texto";
 
-// Helvetica (fonte StandardFonts usada aqui) só suporta a codificação
-// WinAnsi — Latin-1 e pouco mais. Qualquer carácter fora disso (emoji,
-// CJK, símbolos colados de outra fonte) faz o pdf-lib lançar uma exceção
-// a meio da geração, rebentando o pedido inteiro com 500. Substituir por
-// "?" garante que o PDF sai sempre, mesmo que algum campo tenha um
-// carácter exótico — nunca falha silenciosamente o resto do documento.
-function t(texto: string | null | undefined): string {
-  if (!texto) return "";
-  return Array.from(texto)
-    .map((ch) => (ch.codePointAt(0)! <= 0xff ? ch : "?"))
-    .join("");
-}
+const LARGURA = 595.28; // A4
+const ALTURA = 841.89;
+const MARGEM = 56;
+
+const PRETO = rgb(0.09, 0.09, 0.11);
+const CINZA_ESCURO = rgb(0.35, 0.37, 0.4);
+const CINZA_CLARO = rgb(0.55, 0.57, 0.6);
+const LINHA = rgb(0.87, 0.88, 0.9);
 
 // Gera o PDF do orçamento a pedido — nunca fica gravado, cada download é
 // construído na hora a partir dos dados atuais. RLS garante que só a
@@ -51,112 +48,144 @@ export async function GET(_req: Request, props: { params: Promise<{ id: string }
   const { subtotal, ivaValor, total } = calcularOrcamento(items, orcamento.iva_percent);
 
   const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595.28, 841.89]); // A4
+  const page = pdf.addPage([LARGURA, ALTURA]);
   const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  const azul = rgb(0.231, 0.357, 0.812);
-  const escuro = rgb(0.13, 0.16, 0.22);
-  const cinza = rgb(0.4, 0.44, 0.5);
-
-  let y = 800;
-  const margem = 50;
-  const largura = 595.28;
+  const t = (texto: string) => textoSeguroPdf(texto);
+  const larguraTexto = (texto: string, font: PDFFont, size: number) => font.widthOfTextAtSize(t(texto), size);
 
   const desenhar = (
     texto: string,
     opts: { x: number; y: number; size: number; font: PDFFont; color: ReturnType<typeof rgb> }
   ) => page.drawText(t(texto), opts);
 
+  const desenharDireita = (
+    texto: string,
+    opts: { xDireita: number; y: number; size: number; font: PDFFont; color: ReturnType<typeof rgb> }
+  ) => {
+    const largura = larguraTexto(texto, opts.font, opts.size);
+    desenhar(texto, { x: opts.xDireita - largura, y: opts.y, size: opts.size, font: opts.font, color: opts.color });
+  };
+
+  const direita = LARGURA - MARGEM;
+  let y = ALTURA - MARGEM;
+
+  // --- Cabeçalho: identidade da empresa à esquerda, nº/data à direita ------
   const logo = await embutirLogo(pdf, supabase, empresa.logo_path);
   if (logo) {
-    const alturaLogo = 32;
+    const alturaLogo = 26;
     const larguraLogo = (logo.width / logo.height) * alturaLogo;
-    page.drawImage(logo, { x: margem, y: y - 24, width: larguraLogo, height: alturaLogo });
-    desenhar(empresa.nome, { x: margem + larguraLogo + 10, y: y - 6, size: 14, font: fontBold, color: escuro });
-    if (empresa.nif) desenhar(`NIF: ${empresa.nif}`, { x: margem + larguraLogo + 10, y: y - 22, size: 9, font: fontRegular, color: cinza });
+    page.drawImage(logo, { x: MARGEM, y: y - 24, width: larguraLogo, height: alturaLogo });
+    desenhar(empresa.nome, { x: MARGEM + larguraLogo + 10, y: y - 9, size: 13, font: fontBold, color: PRETO });
+    if (empresa.nif) {
+      desenhar(`NIF ${empresa.nif}`, { x: MARGEM + larguraLogo + 10, y: y - 22, size: 8, font: fontRegular, color: CINZA_CLARO });
+    }
   } else {
-    page.drawRectangle({ x: margem, y: y - 24, width: 32, height: 32, color: azul });
-    desenhar(empresa.nome.slice(0, 2).toUpperCase(), { x: margem + 4, y: y - 15, size: 12, font: fontBold, color: rgb(1, 1, 1) });
-    desenhar(empresa.nome, { x: margem + 42, y: y - 6, size: 14, font: fontBold, color: escuro });
-    if (empresa.nif) desenhar(`NIF: ${empresa.nif}`, { x: margem + 42, y: y - 22, size: 9, font: fontRegular, color: cinza });
-  }
-  if (empresa.endereco) {
-    desenhar(empresa.endereco, { x: largura - margem - 200, y: y - 6, size: 8, font: fontRegular, color: cinza });
-  }
-  if (empresa.telefone || empresa.email) {
-    desenhar([empresa.telefone, empresa.email].filter(Boolean).join(" · "), {
-      x: largura - margem - 200,
-      y: y - 18,
-      size: 8,
-      font: fontRegular,
-      color: cinza,
-    });
+    desenhar(empresa.nome, { x: MARGEM, y: y - 9, size: 16, font: fontBold, color: PRETO });
+    if (empresa.nif) {
+      desenhar(`NIF ${empresa.nif}`, { x: MARGEM, y: y - 24, size: 8, font: fontRegular, color: CINZA_CLARO });
+    }
   }
 
-  y -= 60;
-  desenhar(`ORÇAMENTO Nº ${orcamento.numero}`, { x: margem, y, size: 18, font: fontBold, color: escuro });
-  desenhar(`Data: ${String(orcamento.criado_em).slice(0, 10)}`, { x: largura - margem - 120, y, size: 10, font: fontRegular, color: cinza });
+  desenharDireita("ORÇAMENTO", { xDireita: direita, y: y - 2, size: 8, font: fontRegular, color: CINZA_CLARO });
+  desenharDireita(orcamento.numero, { xDireita: direita, y: y - 19, size: 15, font: fontBold, color: PRETO });
+  desenharDireita(`Data ${String(orcamento.criado_em).slice(0, 10)}`, {
+    xDireita: direita,
+    y: y - 34,
+    size: 9,
+    font: fontRegular,
+    color: CINZA_ESCURO,
+  });
 
-  y -= 30;
-  desenhar("Cliente", { x: margem, y, size: 9, font: fontBold, color: cinza });
-  y -= 14;
-  desenhar(cliente?.nome ?? "—", { x: margem, y, size: 11, font: fontRegular, color: escuro });
-  if (cliente?.empresa) {
+  y -= 56;
+  page.drawLine({ start: { x: MARGEM, y }, end: { x: direita, y }, thickness: 1, color: PRETO });
+  y -= 26;
+
+  // --- Cliente ---------------------------------------------------------------
+  desenhar("CLIENTE", { x: MARGEM, y, size: 8, font: fontRegular, color: CINZA_CLARO });
+  y -= 15;
+  desenhar(cliente?.nome ?? "—", { x: MARGEM, y, size: 11, font: fontBold, color: PRETO });
+  const linhaCliente2 = [cliente?.empresa, cliente?.nif ? `NIF ${cliente.nif}` : null].filter(Boolean).join("  ·  ");
+  if (linhaCliente2) {
     y -= 14;
-    desenhar(cliente.empresa, { x: margem, y, size: 10, font: fontRegular, color: cinza });
+    desenhar(linhaCliente2, { x: MARGEM, y, size: 9, font: fontRegular, color: CINZA_ESCURO });
   }
   if (cliente?.morada) {
     y -= 14;
-    desenhar(cliente.morada, { x: margem, y, size: 10, font: fontRegular, color: cinza });
-  }
-  if (cliente?.nif) {
-    y -= 14;
-    desenhar(`NIF: ${cliente.nif}`, { x: margem, y, size: 10, font: fontRegular, color: cinza });
+    desenhar(cliente.morada, { x: MARGEM, y, size: 9, font: fontRegular, color: CINZA_ESCURO });
   }
 
-  y -= 30;
-  const colX = { desc: margem, qtd: 330, unit: 390, total: 470 };
-  page.drawRectangle({ x: margem, y: y - 6, width: largura - margem * 2, height: 20, color: rgb(0.95, 0.96, 0.98) });
-  desenhar("Descrição", { x: colX.desc + 4, y, size: 9, font: fontBold, color: escuro });
-  desenhar("Qtd", { x: colX.qtd, y, size: 9, font: fontBold, color: escuro });
-  desenhar("Preço unit.", { x: colX.unit, y, size: 9, font: fontBold, color: escuro });
-  desenhar("Total", { x: colX.total, y, size: 9, font: fontBold, color: escuro });
-  y -= 24;
+  y -= 34;
+
+  // --- Itens: tabela minimalista (linha fina, sem fundo pesado) -------------
+  const colX = { desc: MARGEM, qtd: direita - 220, unit: direita - 150, total: direita };
+  desenhar("Descrição", { x: colX.desc, y, size: 8, font: fontRegular, color: CINZA_CLARO });
+  desenhar("Qtd", { x: colX.qtd, y, size: 8, font: fontRegular, color: CINZA_CLARO });
+  desenharDireita("Preço unit.", { xDireita: colX.unit + 60, y, size: 8, font: fontRegular, color: CINZA_CLARO });
+  desenharDireita("Total", { xDireita: colX.total, y, size: 8, font: fontRegular, color: CINZA_CLARO });
+  y -= 8;
+  page.drawLine({ start: { x: MARGEM, y }, end: { x: direita, y }, thickness: 1, color: PRETO });
+  y -= 20;
 
   for (const item of items) {
     const linhaTotal = Number(item.quantidade) * Number(item.valor_unitario);
-    desenhar(item.descricao.slice(0, 55), { x: colX.desc + 4, y, size: 9, font: fontRegular, color: escuro });
-    desenhar(String(item.quantidade), { x: colX.qtd, y, size: 9, font: fontRegular, color: escuro });
-    desenhar(Number(item.valor_unitario).toFixed(2) + " €", { x: colX.unit, y, size: 9, font: fontRegular, color: escuro });
-    desenhar(linhaTotal.toFixed(2) + " €", { x: colX.total, y, size: 9, font: fontRegular, color: escuro });
-    y -= 18;
-    if (y < 200) break; // orçamentos muito longos ficam truncados numa página só — suficiente para o caso de uso atual
+    desenhar(item.descricao.slice(0, 60), { x: colX.desc, y, size: 10, font: fontRegular, color: PRETO });
+    desenhar(String(item.quantidade), { x: colX.qtd, y, size: 10, font: fontRegular, color: CINZA_ESCURO });
+    desenharDireita(`${Number(item.valor_unitario).toFixed(2)} €`, {
+      xDireita: colX.unit + 60,
+      y,
+      size: 10,
+      font: fontRegular,
+      color: CINZA_ESCURO,
+    });
+    desenharDireita(`${linhaTotal.toFixed(2)} €`, { xDireita: colX.total, y, size: 10, font: fontRegular, color: PRETO });
+    y -= 12;
+    page.drawLine({ start: { x: MARGEM, y }, end: { x: direita, y }, thickness: 0.5, color: LINHA });
+    y -= 16;
+    if (y < 220) break; // orçamentos muito longos ficam truncados numa página só — suficiente para o caso de uso atual
   }
 
-  y -= 10;
-  page.drawLine({ start: { x: margem, y }, end: { x: largura - margem, y }, thickness: 0.5, color: rgb(0.85, 0.87, 0.9) });
-  y -= 20;
+  y -= 8;
 
+  // --- Totais ------------------------------------------------------------------
   const linhaValor = (label: string, valor: number, destaque = false) => {
-    desenhar(label, { x: colX.unit, y, size: destaque ? 12 : 10, font: destaque ? fontBold : fontRegular, color: destaque ? escuro : cinza });
-    desenhar(valor.toFixed(2) + " €", { x: colX.total, y, size: destaque ? 12 : 10, font: destaque ? fontBold : fontRegular, color: escuro });
-    y -= destaque ? 20 : 16;
+    desenhar(label, { x: colX.unit - 30, y, size: destaque ? 11 : 9, font: destaque ? fontBold : fontRegular, color: destaque ? PRETO : CINZA_CLARO });
+    desenharDireita(`${valor.toFixed(2)} €`, {
+      xDireita: colX.total,
+      y,
+      size: destaque ? 12 : 10,
+      font: destaque ? fontBold : fontRegular,
+      color: PRETO,
+    });
+    y -= destaque ? 20 : 17;
   };
   linhaValor("Subtotal", subtotal);
   linhaValor(`IVA (${orcamento.iva_percent}%)`, ivaValor);
+  y -= 4;
+  page.drawLine({ start: { x: colX.unit - 30, y: y + 16 }, end: { x: direita, y: y + 16 }, thickness: 1, color: PRETO });
   linhaValor("Total", total, true);
 
+  // --- Condições -----------------------------------------------------------
   if (orcamento.condicoes) {
-    y -= 20;
-    desenhar("Condições", { x: margem, y, size: 9, font: fontBold, color: cinza });
-    y -= 14;
-    for (const linha of quebrarLinhas(orcamento.condicoes, 95)) {
-      desenhar(linha, { x: margem, y, size: 9, font: fontRegular, color: escuro });
+    y -= 24;
+    desenhar("CONDIÇÕES", { x: MARGEM, y, size: 8, font: fontRegular, color: CINZA_CLARO });
+    y -= 15;
+    for (const linha of quebrarLinhas(orcamento.condicoes, 100)) {
+      desenhar(linha, { x: MARGEM, y, size: 9, font: fontRegular, color: CINZA_ESCURO });
       y -= 13;
-      if (y < 40) break;
+      if (y < 50) break;
     }
   }
+
+  // --- Rodapé: validade ------------------------------------------------------
+  desenhar(`Orçamento válido por ${orcamento.validade_dias} dias a partir da data de emissão.`, {
+    x: MARGEM,
+    y: 40,
+    size: 8,
+    font: fontRegular,
+    color: CINZA_CLARO,
+  });
 
   const bytes = await pdf.save();
   return new NextResponse(Buffer.from(bytes), {

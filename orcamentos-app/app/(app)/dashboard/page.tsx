@@ -35,6 +35,10 @@ export default async function DashboardPage() {
     .filter((l) => ESTADOS_ATIVOS.includes(l.estado))
     .reduce((acc, l) => acc + l.total, 0);
 
+  const valorAceites = linhas
+    .filter((l) => l.estado === "aceite")
+    .reduce((acc, l) => acc + l.total, 0);
+
   const aceites = contagemPorEstado.aceite;
   const recusados = contagemPorEstado.recusado;
   const taxaAceitacao = aceites + recusados > 0 ? (aceites / (aceites + recusados)) * 100 : null;
@@ -70,8 +74,9 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <h1 className="text-lg font-semibold tracking-tight text-white">Dashboard</h1>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <CartaoKpi titulo="Valor em pipeline" valor={`${valorPipeline.toFixed(2)} €`} nota="Rascunho + enviado + follow-up" />
+        <CartaoKpi titulo="Valor total aceite" valor={`${valorAceites.toFixed(2)} €`} nota="Soma dos orçamentos aceites" />
         <CartaoKpi
           titulo="Taxa de aceitação"
           valor={taxaAceitacao === null ? "—" : `${taxaAceitacao.toFixed(0)}%`}
