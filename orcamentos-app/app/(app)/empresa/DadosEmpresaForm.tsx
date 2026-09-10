@@ -56,6 +56,21 @@ export default function DadosEmpresaForm({ empresa }: { empresa: Company }) {
         <p className="mt-1 text-xs text-muted-foreground">Usadas como texto inicial em cada novo orçamento (editável por orçamento).</p>
       </div>
 
+      <div>
+        <label className="block text-xs text-muted-foreground">Dias para follow-up automático</label>
+        <input
+          name="followupDiasPadrao"
+          type="number"
+          min={1}
+          step={1}
+          defaultValue={empresa.followup_dias_padrao}
+          className={`w-32 ${inputClasses}`}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Ao marcar um orçamento como enviado, o follow-up é agendado automaticamente esta quantidade de dias depois.
+        </p>
+      </div>
+
       {erro && <p className="text-sm text-red-400">{erro}</p>}
       {guardado && !erro && <p className="text-sm text-emerald-400">Guardado.</p>}
 

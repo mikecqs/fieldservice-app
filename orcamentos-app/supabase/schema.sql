@@ -18,6 +18,7 @@ create table companies (
   email text,
   logo_path text,
   condicoes_padrao text,
+  followup_dias_padrao integer not null default 7,
   created_at timestamptz not null default now()
 );
 

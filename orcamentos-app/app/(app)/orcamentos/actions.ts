@@ -289,18 +289,32 @@ export async function marcarEnviado(budgetId: string): Promise<{ erro?: string }
     return { erro: "Este orçamento não pode ser marcado como enviado." };
   }
 
+  // Enviar já agenda o follow-up automaticamente — passa direto para
+  // "followup" em vez de ficar num estado intermédio "enviado" que
+  // exigiria sempre uma segunda ação manual só para marcar o follow-up.
+  // A data continua ajustável depois (ver marcarFollowup).
+  const empresa = await requireCompany();
+  const followupEm = new Date(Date.now() + empresa.followup_dias_padrao * 86400000).toISOString().slice(0, 10);
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("budgets")
-    .update({ estado: "enviado", enviado_em: new Date().toISOString() })
+    .update({ estado: "followup", enviado_em: new Date().toISOString(), followup_em: followupEm })
     .eq("id", budgetId);
 
   if (error) return { erro: "Não foi possível marcar como enviado." };
 
-  await registarEvento(supabase, budgetId, "enviado", "Orçamento marcado como enviado.");
+  await registarEvento(
+    supabase,
+    budgetId,
+    "enviado",
+    `Orçamento marcado como enviado. Follow-up agendado para ${followupEm}.`
+  );
 
   revalidatePath(`/orcamentos/${budgetId}`);
   revalidatePath("/orcamentos");
+  revalidatePath("/follow-up");
+  revalidatePath("/dashboard");
   return {};
 }
 

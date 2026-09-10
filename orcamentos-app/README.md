@@ -7,7 +7,8 @@ Dashboard) + Empresa (logo, dados, condições padrão, até 3 modelos de
 orçamento reutilizáveis). Por orçamento: duplicar, partilhar por
 WhatsApp/email, histórico de eventos
 (criado/enviado/follow-up/aceite/recusado/cancelado/duplicado), e
-opção de partir de um modelo ao criar.
+opção de partir de um modelo ao criar. Marcar como enviado agenda o
+follow-up automaticamente (dias configuráveis em Empresa).
 
 Não partilha código, base de dados nem deploy com o resto do repo
 (fieldservice-app/Serv). É o "Produto 02" do catálogo da Tareo

@@ -13,6 +13,11 @@ export async function guardarDadosEmpresa(formData: FormData): Promise<{ erro?: 
     return { erro: "O nome da empresa é obrigatório." };
   }
 
+  const followupDiasPadrao = Number(formData.get("followupDiasPadrao") ?? 7);
+  if (!Number.isFinite(followupDiasPadrao) || followupDiasPadrao < 1) {
+    return { erro: "Os dias de follow-up têm de ser um número positivo." };
+  }
+
   const { error } = await supabase
     .from("companies")
     .update({
@@ -22,6 +27,7 @@ export async function guardarDadosEmpresa(formData: FormData): Promise<{ erro?: 
       telefone: String(formData.get("telefone") ?? "").trim() || null,
       email: String(formData.get("email") ?? "").trim() || null,
       condicoes_padrao: String(formData.get("condicoesPadrao") ?? "").trim() || null,
+      followup_dias_padrao: Math.round(followupDiasPadrao),
     })
     .eq("id", empresa.id);
 

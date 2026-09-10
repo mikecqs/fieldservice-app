@@ -12,6 +12,7 @@ export type Company = {
   email: string | null;
   logo_path: string | null;
   condicoes_padrao: string | null;
+  followup_dias_padrao: number;
   created_at: string;
 };
 

@@ -37,19 +37,24 @@ export default function AcoesEstado({
       <h2 className="mb-3 text-sm font-semibold text-neutral-200">Ações</h2>
       <div className="flex flex-wrap items-end gap-3">
         {podeMarcarEnviado({ estado }) && (
-          <button
-            type="button"
-            onClick={() => executar(() => marcarEnviado(budgetId))}
-            className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-transform duration-200 hover:scale-[1.02] hover:bg-neutral-200"
-          >
-            Marcar enviado
-          </button>
+          <div>
+            <button
+              type="button"
+              onClick={() => executar(() => marcarEnviado(budgetId))}
+              className="rounded-md bg-white px-4 py-2 text-sm font-medium text-neutral-950 transition-transform duration-200 hover:scale-[1.02] hover:bg-neutral-200"
+            >
+              Marcar enviado
+            </button>
+            <p className="mt-1 text-xs text-muted-foreground">Agenda o follow-up automaticamente.</p>
+          </div>
         )}
 
         {podeMarcarFollowup({ estado }) && (
           <div className="flex items-end gap-2">
             <div>
-              <label className="block text-xs text-muted-foreground">Data do follow-up</label>
+              <label className="block text-xs text-muted-foreground">
+                {estado === "followup" ? "Ajustar data do follow-up" : "Data do follow-up"}
+              </label>
               <input
                 type="date"
                 value={dataFollowup}
