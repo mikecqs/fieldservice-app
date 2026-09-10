@@ -44,13 +44,27 @@ npm run dev
 ### 4. Deploy (Vercel)
 
 Este projeto vive numa subpasta do repo `fieldservice-app`, mas é
-independente do Next.js na raiz. Para o publicar:
+independente do Next.js na raiz — **tem de ter o seu próprio projeto
+Vercel**, nunca reutilizar/reconfigurar o projeto Vercel existente do
+Serv (mudar o Root Directory desse projeto substituiria o deployment de
+produção do Serv por este app, em vez de criar algo novo — já aconteceu
+uma vez, corrigido revertendo o Root Directory desse projeto).
 
-1. Criar um **novo projeto Vercel** (não usar o projeto existente do Serv).
-2. Ligar ao mesmo repositório GitHub, mas definir **Root Directory** =
-   `orcamentos-app`.
-3. Configurar as 3 env vars da secção 2 no projeto Vercel.
-4. Depois de ter um domínio/URL real, atualizar
+1. **Add New → Project** no Vercel, ligado ao mesmo repositório GitHub,
+   mas como um **projeto à parte** (nome sugerido: `orcamentos-app`,
+   nunca o mesmo projeto do Serv).
+   - Se a pasta `orcamentos-app` ainda não existir no branch `master` do
+     repo, o assistente de criação não a vai oferecer no seletor de
+     Root Directory — cria o projeto na mesma (root directory por
+     omitir) e ajusta a seguir em Settings → General → Root Directory
+     (esse campo aceita texto livre depois do projeto criado).
+2. Definir **Root Directory** = `orcamentos-app`.
+3. Configurar as 3 env vars da secção 2 no projeto Vercel — as do
+   Supabase deste app, nunca as do Serv.
+4. Sem alterar a Production Branch, um push a qualquer branch já gera um
+   Preview Deployment automaticamente — suficiente para testar antes de
+   decidir um domínio de produção definitivo.
+5. Depois de ter um domínio/URL real, atualizar
    `components/tareo/produtos-data.ts` (no repo principal) com o `href`
    deste produto, se for essa a intenção.
 
