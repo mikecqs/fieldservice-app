@@ -19,7 +19,14 @@ export async function criarConta(formData: FormData): Promise<{ erro?: string; v
   const { data, error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
-    return { erro: error.message === "User already registered" ? "Já existe uma conta com este email. Entre em /login." : "Não foi possível criar a conta." };
+    if (error.message === "User already registered") {
+      return { erro: "Já existe uma conta com este email. Entre em /login." };
+    }
+    // Mostrar a mensagem real do Supabase em vez de um genérico "não foi
+    // possível" — já perdemos tempo a adivinhar a causa de erros
+    // parecidos (rate limit, domínio de email inválido, password fraca,
+    // etc.) por esconder o texto original.
+    return { erro: `Não foi possível criar a conta: ${error.message}` };
   }
 
   // O Supabase Auth nunca confirma explicitamente que o email já tinha
