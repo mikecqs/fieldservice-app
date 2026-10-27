@@ -1,0 +1,42 @@
+name: Serv — CI
+
+# Portão antes de produção: corre em cada Pull Request e em cada push para
+# master. Se falhar, o PR fica marcado a vermelho no GitHub. Para bloquear
+# mesmo o merge, ativar a proteção de branch em master
+# (Settings → Branches → "Require status checks to pass" → "verificar").
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    env:
+      # Valores fictícios só para o build compilar — nunca chaves reais.
+      NEXT_PUBLIC_SUPABASE_URL: https://exemplo.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Verificar tipos (TypeScript)
+        run: npm run typecheck
+
+      - name: Testes das regras de estado
+        run: npm test
+
+      - name: Build
+        run: npm run build

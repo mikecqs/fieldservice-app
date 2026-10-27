@@ -473,21 +473,26 @@ Todo o percurso é gravado em `service_events`/`budget_events`/
 - **Datas/horas em UTC fora de Dashboard/Atenção/Agenda** — ver nota no
   fim da secção 5 (não uniformizado em todo o código, só nesses três
   módulos).
-- Sem testes automatizados (unit/integration/e2e) no repositório. Isto
-  importa mais agora que a Vercel está ligada ao GitHub (ver secção 2): um
-  push para `master` vai para produção sem nenhum portão de testes/lint a
-  travar primeiro.
-- Sem CI/CD (nenhum workflow GitHub Actions no repositório, confirmado
-  2026-09-03) — só o deploy automático da Vercel ao fazer push para
-  `master`, sem testes/lint a correr antes.
-- Vulnerabilidades de dependências conhecidas por corrigir (`next@14.2.15`
-  crítica, `postcss`, `xlsx`) — atualização do Next.js adiada por ser
-  breaking change fora do âmbito pedido até agora.
+- **Testes e CI (desde 2026-10-27)**: `lib/__tests__/estados.test.ts`
+  cobre as regras de `lib/*-estado.ts` (vitest, `npm test`). O workflow
+  `.github/workflows/ci.yml` corre typecheck + testes + build em cada PR e
+  push para `master`. Ainda **não** há testes de UI/e2e nem de RLS. Para
+  o CI bloquear mesmo o merge falta ativar a proteção de branch em
+  `master` no GitHub (Settings → Branches).
+- Next.js já está na 15.5 (a nota antiga sobre `next@14.2.15` ficou
+  desatualizada). Continua por resolver: `xlsx` 0.18.5 (vulnerabilidades
+  conhecidas, sem correção no npm).
 - Verificação visual/browser não confirmada em várias sessões recentes
   (ambiente instável) — validar cliques reais antes de dar por fechado.
 
 ## 11. Regras de trabalho para alterações futuras
 
+- **Fluxo de trabalho**: nunca fazer push direto para `master` — trabalhar
+  num branch, abrir PR, esperar pelo CI verde e pela pré-visualização da
+  Vercel, e só depois fazer merge.
+- **Qualquer alteração à BD** segue `supabase/migrations/README.md`:
+  ficheiro de migração numerado + `schema.sql` atualizado no mesmo commit.
+  Nunca alterar a BD de produção diretamente no painel do Supabase.
 - **Nunca enfraquecer RLS ou isolamento multi-tenant** — toda a query/RPC
   nova deve respeitar `organization_id = my_org()`; se usar
   `createAdminClient()`, filtrar `organization_id` manualmente sempre.
