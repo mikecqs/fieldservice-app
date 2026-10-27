@@ -191,6 +191,17 @@ com regras de estado têm também o `lib/*-estado.ts` correspondente.
   materiais, fotos ou reabrir uma visita já fechada por fora da RPC.
 - **Views seguras para técnico** (`services_technician_view` e afins) —
   nunca lê tabelas base diretamente; sem valores/margens/faturação.
+- **As 4 views seguras (`services_technician_view`, `clients_technician_view`,
+  `client_addresses_technician_view`, `requests_status_atendimento_view`)
+  TÊM de ficar com `security_invoker = false`** (fixado no fim da secção
+  das views em `schema.sql`). Com `security_invoker = true` devolvem 0
+  linhas **sem erro** — foi a causa real da agenda do técnico vazia em
+  produção (2026-10-27), depois de alguém ter "corrigido" o aviso
+  "Security Definer View" do Security Advisor do Supabase. Esse aviso é
+  esperado neste projeto: **nunca o corrigir**. Se o técnico deixar de ver
+  serviços, verificar primeiro `pg_class.reloptions` destas views antes de
+  suspeitar de cache do Next.js (os commits 785561f/9a721b4 foram
+  tentativas nessa direção errada).
 - Colunas sensíveis podem ter `revoke select` (ex.: `refresh_token` do
   Google Sheets só é lido pelo `service_role`).
 - **Datas/horas**: usar sempre `toISO()`/`addDays()`/`nowTimeHHMMSS()`/
