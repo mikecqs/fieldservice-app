@@ -1047,6 +1047,21 @@ where st.user_id = auth.uid();
 
 grant select on client_addresses_technician_view to authenticated;
 
+-- -----------------------------------------------------------------------------
+-- IMPORTANTE — estas 4 views TÊM de correr com os privilégios do dono
+-- (security_invoker = false). O técnico e o Atendimento não têm policy de
+-- SELECT em services/budgets/clients; a segurança vem do filtro dentro de
+-- cada view (auth.uid() / my_org() / my_role()). Com security_invoker = true
+-- as views devolvem 0 linhas SEM erro — foi isso que partiu a agenda do
+-- técnico em produção (2026-10-27): o aviso "Security Definer View" do
+-- Security Advisor do Supabase tinha sido "corrigido". Esse aviso é
+-- ESPERADO neste projeto — NÃO o corrigir.
+-- -----------------------------------------------------------------------------
+alter view public.services_technician_view          set (security_invoker = false);
+alter view public.clients_technician_view           set (security_invoker = false);
+alter view public.client_addresses_technician_view  set (security_invoker = false);
+alter view public.requests_status_atendimento_view  set (security_invoker = false);
+
 -- =============================================================================
 -- FUNÇÕES RPC PARA O TÉCNICO INICIAR/CONCLUIR SERVIÇOS
 --
