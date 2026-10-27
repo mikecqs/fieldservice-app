@@ -302,8 +302,22 @@ export async function atribuirTecnico(formData: FormData) {
   // Finding 1 — mesmo motivo de reativarServico/aceitarOrcamento acima.
   await assertTecnicoPertenceOrg(supabase, user_id, organizationId);
 
-  await supabase.from("service_technicians").insert({ service_id, user_id });
+  // Evitar duplicado silencioso (chave primária duplicada falha sem aviso).
+  const { data: jaExiste } = await supabase
+    .from("service_technicians")
+    .select("user_id")
+    .eq("service_id", service_id)
+    .eq("user_id", user_id)
+    .maybeSingle();
+  if (!jaExiste) {
+    const { error } = await supabase
+      .from("service_technicians")
+      .insert({ service_id, user_id });
+    if (error) throw new Error(`Erro ao atribuir técnico: ${error.message}`);
+  }
   revalidatePath(`/admin/servicos/${service_id}`);
+  revalidatePath("/admin/agenda");
+  revalidatePath("/tecnico");
 }
 
 export async function removerTecnico(formData: FormData) {
@@ -319,6 +333,7 @@ export async function removerTecnico(formData: FormData) {
 
   await supabase.from("service_technicians").delete().eq("service_id", service_id).eq("user_id", user_id);
   revalidatePath(`/admin/servicos/${service_id}`);
+  revalidatePath("/tecnico");
 }
 
 // Mesmo guard de estado já usado para técnicos (atribuirTecnico/

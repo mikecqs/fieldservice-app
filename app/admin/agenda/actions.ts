@@ -75,6 +75,7 @@ export async function agendarServicoExistente(input: {
   revalidatePath(`/admin/servicos/${serviceId}`);
   revalidatePath("/admin/pedidos");
   revalidatePath("/admin/dashboard");
+  revalidatePath("/tecnico");
 
   return serviceId;
 }
