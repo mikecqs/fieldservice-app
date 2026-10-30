@@ -14,6 +14,10 @@ const NAV_GROUPS: { titulo: string; itens: { href: string; label: string }[] }[]
   {
     titulo: "Operação",
     itens: [
+      // Centro de Operações (Fase A) — vista única Pedido → Orçamento →
+      // Serviço. Por agora convive com as listas antigas; o menu só é
+      // simplificado na Fase B, depois de validado em uso real.
+      { href: "/admin/operacoes", label: "Operações" },
       { href: "/admin/dashboard", label: "Dashboard" },
       { href: "/admin/pedidos", label: "Pedidos" },
       { href: "/admin/agenda", label: "Agenda" },
