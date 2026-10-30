@@ -1,7 +1,7 @@
 // Testes das regras de estado (lib/*-estado.ts) — a fonte única de verdade
 // das transições, usada tanto pelas Server Actions como pela UI. Se uma
 // destas regras mudar por engano, o CI falha antes de chegar a produção.
-import { describe, expect, it } from "vitest";
+// describe/it/expect vêm como globais do vitest (ver vitest.config.mts).
 import {
   podeReagendarServico,
   deveTransicionarParaAgendado,
