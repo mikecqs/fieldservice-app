@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
-import { obterDetalhePedido } from "@/app/admin/pedidos/actions";
-import { PedidoDetalheConteudo, type PedidoDetalhe } from "@/components/pedidos/PedidoDetalheConteudo";
+import { PedidoDetalheConteudo } from "@/components/pedidos/PedidoDetalheConteudo";
+import { usePedidoDetalhe } from "@/components/pedidos/usePedidoDetalhe";
 import { Button } from "@/components/ui/Button";
 
 // Popup de consulta rápida — mesmo padrão visual/estrutural do
@@ -17,34 +16,7 @@ import { Button } from "@/components/ui/Button";
 // poder ser reutilizado a partir de outros módulos (ex: Clientes), sem
 // duplicar um segundo sistema de detalhe de pedidos.
 export function PedidoModal({ id, onClose }: { id: string; onClose: () => void }) {
-  const [detalhe, setDetalhe] = useState<PedidoDetalhe | null>(null);
-  const [aCarregar, setACarregar] = useState(true);
-  const [erro, setErro] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelado = false;
-    setACarregar(true);
-    setErro(null);
-    setDetalhe(null);
-    obterDetalhePedido(id)
-      .then((res) => {
-        if (cancelado) return;
-        if (!res) {
-          setErro("Pedido não encontrado.");
-        } else {
-          setDetalhe(res as PedidoDetalhe);
-        }
-      })
-      .catch(() => {
-        if (!cancelado) setErro("Não foi possível carregar o pedido.");
-      })
-      .finally(() => {
-        if (!cancelado) setACarregar(false);
-      });
-    return () => {
-      cancelado = true;
-    };
-  }, [id]);
+  const { detalhe, aCarregar, erro } = usePedidoDetalhe(id);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4" onClick={onClose}>

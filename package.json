@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "npx --yes vitest@3 run"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
