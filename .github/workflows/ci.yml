@@ -5,6 +5,8 @@ name: Serv — CI
 # mesmo o merge, ativar a proteção de branch em master
 # (Settings → Branches → "Require status checks to pass" → "verificar").
 on:
+  # Permite correr o CI à mão (separador Actions → Serv — CI → Run workflow).
+  workflow_dispatch:
   pull_request:
   push:
     branches: [master]
